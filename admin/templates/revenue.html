@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block page_title %}Revenue{% endblock %}
+{% block page_subtitle %}<p class="page-subtitle">Completed order revenue summary</p>{% endblock %}
+{% block content %}
+<h2>Revenue</h2>
+<section class="cards">
+  <article class="card"><span>Total Revenue</span><strong>{{ "%.2f"|format(completed|sum(attribute="amount_usdt")) }} USDT</strong></article>
+  <article class="card"><span>Last 30 Days</span><strong>{{ "%.2f"|format(monthly|sum(attribute="amount_usdt")) }} USDT</strong></article>
+</section>
+<div class="table-scroll">
+<table>
+  <tr><th>Order</th><th>Product</th><th>Amount</th><th>Completed</th></tr>
+  {% for order in completed %}
+  <tr><td>{{ order.order_code }}</td><td>{{ order.service.name }}</td><td>{{ "%.2f"|format(order.amount_usdt) }}</td><td>{{ order.completed_at }}</td></tr>
+  {% endfor %}
+</table>
+</div>
+{% endblock %}

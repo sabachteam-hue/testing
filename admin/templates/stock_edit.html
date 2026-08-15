@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block page_title %}Edit Stock{% endblock %}
+{% block content %}
+<h2>Edit Stock</h2>
+{% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+{% if message %}<div class="alert alert-success">{{ message }}</div>{% endif %}
+
+<form class="panel provider-add-card" method="post" action="/admin/stock/{{ service.id }}/edit">
+  <div class="provider-add-head">
+    <div class="provider-add-icon" aria-hidden="true">📦</div>
+    <div>
+      <h3>Edit Stock</h3>
+      <p class="muted">{{ service.name|admin_plain }}</p>
+    </div>
+  </div>
+
+  <label>Total quantity
+    <input name="quantity" type="number" min="0" value="{{ stock.quantity }}" required>
+  </label>
+  <label>Reserved
+    <input name="reserved_qty" type="number" min="0" value="{{ stock.reserved_qty }}">
+  </label>
+  <label>Low-stock threshold
+    <input name="low_stock_threshold" type="number" min="0" value="{{ stock.low_stock_threshold }}">
+  </label>
+  <label>Customer note (shown with delivery)
+    <textarea name="notes" rows="8" placeholder="Note shown to customer with delivery">{{ stock.notes or '' }}</textarea>
+  </label>
+
+  <div class="provider-add-actions">
+    <button type="submit" class="btn-box">Save changes</button>
+    <a class="btn secondary btn-box" href="/admin/stock">Cancel</a>
+  </div>
+</form>
+{% endblock %}

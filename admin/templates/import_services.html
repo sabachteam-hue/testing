@@ -1,0 +1,221 @@
+{% extends "base.html" %}
+{% block page_title %}Import Products{% endblock %}
+{% block page_subtitle %}<p class="page-subtitle">Fetch from a provider, then click Import only for products you want to sell. Nothing is auto-added.</p>{% endblock %}
+{% block content %}
+<h2>Import Products</h2>
+{% if message %}<div class="alert alert-success">{{ message }}</div>{% endif %}
+{% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+<form class="panel form-grid" method="get" action="/admin/import-services">
+  <select name="provider_id" required>
+    <option value="">Choose API provider</option>
+    {% for provider in providers %}
+    <option value="{{ provider.id }}" {% if provider.id == provider_id %}selected{% endif %}>{{ provider.name }}</option>
+    {% endfor %}
+  </select>
+  <button>Fetch Products</button>
+</form>
+{% if imported and not categories %}
+<p class="alert">Create at least one category under Categories before importing products.</p>
+{% endif %}
+{% if imported %}
+<form class="search-bar" onsubmit="return false;">
+  <input type="search" id="import-search" placeholder="Search fetched products by name or ID…" autocomplete="off">
+</form>
+<div class="panel import-bulk-bar">
+  <button type="submit" form="bulk-import-form" id="bulk-import-btn" data-has-categories="{{ 1 if categories else 0 }}" disabled>Import Selected</button>
+  <span class="field-hint" id="bulk-count">0 selected</span>
+  <span class="field-hint" id="import-search-hint">{{ imported|length }} product(s) fetched — select rows or click Import on one.</span>
+</div>
+<form id="bulk-import-form" method="post" action="/admin/import-services/bulk">
+  <input type="hidden" name="provider_id" value="{{ provider_id }}">
+  <div class="table-scroll">
+  <table id="import-table">
+    <tr>
+      <th><input type="checkbox" id="select-all-imports" title="Select all visible" {% if not categories %}disabled{% endif %}></th>
+      <th>ID</th>
+      <th>Product Name</th>
+      <th>Source Category</th>
+      <th>Provider Cost</th>
+      <th>Available Stock</th>
+      <th>Import Cost Price</th>
+      <th>Markup %</th>
+      <th>+ Fixed USDT</th>
+      <th>Product Category</th>
+      <th>Import</th>
+    </tr>
+    {% for item in imported %}
+    {% set row = loop.index0 %}
+    {% set source_cat = (item.category or '')|string %}
+    <tr class="import-row" data-search="{{ (item.service or item.id or '')|e }} {{ (item.name or '')|e }} {{ source_cat|e }}">
+      <td><input type="checkbox" class="import-check" name="selected" value="{{ row }}" {% if not categories %}disabled{% endif %}></td>
+      <td>{{ item.service or item.id }}</td>
+      <td>{{ item.name }}</td>
+      <td>{{ item.category or '—' }}</td>
+      <td>{{ "%.6g"|format(item.rate|float) if item.rate is defined else (item.cost or 0) }}</td>
+      <td>{{ item.available if item.available is defined else 0 }}</td>
+      <td>
+        <input type="hidden" name="provider_service_id_{{ row }}" value="{{ item.service or item.id }}">
+        <input type="hidden" name="name_{{ row }}" value="{{ item.name }}">
+        <input type="hidden" name="description_{{ row }}" value="{{ item.description or item.name }}">
+        <input type="hidden" name="min_qty_{{ row }}" value="{{ item.min or 1 }}">
+        <input type="hidden" name="max_qty_{{ row }}" value="{{ item.max or 10000 }}">
+        <input type="hidden" name="initial_stock_{{ row }}" value="{{ item.available or 0 }}">
+        <input name="cost_price_{{ row }}" value="{{ item.rate if item.rate is defined else (item.cost or 0) }}" size="6">
+      </td>
+      <td><input name="commission_pct_{{ row }}" value="25" size="4"></td>
+      <td><input name="markup_fixed_usdt_{{ row }}" value="0" size="5" title="Added after % markup, e.g. 0.05"></td>
+      <td>
+        <select name="category_id_{{ row }}" class="premium-named-select" {% if not categories %}disabled{% endif %}>
+          <option value="">Select category</option>
+          {% for category in categories %}
+          <option
+            value="{{ category.id }}"
+            data-emoji-id="{{ category.emoji|admin_icon_id }}"
+            data-emoji-fallback="{{ category.emoji|admin_icon_fb }}"
+            data-plain-label="{{ category.name|admin_plain }}"
+            {% if source_cat and category.name|admin_plain|lower == source_cat|lower %}selected{% endif %}
+          >{{ category.emoji|admin_icon_fb }} {{ category.name|admin_plain }}</option>
+          {% endfor %}
+        </select>
+      </td>
+      <td>
+        <button type="submit" formaction="/admin/import-services" formmethod="post" class="import-one-btn" data-row="{{ row }}" {% if not categories %}disabled{% endif %}>Import</button>
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+  </div>
+</form>
+<script>
+(function () {
+  var input = document.getElementById("import-search");
+  var hint = document.getElementById("import-search-hint");
+  var rows = Array.prototype.slice.call(document.querySelectorAll(".import-row"));
+  var selectAll = document.getElementById("select-all-imports");
+  var bulkBtn = document.getElementById("bulk-import-btn");
+  var bulkCount = document.getElementById("bulk-count");
+  var bulkForm = document.getElementById("bulk-import-form");
+
+  function visibleChecks() {
+    return rows.filter(function (row) {
+      return row.style.display !== "none";
+    }).map(function (row) {
+      return row.querySelector(".import-check");
+    }).filter(Boolean);
+  }
+
+  function updateBulkState() {
+    var checked = 0;
+    document.querySelectorAll(".import-check").forEach(function (cb) {
+      if (cb.checked) checked += 1;
+    });
+    if (bulkCount) bulkCount.textContent = checked + " selected";
+    if (bulkBtn) {
+      var hasCats = bulkBtn.getAttribute("data-has-categories") === "1";
+      bulkBtn.disabled = !hasCats || checked === 0;
+    }
+    if (selectAll) {
+      var vis = visibleChecks();
+      var allOn = vis.length > 0 && vis.every(function (cb) { return cb.checked; });
+      selectAll.checked = allOn;
+    }
+  }
+
+  if (selectAll) {
+    selectAll.addEventListener("change", function () {
+      visibleChecks().forEach(function (cb) {
+        if (!cb.disabled) cb.checked = selectAll.checked;
+      });
+      updateBulkState();
+    });
+  }
+
+  document.querySelectorAll(".import-check").forEach(function (cb) {
+    cb.addEventListener("change", updateBulkState);
+  });
+
+  document.querySelectorAll(".import-one-btn").forEach(function (btn) {
+    btn.addEventListener("click", function (ev) {
+      var row = btn.getAttribute("data-row");
+      if (!bulkForm || row === null) return;
+      var cat = bulkForm.querySelector('[name="category_id_' + row + '"]');
+      if (!cat || !cat.value) {
+        ev.preventDefault();
+        alert("Select a product category for this row before importing.");
+        if (cat) cat.focus();
+        return;
+      }
+      // Map this row's indexed fields onto the single-import form names.
+      bulkForm.querySelectorAll('[data-temp="1"]').forEach(function (el) { el.remove(); });
+      [
+        ["provider_service_id", "provider_service_id_" + row],
+        ["name", "name_" + row],
+        ["description", "description_" + row],
+        ["min_qty", "min_qty_" + row],
+        ["max_qty", "max_qty_" + row],
+        ["initial_stock", "initial_stock_" + row],
+        ["cost_price", "cost_price_" + row],
+        ["commission_pct", "commission_pct_" + row],
+        ["markup_fixed_usdt", "markup_fixed_usdt_" + row],
+        ["category_id", "category_id_" + row]
+      ].forEach(function (pair) {
+        var src = bulkForm.querySelector('[name="' + pair[1] + '"]');
+        if (!src) return;
+        var hidden = document.createElement("input");
+        hidden.type = "hidden";
+        hidden.name = pair[0];
+        hidden.value = src.value;
+        hidden.setAttribute("data-temp", "1");
+        bulkForm.appendChild(hidden);
+      });
+    });
+  });
+
+  if (bulkForm) {
+    bulkForm.addEventListener("submit", function (ev) {
+      var action = (ev.submitter && ev.submitter.getAttribute("formaction")) || bulkForm.getAttribute("action") || "";
+      if (action.indexOf("/import-services/bulk") === -1) return;
+      var any = false;
+      var missingCat = false;
+      document.querySelectorAll(".import-check").forEach(function (cb) {
+        if (!cb.checked) return;
+        any = true;
+        var cat = bulkForm.querySelector('[name="category_id_' + cb.value + '"]');
+        if (!cat || !cat.value) missingCat = true;
+      });
+      if (!any) {
+        ev.preventDefault();
+        alert("Select at least one product to import.");
+        return;
+      }
+      if (missingCat) {
+        ev.preventDefault();
+        alert("Select a product category for every checked product.");
+      }
+    });
+  }
+
+  if (input) {
+    input.addEventListener("input", function () {
+      var q = (input.value || "").trim().toLowerCase();
+      var shown = 0;
+      rows.forEach(function (row) {
+        var hay = (row.getAttribute("data-search") || "").toLowerCase();
+        var ok = !q || hay.indexOf(q) !== -1;
+        row.style.display = ok ? "" : "none";
+        if (ok) shown += 1;
+      });
+      if (hint) {
+        hint.textContent = q
+          ? shown + " match(es) for “" + input.value.trim() + "” — select or Import."
+          : rows.length + " product(s) fetched — select rows or click Import on one.";
+      }
+      updateBulkState();
+    });
+  }
+
+  updateBulkState();
+})();
+</script>
+{% endif %}
+{% endblock %}

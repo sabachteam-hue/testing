@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+{% block page_title %}Stock{% endblock %}
+{% block page_subtitle %}<p class="page-subtitle">Add, adjust, and monitor inventory</p>{% endblock %}
+{% block content %}
+<h2>Stock Management</h2>
+
+<div class="providers-header">
+  <div class="providers-header-actions">
+    <a class="btn add-entry-btn" href="/admin/stock/new">+ Add Stock</a>
+    <a class="btn secondary add-entry-btn" href="/admin/stock/notify">+ Stock Notification</a>
+  </div>
+</div>
+
+{% if message %}<div class="alert alert-success">{{ message }}</div>{% endif %}
+{% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+
+<div class="table-scroll">
+<table class="stock-table">
+  <thead>
+    <tr>
+      <th>Product</th>
+      <th>Fulfillment</th>
+      <th>Current</th>
+      <th>Reserved</th>
+      <th>Available</th>
+      <th>Threshold</th>
+      <th>Last Updated</th>
+      <th>Notes</th>
+      <th>Logins</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for stock in stocks %}
+    <tr>
+      <td>{{ stock.service.name|admin_plain }}</td>
+      <td>{{ "🛠 Manual" if stock.service.fulfillment_type == "manual" else ("📦 Stock" if stock.service.fulfillment_type == "stock" else "⚡ Auto") }}</td>
+      <td>{{ stock.quantity }}</td>
+      <td>{{ stock.reserved_qty }}</td>
+      <td>{{ stock.available_qty }}</td>
+      <td>{{ stock.low_stock_threshold }}</td>
+      <td>{{ stock.last_updated }}</td>
+      <td class="stock-notes-cell">{{ stock.notes or "-" }}</td>
+      <td>
+        {% if stock.login_line_count %}
+        <span class="stock-login-count">{{ stock.login_line_count }} line{{ 's' if stock.login_line_count != 1 else '' }}</span>
+        {% else %}
+        <span class="muted">—</span>
+        {% endif %}
+      </td>
+      <td class="stock-actions">
+        <textarea class="stock-logins-data" hidden>{{ stock.login_details or '' }}</textarea>
+        <button type="button" class="secondary stock-view-btn"
+          data-service-id="{{ stock.service_id }}"
+          data-product="{{ stock.service.name|admin_plain|e }}">View stock</button>
+        <a class="btn secondary add-entry-btn" href="/admin/stock/{{ stock.service_id }}/edit">Edit</a>
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="10">No stock rows yet.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+
+<dialog class="stock-modal" id="stockViewModal">
+  <form method="post" id="stockViewForm" class="stock-modal-panel">
+    <header class="stock-modal-head">
+      <div>
+        <h3>View stock</h3>
+        <p class="muted" id="stockViewProduct">—</p>
+      </div>
+      <button type="button" class="secondary" id="stockViewClose" aria-label="Close">Close</button>
+    </header>
+    <p class="help-box">Edit or delete any login / promo line, then Save. <strong>Each new line = 1 stock</strong> and sends a Telegram stock notification. Blank lines are removed on save.</p>
+    <div class="stock-login-list" id="stockLoginList"></div>
+    <div class="stock-modal-add">
+      <button type="button" class="secondary" id="stockAddLine">+ Add line</button>
+    </div>
+    <input type="hidden" name="login_details" id="stockLoginPayload" value="">
+    <footer class="stock-modal-foot">
+      <button type="button" class="secondary" id="stockViewCancel">Cancel</button>
+      <button type="submit">Save</button>
+    </footer>
+  </form>
+</dialog>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  const modal = document.getElementById("stockViewModal");
+  const form = document.getElementById("stockViewForm");
+  const list = document.getElementById("stockLoginList");
+  const productEl = document.getElementById("stockViewProduct");
+  const payload = document.getElementById("stockLoginPayload");
+  const addBtn = document.getElementById("stockAddLine");
+  if (!modal || !form || !list) return;
+
+  function closeModal() {
+    if (typeof modal.close === "function") modal.close();
+    else modal.removeAttribute("open");
+  }
+
+  function openModal() {
+    if (typeof modal.showModal === "function") modal.showModal();
+    else modal.setAttribute("open", "");
+  }
+
+  function addRow(value) {
+    const row = document.createElement("div");
+    row.className = "stock-login-row";
+    const input = document.createElement("input");
+    input.type = "text";
+    input.className = "stock-login-input";
+    input.value = value || "";
+    input.placeholder = "email:password or promo URL";
+    const del = document.createElement("button");
+    del.type = "button";
+    del.className = "secondary stock-login-del";
+    del.textContent = "Delete";
+    del.addEventListener("click", () => row.remove());
+    row.appendChild(input);
+    row.appendChild(del);
+    list.appendChild(row);
+  }
+
+  function loadLines(text) {
+    list.innerHTML = "";
+    const lines = String(text || "").split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    if (!lines.length) addRow("");
+    else lines.forEach(addRow);
+  }
+
+  document.querySelectorAll(".stock-view-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const id = btn.getAttribute("data-service-id");
+      const data = btn.parentElement?.querySelector(".stock-logins-data");
+      form.action = "/admin/stock/" + id + "/logins";
+      productEl.textContent = btn.getAttribute("data-product") || "Product";
+      loadLines(data ? data.value : "");
+      openModal();
+    });
+  });
+
+  addBtn && addBtn.addEventListener("click", () => addRow(""));
+  document.getElementById("stockViewClose")?.addEventListener("click", closeModal);
+  document.getElementById("stockViewCancel")?.addEventListener("click", closeModal);
+  modal.addEventListener("click", (e) => {
+    if (e.target === modal) closeModal();
+  });
+
+  form.addEventListener("submit", () => {
+    const values = Array.from(list.querySelectorAll(".stock-login-input"))
+      .map((el) => el.value.trim())
+      .filter(Boolean);
+    payload.value = values.join("\n");
+  });
+})();
+</script>
+{% endblock %}

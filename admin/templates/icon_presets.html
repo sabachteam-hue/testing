@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Icon Presets{% endblock %}
+{% block page_title %}Icon Presets{% endblock %}
+{% block page_subtitle %}<p class="page-subtitle">Save Telegram premium emoji IDs for quick reuse in name / description keyboards</p>{% endblock %}
+{% block content %}
+<h2>Icon Presets</h2>
+
+{% if message %}<div class="alert alert-success">{{ message }}</div>{% endif %}
+{% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+
+<p class="help-box">Product description templates now live on <a href="/admin/services/new">Add Product</a> / Edit Product (above the description box).</p>
+
+<h3>Add New Preset</h3>
+<form method="post" action="/admin/icon-presets">
+    <label>Name (e.g. ChatGPT, Adobe, Netflix, VPN)<input type="text" name="name" placeholder="e.g. ChatGPT" required></label>
+    <label>Telegram custom emoji ID (digits only)<input type="text" name="emoji_id" placeholder="e.g. 5368324170671202286" required pattern="[0-9]+" title="Digits only"></label>
+    <label>Fallback emoji (agar custom emoji load na ho / purane clients pe)<input type="text" name="fallback_emoji" value="📦" maxlength="20"></label>
+    <label>Sort order<input type="number" name="sort_order" value="0"></label>
+    <button type="submit">Add Preset</button>
+</form>
+
+<h3>Existing Presets</h3>
+<div class="table-scroll">
+<table>
+    <thead>
+        <tr>
+            <th>Emoji</th>
+            <th>Name</th>
+            <th>Emoji ID</th>
+            <th>Value to paste manually</th>
+            <th>Order</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for preset in presets %}
+        <tr>
+            <td>{{ preset.combined_value|admin_emoji }}</td>
+            <td>{{ preset.name }}</td>
+            <td>{{ preset.emoji_id }}</td>
+            <td><code>{{ preset.combined_value }}</code></td>
+            <td>{{ preset.sort_order }}</td>
+            <td>
+                <details>
+                    <summary>Edit</summary>
+                    <form method="post" action="/admin/icon-presets/{{ preset.id }}/edit">
+                        <input type="text" name="name" value="{{ preset.name }}" required>
+                        <input type="text" name="emoji_id" value="{{ preset.emoji_id }}" required pattern="[0-9]+" title="Digits only">
+                        <input type="text" name="fallback_emoji" value="{{ preset.fallback_emoji }}" maxlength="20">
+                        <input type="number" name="sort_order" value="{{ preset.sort_order }}">
+                        <button type="submit">Save</button>
+                    </form>
+                </details>
+                <form method="post" action="/admin/icon-presets/{{ preset.id }}/delete" style="display:inline"
+                      onsubmit="return confirm('Delete this preset? Products already using it keep working, only the shortcut is removed.');">
+                    <button type="submit">Delete</button>
+                </form>
+            </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6">Koi preset nahi bana abhi. Upar form se add karo.</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endblock %}

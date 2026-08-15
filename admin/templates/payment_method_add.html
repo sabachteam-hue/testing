@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Add Payment Method{% endblock %}
+{% block page_title %}Add Payment Method{% endblock %}
+{% block content %}
+<h2>Add Payment Method</h2>
+{% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+{% if message %}<div class="alert alert-success">{{ message }}</div>{% endif %}
+
+<form class="panel provider-add-card" method="post" action="/admin/payment-methods" enctype="multipart/form-data">
+  <div class="provider-add-head">
+    <div class="provider-add-icon" aria-hidden="true">💳</div>
+    <div>
+      <h3>Add Payment Method</h3>
+      <p class="muted">Name with optional premium emoji, then the rest of the details.</p>
+    </div>
+  </div>
+
+  <div class="emoji-field-block">
+    <span class="field-label">Name *</span>
+    {% with field_id='new-pm-name', field_name='name', value='', placeholder='e.g. JazzCash', required=true, mode='text', presets=icon_presets, aria_label='Payment method name' %}
+      {% include "_emoji_kbd.html" %}
+    {% endwith %}
+    <span class="field-hint">Use ✨ to put a premium emoji in the name (same as Categories).</span>
+  </div>
+  <label>Code (unique)<input type="text" name="code" placeholder="e.g. JAZZCASH" required></label>
+  <label>Type
+      <select name="method_type">
+          <option value="manual">Manual (admin confirms)</option>
+          <option value="auto">Auto-verify (BEP20 / TRC20 / Binance Pay / Bybit Pay)</option>
+      </select>
+  </label>
+  <label>Network (optional)<input type="text" name="network" placeholder="e.g. BEP20, TRC20"></label>
+  <label>Address / Account / Number<input type="text" name="address" placeholder="wallet address or account number"></label>
+  <label>Or upload real logo/icon image (used in the catalog picture shown to customers)<input type="file" name="icon_image" accept="image/*"></label>
+  <label>Instructions (shown to customer)<textarea name="instructions" placeholder="e.g. Send exact amount and upload screenshot"></textarea></label>
+  <label>Sort order<input type="number" name="sort_order" value="0"></label>
+
+  <div class="provider-add-actions">
+    <button type="submit" class="btn-box">Add Payment Method</button>
+    <a class="btn secondary btn-box" href="/admin/payment-methods">Cancel</a>
+  </div>
+</form>
+{% endblock %}

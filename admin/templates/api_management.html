@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block page_title %}API Management{% endblock %}
+{% block page_subtitle %}<p class="page-subtitle">Optional admin tools — clients can also generate keys themselves in the bot</p>{% endblock %}
+{% block content %}
+<h2>API Management</h2>
+
+<div class="panel">
+  <p><strong>Auto keys:</strong> jab client bot mein <code>/api</code> kholta hai, key <em>automatic</em> ban jati hai.
+  Admin se har user ke liye manually generate karna zaroori <strong>nahi</strong>.</p>
+  <p>Yahan se aap kisi user ke liye custom <strong>per-hour rate limit</strong> ke sath key bana / disable kar sakte ho.</p>
+</div>
+
+<form class="panel form-grid" method="post" action="/admin/api-management/generate">
+  <label>User
+    <select name="user_id" required>
+      {% for user in users %}
+      <option value="{{ user.id }}">{{ user.username or user.full_name or user.telegram_id }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Calls per hour (rate limit)
+    <input name="rate_limit" type="number" value="100" min="1">
+  </label>
+  <button type="submit">Generate API Key</button>
+</form>
+
+<div class="table-scroll">
+<table>
+  <tr>
+    <th>User</th>
+    <th>API Key</th>
+    <th>Rate Limit</th>
+    <th>Last Used</th>
+    <th>Status</th>
+    <th>Action</th>
+  </tr>
+  {% for key in api_keys %}
+  <tr>
+    <td>{{ key.user.username or key.user.telegram_id }}</td>
+    <td><code>{{ key.api_key }}</code></td>
+    <td>{{ key.rate_limit }}/hour</td>
+    <td>{{ key.last_used or "-" }}</td>
+    <td>{{ "Active" if key.is_active else "Disabled" }}</td>
+    <td>
+      <form method="post" action="/admin/api-management/{{ key.id }}/toggle">
+        <button type="submit">{{ "Disable" if key.is_active else "Enable" }}</button>
+      </form>
+    </td>
+  </tr>
+  {% else %}
+  <tr><td colspan="6">Abhi koi key nahi — clients /api se khud bana lenge.</td></tr>
+  {% endfor %}
+</table>
+</div>
+{% endblock %}

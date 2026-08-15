@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block page_title %}Add Manual Provider{% endblock %}
+{% block page_subtitle %}<p class="page-subtitle">Configure Telegram bot handle and contact for manual dispatch</p>{% endblock %}
+{% block content %}
+<h2>Add Manual Provider</h2>
+{% if error %}<p class="alert">{{ error }}</p>{% endif %}
+{% if message %}<p class="alert alert-success">{{ message }}</p>{% endif %}
+
+<form class="panel provider-add-card" method="post" action="/admin/providers">
+  <div class="provider-add-head">
+    <div class="provider-add-icon" aria-hidden="true">🤖</div>
+    <div>
+      <h3>Add Telegram Bot Provider</h3>
+      <p class="muted">Configure Telegram bot handle and administrator contact details for manual order dispatch.</p>
+    </div>
+  </div>
+
+  <input type="hidden" name="type" value="manual">
+
+  <label>Provider name *
+    <input name="name" placeholder="e.g. PeakSMM Main Panel" required>
+  </label>
+  <label>Telegram bot handle
+    <input name="telegram_bot" placeholder="e.g. supplier_bot">
+  </label>
+  <label>Admin contact
+    <input name="contact" placeholder="e.g. @supplier_admin or admin@example.com">
+  </label>
+
+  <p class="help-box">At least one contact method (Telegram bot or Admin contact) is required to dispatch orders.</p>
+
+  <div class="provider-add-actions">
+    <button type="submit">Add manual provider</button>
+    <a class="btn secondary" href="/admin/providers">Cancel</a>
+  </div>
+</form>
+{% endblock %}

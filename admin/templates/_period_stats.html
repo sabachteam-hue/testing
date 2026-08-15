@@ -1,0 +1,41 @@
+<section class="period-stats">
+  <div class="period-toolbar panel">
+    <div class="period-stats-head">
+      <div>
+        <h3>{{ period_stats.title }}</h3>
+        <p class="muted">Choose a range, then review the counts below.</p>
+      </div>
+    </div>
+
+    <div class="period-tabs" role="group" aria-label="Period presets">
+      {% for key, label in period_stats.period_options %}
+      <a href="{{ period_stats.base_path }}?period={{ key }}{% if status is defined and status %}&status={{ status }}{% endif %}{% if service_id is defined and service_id %}&service_id={{ service_id }}{% endif %}{% if q is defined and q %}&q={{ q|urlencode }}{% endif %}"
+         class="period-tab {% if period_stats.period == key %}active{% endif %}">{{ label }}</a>
+      {% endfor %}
+    </div>
+
+    <form method="get" action="{{ period_stats.base_path }}" class="period-calendar-row">
+      {% if status is defined and status %}<input type="hidden" name="status" value="{{ status }}">{% endif %}
+      {% if service_id is defined and service_id %}<input type="hidden" name="service_id" value="{{ service_id }}">{% endif %}
+      {% if q is defined and q %}<input type="hidden" name="q" value="{{ q }}">{% endif %}
+      <input type="hidden" name="period" value="custom">
+      <label>From
+        <input type="date" name="from" value="{{ period_stats.date_from }}" required>
+      </label>
+      <label>To
+        <input type="date" name="to" value="{{ period_stats.date_to }}" required>
+      </label>
+      <button type="submit" class="period-apply">Apply range</button>
+      <span class="period-range-label">{{ period_stats.period_label }}</span>
+    </form>
+  </div>
+
+  <div class="cards period-stats-cards">
+    {% for card in period_stats.cards %}
+    <article class="card period-card">
+      <span>{{ card.label }}</span>
+      <strong>{{ card.value }}</strong>
+    </article>
+    {% endfor %}
+  </div>
+</section>

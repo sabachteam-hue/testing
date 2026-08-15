@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Merge Products{% endblock %}
+{% block page_title %}Merge Products{% endblock %}
+{% block page_subtitle %}<p class="page-subtitle">Join duplicate products — sold orders move onto one active product</p>{% endblock %}
+{% block content %}
+<h2>Merge Products</h2>
+
+{% if message %}<div class="alert alert-success">{{ message }}</div>{% endif %}
+{% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+
+<form class="panel provider-add-card" method="post" action="/admin/merge-products" id="mergeProductsForm"
+      data-confirm="Merge will move ALL orders/sold history from the duplicate onto the keep product, then hide the duplicate. Continue?">
+  <div class="provider-add-head">
+    <div class="provider-add-icon" aria-hidden="true">🔗</div>
+    <div>
+      <h3>Merge duplicate products</h3>
+      <p class="muted">Example: two Gemini products from different providers → keep one, merge the other. Sold accounts show on the keep product only.</p>
+    </div>
+  </div>
+
+  <label>Keep this product (stays active) *
+    <select name="keep_id" id="mergeKeepId" required>
+      <option value="">Choose product to keep…</option>
+      {% for product in products %}
+      <option value="{{ product.id }}">{{ product.label }}{% if not product.active %} (inactive){% endif %}</option>
+      {% endfor %}
+    </select>
+  </label>
+
+  <label>Merge this duplicate into it (will be hidden) *
+    <select name="merge_id" id="mergeMergeId" required>
+      <option value="">Choose duplicate to merge away…</option>
+      {% for product in products %}
+      <option value="{{ product.id }}">{{ product.label }}{% if not product.active %} (inactive){% endif %}</option>
+      {% endfor %}
+    </select>
+  </label>
+
+  <div class="help-box">
+    <strong>What happens</strong>
+    <ul>
+      <li>All orders / sold history from the duplicate move to the keep product</li>
+      <li>Stock login lines + qty merge into the keep product</li>
+      <li>User discounts &amp; sales move when possible</li>
+      <li>Duplicate is hidden (soft-deleted) and unlinked from its provider</li>
+      <li>SKU / name of the keep product stay the same</li>
+    </ul>
+  </div>
+
+  <label>Type <code>MERGE</code> to confirm *
+    <input type="text" name="confirm" id="mergeConfirm" placeholder="MERGE" autocomplete="off" required>
+  </label>
+
+  <div class="provider-add-actions">
+    <button type="submit" class="btn-box">Merge products</button>
+    <a class="btn secondary btn-box" href="/admin/services">Back to Products</a>
+  </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  const keep = document.getElementById("mergeKeepId");
+  const merge = document.getElementById("mergeMergeId");
+  const form = document.getElementById("mergeProductsForm");
+  if (!keep || !merge || !form) return;
+
+  form.addEventListener("submit", (event) => {
+    if (keep.value && merge.value && keep.value === merge.value) {
+      event.preventDefault();
+      alert("Keep and Merge must be two different products.");
+    }
+  });
+})();
+</script>
+{% endblock %}

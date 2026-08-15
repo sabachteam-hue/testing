@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Commands{% endblock %}
+{% block page_title %}Commands{% endblock %}
+{% block page_subtitle %}<p class="page-subtitle">Edit bot menu button names and premium emojis</p>{% endblock %}
+{% block content %}
+<h2>Command Options</h2>
+<p>Edit each menu command name and premium emoji. Inline start menu and reply keyboard both use these settings.</p>
+
+{% if message %}<div class="alert alert-success">{{ message }}</div>{% endif %}
+{% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+
+<div class="table-scroll">
+<table>
+    <thead>
+        <tr>
+            <th>Key</th>
+            <th>Name (inline)</th>
+            <th>Reply name</th>
+            <th>Icon</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for command in commands %}
+        <tr>
+            <td><code>{{ command.key }}</code></td>
+            <td>{{ command.name }}</td>
+            <td>{{ command.reply_label }}</td>
+            <td>{{ command.icon|admin_emoji }}</td>
+            <td>
+                <details>
+                    <summary>Edit name &amp; emoji</summary>
+                    <form method="post" action="/admin/commands/{{ command.id }}/edit" class="form-grid">
+                        <label>Name (inline menu)
+                            <input type="text" name="name" value="{{ command.name }}" required maxlength="80">
+                        </label>
+                        <label>Reply name (bottom keyboard)
+                            <input type="text" name="reply_name" value="{{ command.reply_name or '' }}" maxlength="80"
+                                   placeholder="Leave blank to use Name">
+                        </label>
+                        <div class="emoji-field-block">
+                          <span class="field-label">Premium emoji icon</span>
+                          {% with field_id='cmd-icon-' ~ command.id, field_name='icon', value=command.icon, placeholder='Pick a premium emoji', required=true, mode='icon', presets=icon_presets, aria_label='Command icon' %}
+                            {% include "_emoji_kbd.html" %}
+                          {% endwith %}
+                        </div>
+                        <label>Sort order
+                            <input type="number" name="sort_order" value="{{ command.sort_order }}">
+                        </label>
+                        <button type="submit">Save {{ command.key }}</button>
+                    </form>
+                </details>
+            </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5">No commands yet — restart the app to seed defaults.</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endblock %}

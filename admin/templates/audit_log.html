@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block page_title %}Audit log{% endblock %}
+{% block page_subtitle %}<p class="page-subtitle">Track admin panel saves, deletes, syncs, and other changes</p>{% endblock %}
+{% block content %}
+<h2>Audit log</h2>
+
+<form method="get" action="/admin/audit-log" class="panel audit-filter-form">
+  <div class="form-grid">
+    <label>Action
+      <input type="text" name="action" value="{{ filter_action }}" placeholder="admin.login.failed">
+    </label>
+    <label>Entity
+      <select name="entity">
+        <option value="any" {% if filter_entity == 'any' %}selected{% endif %}>Any</option>
+        {% for et in entity_types %}
+        <option value="{{ et }}" {% if filter_entity == et %}selected{% endif %}>{{ et }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Since (UTC date)
+      <input type="date" name="since" value="{{ filter_since }}">
+    </label>
+  </div>
+  <div class="audit-filter-actions">
+    <button type="submit">Filter</button>
+    <a class="btn secondary" href="/admin/audit-log">Clear</a>
+  </div>
+</form>
+
+<div class="panel table-scroll">
+  <table>
+    <tr>
+      <th>When (UTC)</th>
+      <th>Action</th>
+      <th>Entity</th>
+      <th>Administrator</th>
+      <th>Address</th>
+      <th>Change</th>
+    </tr>
+    {% for row in rows %}
+    <tr>
+      <td class="nowrap">{{ row.created_at }}</td>
+      <td><span class="action-pill">{{ row.action }}</span></td>
+      <td>{{ entity_display(row) }}</td>
+      <td>{{ row.administrator or "admin" }}</td>
+      <td>{{ row.address or "—" }}</td>
+      <td>
+        {% if row.change_json %}
+        <details>
+          <summary>▶ Show</summary>
+          <pre class="audit-change-pre">{{ row.change_json }}</pre>
+        </details>
+        {% else %}
+        —
+        {% endif %}
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="6" class="muted">No audit events match these filters.</td></tr>
+    {% endfor %}
+  </table>
+</div>
+{% endblock %}

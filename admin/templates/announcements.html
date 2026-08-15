@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block page_title %}Announcements{% endblock %}
+{% block page_subtitle %}<p class="page-subtitle">Broadcast messages to all bot users</p>{% endblock %}
+{% block content %}
+<h2>Announcements</h2>
+{% if message %}<p class="panel">{{ message }}</p>{% endif %}
+{% if error %}<p class="alert">{{ error }}</p>{% endif %}
+<form class="panel" method="post" action="/admin/announcements" enctype="multipart/form-data">
+  <div class="emoji-field-block">
+    <span class="field-label">Message *</span>
+    {% with field_id='announcement-message', field_name='message', value='', placeholder='Type your broadcast… use ✨ to insert premium emoji', required=true, multiline=true, mode='text', rows=5, presets=icon_presets, aria_label='Announcement message' %}
+      {% include "_emoji_kbd.html" %}
+    {% endwith %}
+  </div>
+  <p class="hint">
+    Save premium IDs under <a href="/admin/icon-presets">Icon Presets</a>, then insert with the ✨ keyboard.
+  </p>
+  <label for="image">Attach image (optional)</label>
+  <input type="file" id="image" name="image" accept="image/png,image/jpeg,image/gif,image/webp">
+  <button>Create Announcement</button>
+</form>
+<div class="table-scroll">
+<table>
+  <tr><th>Image</th><th>Message</th><th>Sent Count</th><th>Status</th><th>Created</th><th>Actions</th></tr>
+  {% for item in announcements %}
+  <tr>
+    <td>
+      {% if item.image_path %}
+      <img src="/{{ item.image_path }}" alt="attached image" style="max-width:80px;max-height:80px;">
+      {% else %}
+      -
+      {% endif %}
+    </td>
+    <td>{{ item.message|admin_emoji }}</td>
+    <td>{{ item.sent_count }}</td>
+    <td>{{ "Sent" if item.is_sent else "Draft" }}</td>
+    <td>{{ item.created_at }}</td>
+    <td>
+      {% if not item.is_sent %}
+      <form method="post" action="/admin/announcements/{{ item.id }}/send" class="inline-form" onsubmit="return confirm('Send this announcement to all users on Telegram now?');">
+        <button>Send Now</button>
+      </form>
+      {% else %}
+      -
+      {% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+</div>
+{% endblock %}

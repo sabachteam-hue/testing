@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block page_title %}Add Stock{% endblock %}
+{% block content %}
+<h2>Add Stock</h2>
+{% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+{% if message %}<div class="alert alert-success">{{ message }}</div>{% endif %}
+
+<form class="panel provider-add-card" method="post" action="/admin/stock/add" enctype="multipart/form-data">
+  <div class="provider-add-head">
+    <div class="provider-add-icon" aria-hidden="true">📦</div>
+    <div>
+      <h3>Add Stock</h3>
+      <p class="muted">Quantity is set from the number of account lines.</p>
+    </div>
+  </div>
+
+  <label>Product
+    <select name="service_id" class="premium-named-select" required>
+      <option value="">Choose product…</option>
+      {% for service in services %}
+      <option
+        value="{{ service.id }}"
+        data-emoji-id="{{ (service.emoji or service.name)|admin_icon_id }}"
+        data-emoji-fallback="{{ (service.emoji or service.name)|admin_icon_fb }}"
+        data-plain-label="{{ service.name|admin_plain }}{% if service.fulfillment_type == 'manual' %} (Manual){% elif service.fulfillment_type == 'stock' %} (Auto from stock){% endif %}"
+      >{{ (service.emoji or service.name)|admin_icon_fb }} {{ service.name|admin_plain }} {% if service.fulfillment_type == "manual" %}(Manual){% elif service.fulfillment_type == "stock" %}(Auto from stock){% endif %}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Customer note (shown with delivery)
+    <textarea name="notes" rows="8" placeholder="Note shown to customer with delivery (e.g. warranty terms, delivery time…)"></textarea>
+  </label>
+  <label>Account / login details
+    <textarea id="stock-login-details" name="login_details" rows="8" placeholder="One account per line (e.g. email:password)"></textarea>
+    <span class="field-hint" id="stock-line-count">0 line(s) → quantity 0</span>
+  </label>
+  <label>Bulk import
+    <input type="file" name="bulk_file" id="stock-bulk-file" accept=".txt,.csv,.xlsx,.xls,.pdf,.doc,.docx,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
+  </label>
+
+  <div class="provider-add-actions">
+    <button type="submit" class="btn-box">Add Stock</button>
+    <a class="btn secondary btn-box" href="/admin/stock">Cancel</a>
+  </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var loginBox = document.getElementById("stock-login-details");
+  var lineCount = document.getElementById("stock-line-count");
+  function updateLineCount() {
+    if (!loginBox || !lineCount) return;
+    var n = String(loginBox.value || "").split(/\r?\n/).map(function (l) { return l.trim(); }).filter(Boolean).length;
+    lineCount.textContent = n + " line(s) → quantity " + n;
+  }
+  if (loginBox) loginBox.addEventListener("input", updateLineCount);
+  updateLineCount();
+})();
+</script>
+{% endblock %}

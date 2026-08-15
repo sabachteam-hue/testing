@@ -1,0 +1,183 @@
+{% extends "base.html" %}
+{% block title %}Payment Methods{% endblock %}
+{% block page_title %}Payment Methods{% endblock %}
+{% block page_subtitle %}<p class="page-subtitle">Configure wallets and top-up options</p>{% endblock %}
+{% block content %}
+<h2>Payment Methods</h2>
+
+<div class="providers-header">
+  <div class="providers-header-actions">
+    <a class="btn add-entry-btn" href="/admin/payment-methods/new">+ Add Payment Method</a>
+  </div>
+</div>
+
+{% if message %}<div class="alert alert-success">{{ message }}</div>{% endif %}
+{% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+
+<div class="provider-status-tabs" role="group" aria-label="Payment Methods sections">
+  <a href="/admin/payment-methods?tab=methods" class="provider-tab {% if tab != 'config' %}active{% endif %}">Payment Methods</a>
+  <a href="/admin/payment-methods?tab=config" class="provider-tab {% if tab == 'config' %}active{% endif %}">Payment Configuration</a>
+</div>
+
+{% if tab == 'config' %}
+
+<div>
+<form method="post" action="/admin/settings/payment-config">
+
+  <div class="panel">
+    <div class="settings-card-head">
+      <div>
+        <h3>Payment Verification</h3>
+      </div>
+    </div>
+    <div class="settings-fields">
+      <label><input type="checkbox" name="auto_verify_enabled" value="true" {% if not config or config.auto_verify_enabled %}checked{% endif %}> Auto Verify Payments</label>
+      <label>Payment Verification Method
+        <select name="usdt_network">
+          <option value="BEP20" {% if config and config.usdt_network == 'BEP20' %}selected{% endif %}>BEP20 / BscScan</option>
+          <option value="TRC20" {% if config and config.usdt_network == 'TRC20' %}selected{% endif %}>TRC20 / TronScan</option>
+          <option value="BINANCE" {% if config and config.usdt_network == 'BINANCE' %}selected{% endif %}>Binance Exchange</option>
+          <option value="BYBIT" {% if config and config.usdt_network == 'BYBIT' %}selected{% endif %}>Bybit Exchange</option>
+        </select>
+      </label>
+      <label>Min Deposit <input name="min_deposit" type="number" step="0.01" value="{{ config.min_deposit if config else 1 }}"></label>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="settings-card-head">
+      <div>
+        <h3>Blockchain Verification</h3>
+      </div>
+    </div>
+    <div class="settings-fields">
+      <label class="full">USDT Address / Exchange Note
+        <input name="usdt_address" value="{{ config.usdt_address if config else '' }}">
+        <span class="field-hint">Used for on-chain auto-verification against the network selected above.</span>
+      </label>
+      <label>BscScan API Key <input name="bscscan_api_key" value="{{ config.bscscan_api_key if config and config.bscscan_api_key else '' }}"></label>
+      <label>TronScan API Key <input name="tronscan_api_key" value="{{ config.tronscan_api_key if config and config.tronscan_api_key else '' }}"></label>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="settings-card-head">
+      <div>
+        <h3>PayFast Configuration</h3>
+        <p class="muted settings-card-sub">JazzCash / Easypaisa / Bank / Raast</p>
+      </div>
+    </div>
+    <div class="settings-fields">
+      <label>USD to PKR Rate <input name="usd_to_pkr_rate" type="number" step="0.01" value="{{ config.usd_to_pkr_rate if config and config.usd_to_pkr_rate else 280 }}"></label>
+      <label>PayFast Merchant ID <input name="payfast_merchant_id" value="{{ config.payfast_merchant_id if config and config.payfast_merchant_id else '' }}"></label>
+      <label>PayFast Secured Key <input name="payfast_secured_key" type="password" value="{{ config.payfast_secured_key if config and config.payfast_secured_key else '' }}"></label>
+      <label>PayFast Store ID (optional) <input name="payfast_store_id" value="{{ config.payfast_store_id if config and config.payfast_store_id else '' }}"></label>
+      <label>PayFast Base URL <input name="payfast_base_url" value="{{ config.payfast_base_url if config and config.payfast_base_url else 'https://ipg2.apps.net.pk' }}"></label>
+      <label class="full">PayFast Tutorial Video URL (optional - shows a "Watch Tutorial" button under the PayFast payment message)
+        <input name="payfast_tutorial_url" value="{{ config.payfast_tutorial_url if config and config.payfast_tutorial_url else '' }}" placeholder="https://youtube.com/...">
+      </label>
+    </div>
+    <p class="muted" style="margin:12px 0 0;">Fill in Merchant ID, Secured Key and Base URL above, then add a Payment Method in the Payment Methods tab with code <code>PAYFAST</code>. Works for <strong>wallet top-up</strong> and <strong>direct product purchase</strong>. No webhook/notify URL needs to be registered anywhere — the callback URL is sent fresh with every transaction automatically.</p>
+  </div>
+
+  <div class="panel">
+    <div class="settings-card-head">
+      <div>
+        <h3>Binance / Bybit Verification</h3>
+      </div>
+    </div>
+    <p>Pay ID top-ups can auto-credit like on-chain deposits when API keys are set and
+    Payment Methods → Binance Pay / Bybit Pay are marked <strong>Auto</strong>.
+    Use read-only API keys (no withdrawal permission).</p>
+    <ul>
+      <li><code>BINANCE_PAY_ID</code> — shown to users for Binance Pay top-ups.</li>
+      <li><code>BYBIT_PAY_ID</code> — shown to users for Bybit Pay top-ups.</li>
+      <li><code>BEP20_USDT_ADDRESS</code> / <code>TRC20_USDT_ADDRESS</code> — on-chain USDT addresses.</li>
+      <li><code>BINANCE_API_KEY</code> + <code>BINANCE_API_SECRET</code> — Binance Pay transaction history + deposits.</li>
+      <li><code>BYBIT_API_KEY</code> + <code>BYBIT_API_SECRET</code> — Bybit Pay internal deposits + on-chain deposits.</li>
+    </ul>
+    <p class="muted">After a user pays and pastes the order / transfer ID, the bot matches it in
+    Binance Pay history or Bybit internal deposit history and credits the wallet automatically
+    (Auto Verify Payments above must be on).</p>
+  </div>
+
+  <div class="settings-actions">
+    <button>Save Payment Configuration</button>
+  </div>
+</form>
+</div>
+
+{% else %}
+
+<h3>Existing Payment Methods</h3>
+<div class="table-scroll">
+<table>
+    <thead>
+        <tr>
+            <th>Icon</th>
+            <th>Name</th>
+            <th>Code</th>
+            <th>Type</th>
+            <th>Network</th>
+            <th>Address</th>
+            <th>Status</th>
+            <th>Order</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for method in methods %}
+        <tr>
+            <td>{% if method.image_path %}<img src="{{ method.image_path }}" alt="{{ method.name|admin_plain }}" style="width:24px;height:24px;object-fit:cover;border-radius:4px;">{% else %}{{ method.icon|admin_emoji }}{% endif %}</td>
+            <td>{{ method.name|admin_emoji }}</td>
+            <td>{{ method.code }}</td>
+            <td>{{ "Auto-verify" if method.method_type == "auto" else "Manual" }}</td>
+            <td>{{ method.network or "-" }}</td>
+            <td>{{ method.address or "-" }}</td>
+            <td>{{ "Active" if method.is_active else "Inactive" }}</td>
+            <td>{{ method.sort_order }}</td>
+            <td>
+                <details>
+                    <summary>Edit</summary>
+                    <form method="post" action="/admin/payment-methods/{{ method.id }}/edit" enctype="multipart/form-data">
+                        <div class="emoji-field-block">
+                          <span class="field-label">Name *</span>
+                          {% with field_id='pm-name-' ~ method.id, field_name='name', value=method.name_rich, placeholder='Payment method name', required=true, mode='text', presets=icon_presets, aria_label='Payment method name' %}
+                            {% include "_emoji_kbd.html" %}
+                          {% endwith %}
+                        </div>
+                        <select name="method_type">
+                            <option value="manual" {% if method.method_type == "manual" %}selected{% endif %}>Manual</option>
+                            <option value="auto" {% if method.method_type == "auto" %}selected{% endif %}>Auto-verify</option>
+                        </select>
+                        <input type="text" name="network" value="{{ method.network or '' }}" placeholder="Network">
+                        <input type="text" name="address" value="{{ method.address or '' }}" placeholder="Address">
+                        <input type="file" name="icon_image" accept="image/*">
+                        {% if method.image_path %}
+                        <label><input type="checkbox" name="remove_image" value="true"> Remove current logo image</label>
+                        {% endif %}
+                        <textarea name="instructions" placeholder="Instructions">{{ method.instructions or '' }}</textarea>
+                        <input type="number" name="sort_order" value="{{ method.sort_order }}">
+                        <button type="submit">Save</button>
+                    </form>
+                </details>
+
+                <form method="post" action="/admin/payment-methods/{{ method.id }}/toggle" style="display:inline">
+                    <button type="submit">{{ "Deactivate" if method.is_active else "Activate" }}</button>
+                </form>
+
+                <form method="post" action="/admin/payment-methods/{{ method.id }}/delete" style="display:inline"
+                      onsubmit="return confirm('Delete this payment method? This cannot be undone.');">
+                    <button type="submit">Delete</button>
+                </form>
+            </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="9">No payment methods yet.</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+</div>
+
+{% endif %}
+{% endblock %}

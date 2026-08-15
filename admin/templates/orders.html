@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+{% block page_title %}Orders{% endblock %}
+{% block page_subtitle %}<p class="page-subtitle">Track and fulfill customer orders</p>{% endblock %}
+{% block content %}
+<h2>Orders</h2>
+{% include "_period_stats.html" %}
+<form method="get" action="/admin/orders" class="search-bar">
+  {% if status %}<input type="hidden" name="status" value="{{ status }}">{% endif %}
+  {% if period_stats %}
+  <input type="hidden" name="period" value="{{ period_stats.period }}">
+  {% if period_stats.period == 'custom' %}
+  <input type="hidden" name="from" value="{{ period_stats.date_from }}">
+  <input type="hidden" name="to" value="{{ period_stats.date_to }}">
+  {% endif %}
+  {% endif %}
+  <input type="search" name="q" value="{{ q or '' }}" placeholder="Search order code / user / product / email / note">
+  <button type="submit">Search</button>
+  {% if q %}<a class="search-clear" href="/admin/orders{% if status %}?status={{ status }}{% endif %}">Clear</a>{% endif %}
+</form>
+<p class="filters">Filter:
+  {% set pqs = ('&period=' ~ period_stats.period) if period_stats else '' %}
+  {% if period_stats and period_stats.period == 'custom' %}
+    {% set pqs = pqs ~ '&from=' ~ period_stats.date_from ~ '&to=' ~ period_stats.date_to %}
+  {% endif %}
+  {% if q %}{% set pqs = pqs ~ '&q=' ~ (q|urlencode) %}{% endif %}
+  <a href="/admin/orders?period={{ period_stats.period if period_stats else '30' }}{% if period_stats and period_stats.period == 'custom' %}&from={{ period_stats.date_from }}&to={{ period_stats.date_to }}{% endif %}{% if q %}&q={{ q|urlencode }}{% endif %}">All</a>
+  <a href="/admin/orders?status=pending{{ pqs }}">Pending payment</a>
+  <a href="/admin/orders?status=manual_pending{{ pqs }}">Manual Pending</a>
+  <a href="/admin/orders?status=processing{{ pqs }}">Processing</a>
+  <a href="/admin/orders?status=completed{{ pqs }}">Completed</a>
+  <a href="/admin/orders?status=refunded{{ pqs }}">Refunded</a>
+  <a href="/admin/orders?status=expired{{ pqs }}">Expired</a>
+  <a href="/admin/orders?status=failed{{ pqs }}">Failed</a>
+  <a href="/admin/orders?status=cancelled{{ pqs }}">Cancelled</a>
+</p>
+<div class="table-scroll">
+<table>
+  <tr><th>Code</th><th>User</th><th>Product</th><th>Fulfillment</th><th>Qty</th><th>Amount</th><th>Method</th><th>Status</th><th>Provider</th><th>Customer email</th><th>Note</th><th>Delivered / Account Info</th><th>Date</th><th>Update</th></tr>
+  {% for order in orders %}
+  {% set ns = namespace(delivery_count=0) %}
+  {% for line in (order.delivered_info or '').splitlines() %}
+    {% if line.strip() %}{% set ns.delivery_count = ns.delivery_count + 1 %}{% endif %}
+  {% endfor %}
+  <tr>
+    <td>{{ order.order_code }}</td><td>{{ order.user.username or order.user.telegram_id }}</td><td>{{ order.service.name }}</td>
+    <td>{{ "🛠 Manual" if order.service.fulfillment_type == "manual" else ("📦 Stock" if order.service.fulfillment_type == "stock" else "⚡ Auto") }}</td>
+    <td>{{ order.quantity }}</td><td>{{ "%.2f"|format(order.amount_usdt) }}</td>
+    <td>{{ order.payment_method_label or order.payment_method or "-" }}</td>
+    <td>{{ order.status }}</td><td>{{ order.service.provider.name if order.service.provider else "Manual" }}</td>
+    <td style="white-space:nowrap;max-width:220px;font-size:13px;">
+      {% if order.customer_email %}
+      <code style="user-select:all;">{{ order.customer_email }}</code>
+      {% else %}-{% endif %}
+    </td>
+    <td style="white-space:pre-wrap;max-width:220px;font-size:12px;">{{ order.note or "-" }}</td>
+    <td class="order-delivery-cell">
+      {% if order.delivered_info and order.delivered_info.strip() %}
+      <span class="stock-login-count">{{ ns.delivery_count }} line{{ 's' if ns.delivery_count != 1 else '' }}</span>
+      <textarea class="order-delivery-data" hidden>{{ order.delivered_info }}</textarea>
+      <button
+        type="button"
+        class="secondary order-view-delivery-btn"
+        data-order-code="{{ order.order_code|e }}"
+        data-product="{{ order.service.name|e }}"
+      >View delivery details</button>
+      {% else %}
+      <span class="muted">—</span>
+      {% endif %}
+    </td>
+    <td>{{ order.created_at }}</td>
+    <td>
+      <form method="post" action="/admin/orders/{{ order.id }}/status" class="inline-form">
+        <select name="status">
+          <option value="processing" {% if order.status == "processing" %}selected{% endif %}>processing</option>
+          <option value="completed" {% if order.status == "completed" %}selected{% endif %}>completed</option>
+          <option value="refunded" {% if order.status == "refunded" %}selected{% endif %}>refunded</option>
+          <option value="failed" {% if order.status == "failed" %}selected{% endif %}>failed</option>
+          <option value="cancelled" {% if order.status == "cancelled" %}selected{% endif %}>cancelled</option>
+          <option value="expired" {% if order.status == "expired" %}selected{% endif %}>expired</option>
+        </select>
+        <textarea name="delivered_info" placeholder="Account/login to deliver to customer" rows="2" style="vertical-align:middle;"></textarea>
+        <button>Save</button>
+      </form>
+      {% if order.customer_email and order.service.fulfillment_type == "manual" and order.status in ["manual_pending", "processing", "pending"] %}
+      <p class="muted" style="margin:6px 0 0;font-size:12px;">Invite <strong>{{ order.customer_email }}</strong> to the plan, then mark completed.</p>
+      {% endif %}
+    </td>
+  </tr>
+  {% else %}
+  <tr><td colspan="14" class="muted">No orders match this search.</td></tr>
+  {% endfor %}
+</table>
+</div>
+
+<dialog class="stock-modal" id="orderDeliveryModal">
+  <div class="stock-modal-panel">
+    <header class="stock-modal-head">
+      <div>
+        <h3>Delivery account details</h3>
+        <p class="muted" id="orderDeliveryMeta">—</p>
+      </div>
+      <button type="button" class="secondary" id="orderDeliveryClose" aria-label="Close">Close</button>
+    </header>
+    <p class="help-box">Account / login lines for this order. Hidden from the table until you open View.</p>
+    <pre class="order-delivery-pre" id="orderDeliveryBody"></pre>
+    <footer class="stock-modal-foot">
+      <button type="button" class="secondary" id="orderDeliveryCopy">Copy all</button>
+      <button type="button" class="secondary" id="orderDeliveryCancel">Close</button>
+    </footer>
+  </div>
+</dialog>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  const modal = document.getElementById("orderDeliveryModal");
+  const meta = document.getElementById("orderDeliveryMeta");
+  const body = document.getElementById("orderDeliveryBody");
+  const copyBtn = document.getElementById("orderDeliveryCopy");
+  if (!modal || !meta || !body) return;
+
+  function closeModal() {
+    if (typeof modal.close === "function") modal.close();
+    else modal.removeAttribute("open");
+  }
+
+  function openModal() {
+    if (typeof modal.showModal === "function") modal.showModal();
+    else modal.setAttribute("open", "");
+  }
+
+  document.querySelectorAll(".order-view-delivery-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const code = btn.getAttribute("data-order-code") || "order";
+      const product = btn.getAttribute("data-product") || "Product";
+      const data = btn.parentElement?.querySelector(".order-delivery-data");
+      const delivery = data ? data.value : "";
+      meta.textContent = code + " · " + product;
+      body.textContent = delivery;
+      openModal();
+    });
+  });
+
+  document.getElementById("orderDeliveryClose")?.addEventListener("click", closeModal);
+  document.getElementById("orderDeliveryCancel")?.addEventListener("click", closeModal);
+  modal.addEventListener("click", (event) => {
+    if (event.target === modal) closeModal();
+  });
+
+  copyBtn?.addEventListener("click", async () => {
+    const text = body.textContent || "";
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      copyBtn.textContent = "Copied";
+      setTimeout(() => { copyBtn.textContent = "Copy all"; }, 1200);
+    } catch (_) {
+      const range = document.createRange();
+      range.selectNodeContents(body);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+  });
+})();
+</script>
+{% endblock %}

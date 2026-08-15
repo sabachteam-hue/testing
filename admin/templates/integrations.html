@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block page_title %}Integrations{% endblock %}
+{% block page_subtitle %}<p class="page-subtitle">External services and connection status</p>{% endblock %}
+{% block content %}
+<h2>Integrations</h2>
+<section class="grid-2">
+  <div class="panel">
+    <h3>Connected Resellers</h3>
+    <div class="table-scroll">
+    <table>
+      <tr><th>User</th><th>Key</th><th>Rate</th><th>Last Used</th></tr>
+      {% for key in api_keys %}
+      <tr><td>{{ key.user.username or key.user.telegram_id }}</td><td>{{ key.api_key }}</td><td>{{ key.rate_limit }}</td><td>{{ key.last_used or "-" }}</td></tr>
+      {% endfor %}
+    </table>
+    </div>
+  </div>
+  <div class="panel">
+    <h3>Webhooks</h3>
+    <div class="table-scroll">
+    <table>
+      <tr><th>User ID</th><th>Event</th><th>URL</th><th>Status</th></tr>
+      {% for webhook in webhooks %}
+      <tr><td>{{ webhook.user_id }}</td><td>{{ webhook.event_type }}</td><td>{{ webhook.webhook_url }}</td><td>{{ "Active" if webhook.is_active else "Off" }}</td></tr>
+      {% endfor %}
+    </table>
+    </div>
+  </div>
+</section>
+{% endblock %}

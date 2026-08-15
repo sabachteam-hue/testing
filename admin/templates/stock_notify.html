@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block page_title %}Stock Notification{% endblock %}
+{% block content %}
+<h2>Stock Notification</h2>
+{% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+{% if message %}<div class="alert alert-success">{{ message }}</div>{% endif %}
+
+<form class="panel provider-add-card" method="post" action="/admin/stock/update">
+  <div class="provider-add-head">
+    <div class="provider-add-icon" aria-hidden="true">📣</div>
+    <div>
+      <h3>Stock Notification</h3>
+      <p class="muted">Send a stock-updated broadcast without changing inventory numbers.</p>
+    </div>
+  </div>
+
+  <label>Product
+    <select name="service_id" class="premium-named-select" required>
+      <option value="">Choose product…</option>
+      {% for service in services %}
+      <option
+        value="{{ service.id }}"
+        data-emoji-id="{{ (service.emoji or service.name)|admin_icon_id }}"
+        data-emoji-fallback="{{ (service.emoji or service.name)|admin_icon_fb }}"
+        data-plain-label="{{ service.name|admin_plain }}{% if service.fulfillment_type == 'manual' %} (Manual){% elif service.fulfillment_type == 'stock' %} (Auto from stock){% endif %}"
+      >{{ (service.emoji or service.name)|admin_icon_fb }} {{ service.name|admin_plain }} {% if service.fulfillment_type == "manual" %}(Manual){% elif service.fulfillment_type == "stock" %}(Auto from stock){% endif %}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Fake “Added” quantity (notification only)
+    <input name="quantity" type="number" min="1" placeholder="e.g. 100" required>
+  </label>
+
+  <div class="provider-add-actions">
+    <button type="submit" class="btn-box">Send stock notification</button>
+    <a class="btn secondary btn-box" href="/admin/stock">Cancel</a>
+  </div>
+</form>
+{% endblock %}

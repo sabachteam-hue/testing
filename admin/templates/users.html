@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block page_title %}Users{% endblock %}
+{% block page_subtitle %}<p class="page-subtitle">Balances, bans, and account actions</p>{% endblock %}
+{% block content %}
+<h2>Users</h2>
+{% include "_period_stats.html" %}
+<form method="get" action="/admin/users" class="search-bar">
+  {% if period_stats %}
+  <input type="hidden" name="period" value="{{ period_stats.period }}">
+  {% if period_stats.period == 'custom' %}
+  <input type="hidden" name="from" value="{{ period_stats.date_from }}">
+  <input type="hidden" name="to" value="{{ period_stats.date_to }}">
+  {% endif %}
+  {% endif %}
+  <input type="search" name="q" value="{{ q or '' }}" placeholder="Search username / telegram id / name">
+  <button type="submit">Search</button>
+  {% if q %}<a class="search-clear" href="/admin/users">Clear</a>{% endif %}
+</form>
+<div class="table-scroll">
+<table>
+  <tr><th>User</th><th>Telegram ID</th><th>Balance</th><th>Referral</th><th>Orders</th><th>Status</th><th>Actions</th></tr>
+  {% for user in users %}
+  <tr>
+    <td>{{ user.full_name or user.username or "-" }}</td><td>{{ user.telegram_id }}</td><td>{{ "%.2f"|format(user.wallet_usdt) }}</td><td>{{ "%.2f"|format(user.referral_wallet) }}</td><td>{{ user.orders|length }}</td><td>{{ "Banned" if user.is_banned else "Active" }}</td>
+    <td>
+      <form method="post" class="inline-form">
+        <input name="amount" type="number" step="0.01" min="0" placeholder="USDT" size="6" required>
+        <input name="note" placeholder="Note" size="8">
+        <button formaction="/admin/users/{{ user.id }}/credit">Credit</button>
+        <button formaction="/admin/users/{{ user.id }}/debit">Deduct</button>
+      </form>
+      <form method="post" action="/admin/users/{{ user.id }}/toggle-ban" class="inline-form"><button>Ban/Unban</button></form>
+    </td>
+  </tr>
+  {% else %}
+  <tr><td colspan="7" class="muted">No users match this search.</td></tr>
+  {% endfor %}
+</table>
+</div>
+{% endblock %}

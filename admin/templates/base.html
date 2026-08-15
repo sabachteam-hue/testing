@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{{ title or "SMF SHOP Admin" }}{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/admin/static/css/style.css?v=17">
+</head>
+<body class="app-body">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-brand">
+      <span class="brand-mark">S</span>
+      <div>
+        <strong>SMF SHOP</strong>
+        <small>Admin panel</small>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <p class="nav-label">Overview</p>
+      <a href="/admin/dashboard" class="{% if request.url.path.endswith('/dashboard') %}active{% endif %}">Dashboard</a>
+
+      <p class="nav-label">Catalog</p>
+      <a href="/admin/providers" class="{% if '/providers' in request.url.path %}active{% endif %}">Providers</a>
+      <a href="/admin/import-services" class="{% if '/import-services' in request.url.path %}active{% endif %}">Import Products</a>
+      <a href="/admin/categories" class="{% if '/categories' in request.url.path %}active{% endif %}">Categories</a>
+      <a href="/admin/icon-presets" class="{% if '/icon-presets' in request.url.path %}active{% endif %}">Icon Presets</a>
+      <a href="/admin/commands" class="{% if '/commands' in request.url.path %}active{% endif %}">Commands</a>
+      <a href="/admin/services" class="{% if request.url.path.rstrip('/').endswith('/admin/services') or '/admin/services/' in request.url.path %}active{% endif %}">Products</a>
+      <a href="/admin/stock" class="{% if '/stock' in request.url.path %}active{% endif %}">Stock</a>
+
+      <p class="nav-label">Commerce</p>
+      <a href="/admin/sales" class="{% if '/sales' in request.url.path %}active{% endif %}">Sales</a>
+      <a href="/admin/user-discounts" class="{% if '/user-discounts' in request.url.path %}active{% endif %}">User Discounts</a>
+      <a href="/admin/refund-tool" class="{% if '/refund-tool' in request.url.path %}active{% endif %}">Refund Tool{% if sidebar_counts and sidebar_counts.refund_tool %}<span class="nav-badge">{{ sidebar_counts.refund_tool }}</span>{% endif %}</a>
+      <a href="/admin/orders" class="{% if '/orders' in request.url.path %}active{% endif %}">Orders{% if sidebar_counts and sidebar_counts.orders %}<span class="nav-badge">{{ sidebar_counts.orders }}</span>{% endif %}</a>
+      <a href="/admin/sold-accounts" class="{% if '/sold-accounts' in request.url.path %}active{% endif %}">Sold Accounts{% if sidebar_counts and sidebar_counts.sold_accounts %}<span class="nav-badge">{{ sidebar_counts.sold_accounts }}</span>{% endif %}</a>
+      <a href="/admin/users" class="{% if '/users' in request.url.path %}active{% endif %}">Users{% if sidebar_counts and sidebar_counts.users %}<span class="nav-badge">{{ sidebar_counts.users }}</span>{% endif %}</a>
+      <a href="/admin/transactions" class="{% if '/transactions' in request.url.path %}active{% endif %}">Transactions{% if sidebar_counts and sidebar_counts.transactions %}<span class="nav-badge">{{ sidebar_counts.transactions }}</span>{% endif %}</a>
+      <a href="/admin/revenue" class="{% if '/revenue' in request.url.path %}active{% endif %}">Revenue{% if sidebar_counts and sidebar_counts.revenue %}<span class="nav-badge">{{ sidebar_counts.revenue }}</span>{% endif %}</a>
+      <a href="/admin/payment-methods" class="{% if '/payment-methods' in request.url.path %}active{% endif %}">Payment Methods</a>
+      <a href="/admin/referrals" class="{% if '/referrals' in request.url.path %}active{% endif %}">Referrals</a>
+
+      <p class="nav-label">System</p>
+      <a href="/admin/announcements" class="{% if '/announcements' in request.url.path %}active{% endif %}">Announcements</a>
+      <a href="/admin/api-management" class="{% if '/api-management' in request.url.path %}active{% endif %}">API Management</a>
+      <a href="/admin/languages" class="{% if '/languages' in request.url.path %}active{% endif %}">Languages</a>
+      <a href="/admin/integrations" class="{% if '/integrations' in request.url.path %}active{% endif %}">Integrations</a>
+      <a href="/admin/settings" class="{% if request.url.path.rstrip('/').endswith('/admin/settings') %}active{% endif %}">Settings</a>
+      <a href="/admin/audit-log" class="{% if '/audit-log' in request.url.path %}active{% endif %}">Audit log</a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <a href="/admin/logout" class="logout-link">Log out</a>
+    </div>
+  </aside>
+
+  <div class="main-wrap">
+    <header class="topbar">
+      <button type="button" class="nav-toggle" id="navToggle" aria-label="Toggle menu">☰</button>
+      <div class="topbar-copy">
+        <h1 class="page-title">{% block page_title %}Admin{% endblock %}</h1>
+        {% block page_subtitle %}<p class="page-subtitle">Manage your Telegram shop</p>{% endblock %}
+      </div>
+    </header>
+    <main class="content">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+
+  <div class="sidebar-backdrop" id="sidebarBackdrop" hidden></div>
+  <script src="/admin/static/js/app.js?v=13"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

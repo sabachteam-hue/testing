@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block page_title %}Transactions{% endblock %}
+{% block page_subtitle %}<p class="page-subtitle">Deposits, deductions, and verification status</p>{% endblock %}
+{% block content %}
+<h2>Transactions</h2>
+{% if request.query_params.get('error') == 'missing_payment_proof' %}
+<p style="color:#b00020;">Cannot confirm: no payment TXID / verified proof on this row (unpaid checkout cannot be credited).</p>
+{% elif request.query_params.get('error') == 'duplicate_txid' %}
+<p style="color:#b00020;">Cannot confirm: this TXID is already used on another deposit.</p>
+{% elif request.query_params.get('error') == 'cannot_confirm_unpaid' %}
+<p style="color:#b00020;">Cannot confirm expired/rejected unpaid checkout without payment proof.</p>
+{% endif %}
+{% include "_period_stats.html" %}
+<p class="filters">
+  <a href="/admin/transactions">All</a>
+  <a href="/admin/transactions?status=pending">Pending</a>
+  <a href="/admin/transactions?status=confirmed">Confirmed</a>
+  <a href="/admin/transactions?status=rejected">Rejected</a>
+  <a href="/admin/transactions?status=expired">Expired</a>
+</p>
+<form method="get" action="/admin/transactions" class="search-bar">
+  {% if status %}<input type="hidden" name="status" value="{{ status }}">{% endif %}
+  {% if period_stats %}
+  <input type="hidden" name="period" value="{{ period_stats.period }}">
+  {% if period_stats.period == 'custom' %}
+  <input type="hidden" name="from" value="{{ period_stats.date_from }}">
+  <input type="hidden" name="to" value="{{ period_stats.date_to }}">
+  {% endif %}
+  {% endif %}
+  <input type="search" name="q" value="{{ q or '' }}" placeholder="Search username / telegram id / note / TX">
+  <button type="submit">Search</button>
+  {% if q %}<a class="search-clear" href="/admin/transactions{% if status %}?status={{ status }}{% endif %}">Clear</a>{% endif %}
+</form>
+<div class="table-scroll">
+<table>
+  <tr>
+    <th>User</th>
+    <th>Amount</th>
+    <th>Type</th>
+    <th>Method</th>
+    <th>TX Hash</th>
+    <th>Blockchain</th>
+    <th>Status</th>
+    <th>Date</th>
+    <th>Pending / Verify reason</th>
+    <th>Verify Info</th>
+    <th>Action</th>
+  </tr>
+  {% for tx in transactions %}
+  <tr>
+    <td>{{ tx.user.username or tx.user.telegram_id }}</td>
+    <td>{{ "%.2f"|format(tx.amount) }}</td>
+    <td>{{ tx.tx_type }}</td>
+    <td>{{ tx.payment_method_label }}</td>
+    <td style="max-width:160px; word-break:break-all;">{{ tx.tx_hash or "-" }}</td>
+    <td>{{ tx.blockchain_status }}</td>
+    <td>{{ tx.status }}</td>
+    <td>{{ tx.created_at }}</td>
+    <td style="max-width:280px; white-space:pre-wrap; word-break:break-word;">
+      {{ tx.pending_reason_label }}
+      {% if tx.note %}<div style="margin-top:6px; font-size:12px; opacity:0.85;"><strong>Note:</strong> {{ tx.note }}</div>{% endif %}
+    </td>
+    <td>
+      {% if tx.verification %}
+      <details>
+        <summary>{{ tx.verification.verification_status }}</summary>
+        <p><strong>Reason:</strong> {{ tx.verification.reason or "-" }}</p>
+        <p><strong>From:</strong> {{ tx.verification.from_address or "-" }}<br>
+           <strong>To:</strong> {{ tx.verification.to_address or "-" }}<br>
+           <strong>Amount verified:</strong> {{ tx.verification.amount_verified }}</p>
+        <pre style="max-width:400px; white-space:pre-wrap; word-break:break-all; font-size:11px;">{{ tx.verification.api_response or "-" }}</pre>
+      </details>
+      {% else %}
+      -
+      {% endif %}
+    </td>
+    <td><form method="post" action="/admin/transactions/{{ tx.id }}/status" class="inline-form"><select name="status"><option>confirmed</option><option>rejected</option><option>expired</option></select><button>Save</button></form></td>
+  </tr>
+  {% endfor %}
+</table>
+</div>
+{% endblock %}

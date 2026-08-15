@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block page_title %}Settings{% endblock %}
+{% block page_subtitle %}<p class="page-subtitle">Bot config and support contacts</p>{% endblock %}
+{% block content %}
+<h2>Settings</h2>
+{% if message %}<p class="alert success">{{ message }}</p>{% endif %}
+
+<div>
+<form method="post" action="/admin/settings">
+
+  <div class="panel">
+    <div class="settings-card-head">
+      <div>
+        <h3>General Settings</h3>
+        <p class="muted settings-card-sub">Basic bot and support configuration</p>
+      </div>
+    </div>
+    <div class="settings-fields">
+      <label>Admin Telegram ID (from env <code>ADMIN_ID</code> — only this user can use /admin)
+        <input name="admin_tg_id" value="{{ config.admin_tg_id if config else '' }}" readonly>
+      </label>
+      <label>Welcome Message
+        <textarea name="welcome_msg">{{ config.welcome_msg if config else 'Welcome to SMF SHOP!' }}</textarea>
+      </label>
+      <label>Support Username (without @) <input name="support_username" value="{{ config.support_username if config and config.support_username else '' }}" placeholder="admin"></label>
+      <label>Support Telegram URL <input name="support_url" value="{{ config.support_url if config and config.support_url else '' }}" placeholder="https://t.me/admin"></label>
+      <label>Admin WhatsApp number (with country code, digits) <input name="support_whatsapp" value="{{ config.support_whatsapp if config and config.support_whatsapp else '' }}" placeholder="e.g. 923001234567"></label>
+      <label>Support Email <input name="support_email" value="{{ config.support_email if config and config.support_email else '' }}" placeholder="admin@yourpanel.com"></label>
+      <label>Telegram Channel URL (Support screen link)
+        <input name="tg_channel_url" value="{{ config.tg_channel_url if config and config.tg_channel_url else '' }}" placeholder="https://t.me/yourchannel">
+      </label>
+      <label>WhatsApp Channel URL <input name="whatsapp_channel_url" value="{{ config.whatsapp_channel_url if config and config.whatsapp_channel_url else '' }}" placeholder="https://whatsapp.com/channel/..."></label>
+      <label class="full">Support Note (extra message shown in /support)
+        <textarea name="support_note">{{ config.support_note if config and config.support_note else '' }}</textarea>
+      </label>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="settings-card-head">
+      <div>
+        <h3>Maintenance Mode</h3>
+      </div>
+      <label class="switch">
+        <input type="checkbox" name="maintenance" value="true" {% if config and config.maintenance %}checked{% endif %}>
+        <span class="switch-slider" aria-hidden="true"></span>
+      </label>
+    </div>
+    <p class="muted">
+      Temporarily restrict customer access to the bot.
+      Turn <strong>ON</strong> and Save: every client gets the maintenance DM, slash commands are hidden,
+      and any menu/command tap only shows the maintenance message (admins can still use the bot).
+      Turn <strong>OFF</strong> and Save to restore commands and notify everyone the bot is active.
+    </p>
+  </div>
+
+  <div class="panel">
+    <div class="settings-card-head">
+      <div>
+        <h3>Notifications</h3>
+      </div>
+    </div>
+    <div class="settings-fields">
+      <label>Notify Group — all notifications (purchase, stock, product, sale, maintenance)
+        <input name="orders_notify_chat_id" value="{{ config.orders_notify_chat_id if config and config.orders_notify_chat_id else '' }}" placeholder="-100123… ya https://t.me/yourgroup">
+        <span class="field-hint">
+          Public/supergroup jahan users saari shop activity dekhein. Bot ko <strong>Admin</strong> banao.
+          Yahan premium emoji chalte hain (owner Premium). Force-join group bhi yahi ho sakta hai.
+        </span>
+      </label>
+      <label>Notify Channel — announcements, flash/sale, maintenance only
+        <input name="channel_notify_chat_id" value="{{ config.channel_notify_chat_id if config and config.channel_notify_chat_id else '' }}" placeholder="-100123… ya https://t.me/yourchannel">
+        <span class="field-hint">
+          Admin announcements, flash sale / price drop, aur maintenance on/off yahan.
+          Purchase / stock / new product yahan <strong>nahi</strong> jati.
+        </span>
+      </label>
+    </div>
+    <p class="muted" style="margin:12px 0 0;">
+      <strong>ID:</strong> bot Admin → <code>https://t.me/username</code> Save pe resolve, ya
+      <code>-100…</code> paste. Private <code>t.me/+…</code> se ID nahi milti.
+    </p>
+  </div>
+
+  <div class="panel">
+    <div class="settings-card-head">
+      <div>
+        <h3>Force Join (Membership Required)</h3>
+      </div>
+      <label class="switch">
+        <input type="checkbox" name="force_join_enabled" value="true" {% if config and config.force_join_enabled %}checked{% endif %}>
+        <span class="switch-slider" aria-hidden="true"></span>
+      </label>
+    </div>
+    <p class="muted">
+      Require users to join the configured channel/group before using the bot.
+      On hone par user ko configured <strong>channel and/or group</strong> join karke ✅ <b>I have joined</b>
+      dabana zaroori hai. Dono set hon to dono check hote hain. Bot dono mein <strong>Admin</strong> hona chahiye.
+    </p>
+    <div class="settings-fields">
+      <label>Force-join channel (@username or -100…)
+        <input name="force_join_channel" value="{{ config.force_join_channel if config and config.force_join_channel else '' }}" placeholder="@mychannel or -100123…">
+      </label>
+      <label>Force-join channel invite URL (Join Channel button)
+        <input name="force_join_channel_url" value="{{ config.force_join_channel_url if config and config.force_join_channel_url else '' }}" placeholder="https://t.me/mychannel or https://t.me/+invite">
+      </label>
+      <label>Force-join group (@username or -100…)
+        <input name="force_join_group" value="{{ config.force_join_group if config and config.force_join_group else '' }}" placeholder="@mygroup or -100123…">
+        <span class="field-hint">Notify Group wali hi id use kar sakti ho taake users pehle group join karein.</span>
+      </label>
+      <label>Force-join group invite URL (Join Group button)
+        <input name="force_join_group_url" value="{{ config.force_join_group_url if config and config.force_join_group_url else '' }}" placeholder="https://t.me/mygroup or https://t.me/+invite">
+      </label>
+    </div>
+  </div>
+
+  <div class="settings-actions">
+    <button>Save Settings</button>
+  </div>
+</form>
+</div>
+{% endblock %}

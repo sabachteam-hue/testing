@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block page_title %}User Discounts{% endblock %}
+{% block page_subtitle %}<p class="page-subtitle">Give a specific Telegram user a personal price on a product</p>{% endblock %}
+{% block content %}
+<h2>User Discounts</h2>
+
+{% if message %}<div class="alert alert-success">{{ message }}</div>{% endif %}
+{% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+
+<section class="panel">
+  <h3>Add discount</h3>
+  <p class="muted" style="margin-top:0;">
+    User sends their Telegram ID → set product + discount here.
+    That user sees a special price on that product in the bot (applied on top of the current sale/list price).
+  </p>
+  <form method="post" action="/admin/user-discounts/create" class="form-grid">
+    <label>Telegram ID or @username
+      <input name="user_query" placeholder="e.g. 8963991087 or @username" required>
+    </label>
+    <label>Product
+      <select name="service_id" class="premium-named-select" required>
+        <option value="">Choose product…</option>
+        {% for product in products %}
+        <option
+          value="{{ product.id }}"
+          data-emoji-id="{{ (product.emoji or product.name)|admin_icon_id }}"
+          data-emoji-fallback="{{ (product.emoji or product.name)|admin_icon_fb }}"
+          data-plain-label="{{ product.name|admin_plain }} — ${{ '%.2f'|format(product.sell_price) }}"
+        >{{ (product.emoji or product.name)|admin_icon_fb }} {{ product.name|admin_plain }} — ${{ '%.2f'|format(product.sell_price) }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Discount type
+      <select name="discount_type" id="discountType">
+        <option value="percent">Percent off (%)</option>
+        <option value="fixed">Fixed USDT off</option>
+        <option value="price">Special absolute price (USDT)</option>
+      </select>
+    </label>
+    <label>Value
+      <input type="number" name="value" step="0.01" min="0" placeholder="e.g. 20 or 0.30" required>
+      <span class="field-hint">% off / USDT off / final unit price — depends on type.</span>
+    </label>
+    <label>Note (optional)
+      <input name="note" maxlength="200" placeholder="e.g. VIP friend">
+    </label>
+    <button type="submit">Save discount</button>
+  </form>
+</section>
+
+<section class="panel" style="margin-top:18px;">
+  <h3>Active &amp; saved discounts</h3>
+  <form method="get" action="/admin/user-discounts" class="search-bar">
+    <input type="search" name="q" value="{{ q or '' }}" placeholder="Search telegram id / username / product">
+    <button type="submit">Search</button>
+    {% if q %}<a class="search-clear" href="/admin/user-discounts">Clear</a>{% endif %}
+  </form>
+  <div class="table-scroll">
+  <table>
+    <tr>
+      <th>User</th>
+      <th>Product</th>
+      <th>List price</th>
+      <th>Discount</th>
+      <th>Their price</th>
+      <th>Status</th>
+      <th>Note</th>
+      <th>Actions</th>
+    </tr>
+    {% for row in discounts %}
+    <tr>
+      <td>
+        {{ row.user.full_name or row.user.username or '—' }}<br>
+        <small class="muted">@{{ row.user.username or '—' }} · {{ row.user.telegram_id }}</small>
+      </td>
+      <td>{{ row.service.name|admin_plain if row.service else ('#' ~ row.service_id) }}</td>
+      <td>${{ '%.2f'|format(row.service.sell_price if row.service else 0) }}</td>
+      <td>
+        {% if row.discount_type == 'percent' %}{{ '%.2g'|format(row.value) }}% off
+        {% elif row.discount_type == 'fixed' %}${{ '%.2f'|format(row.value) }} off
+        {% else %}Special ${{ '%.2f'|format(row.value) }}
+        {% endif %}
+      </td>
+      <td><strong>${{ '%.2f'|format(row.effective_price) }}</strong></td>
+      <td>{{ "Active" if row.is_active else "Off" }}</td>
+      <td>{{ row.note or '—' }}</td>
+      <td class="sales-actions">
+        <form method="post" action="/admin/user-discounts/{{ row.id }}/toggle" style="display:inline">
+          <button type="submit">{{ "Deactivate" if row.is_active else "Activate" }}</button>
+        </form>
+        <form method="post" action="/admin/user-discounts/{{ row.id }}/delete" style="display:inline" onsubmit="return confirm('Delete this discount?');">
+          <button type="submit">Delete</button>
+        </form>
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="8" class="muted">No user discounts yet.</td></tr>
+    {% endfor %}
+  </table>
+  </div>
+</section>
+{% endblock %}

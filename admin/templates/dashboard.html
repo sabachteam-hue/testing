@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block page_title %}Dashboard{% endblock %}
+{% block page_subtitle %}<p class="page-subtitle">Overview of orders, stock, and activity</p>{% endblock %}
+{% block content %}
+<h2>Dashboard</h2>
+{% include "_period_stats.html" %}
+
+<section class="grid-2 dash-split">
+  <div class="panel dash-recent-orders">
+    <h3>Recent Orders</h3>
+    <div class="table-scroll">
+      <table class="compact-table">
+        <tr><th>Code</th><th>User</th><th>Product</th><th>Status</th><th>Amount</th></tr>
+        {% for order in recent_orders %}
+        <tr>
+          <td>{{ order.order_code }}</td>
+          <td>{{ order.user.username or order.user.telegram_id }}</td>
+          <td>{{ order.service.name }}</td>
+          <td><span class="status-pill status-{{ order.status }}">{{ order.status }}</span></td>
+          <td>{{ "%.2f"|format(order.amount_usdt) }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="muted">No recent orders</td></tr>
+        {% endfor %}
+      </table>
+    </div>
+  </div>
+  <div class="panel dash-admin-activity">
+    <h3>Admin Activity</h3>
+    <div class="table-scroll">
+      <table class="compact-table">
+        <tr><th>When (UTC)</th><th>Action</th><th>Entity</th><th>Address</th></tr>
+        {% for row in recent_activity %}
+        <tr>
+          <td class="nowrap">{{ row.created_at }}</td>
+          <td><span class="action-pill">{{ row.action }}</span></td>
+          <td>{{ entity_display(row) }}</td>
+          <td>{{ row.address or "—" }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4" class="muted">No admin activity yet</td></tr>
+        {% endfor %}
+      </table>
+    </div>
+    <p class="muted" style="margin:12px 0 0;"><a href="/admin/audit-log">Open full Audit log →</a></p>
+  </div>
+</section>
+{% endblock %}

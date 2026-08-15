@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block page_title %}Add Provider{% endblock %}
+{% block page_subtitle %}<p class="page-subtitle">Configure API integration credentials and endpoint</p>{% endblock %}
+{% block content %}
+<h2>Add Provider</h2>
+{% if error %}<p class="alert">{{ error }}</p>{% endif %}
+{% if message %}<p class="alert alert-success">{{ message }}</p>{% endif %}
+
+<form class="panel provider-add-card" method="post" action="/admin/providers">
+  <div class="provider-add-head">
+    <div class="provider-add-icon" aria-hidden="true">⚡</div>
+    <div>
+      <h3>Add SMM API Provider</h3>
+      <p class="muted">Configure API integration credentials, endpoint base URL, and balance URL securely.</p>
+    </div>
+  </div>
+
+  <input type="hidden" name="type" value="api">
+
+  <label>Provider name *
+    <input name="name" placeholder="e.g. PeakSMM Main Panel" required>
+  </label>
+  <label>API base URL *
+    <input name="api_url" placeholder="https://panel.example.com/api/v2" required>
+  </label>
+  <label>Balance URL (optional)
+    <input name="balance_url" placeholder="https://panel.example.com/api/balance">
+  </label>
+  <label>API key
+    <input name="api_key" placeholder="API key">
+  </label>
+  <label>Telegram bot @username
+    <input name="telegram_bot" placeholder="@supplier_bot">
+  </label>
+  <label>Contact
+    <input name="contact" placeholder="@admin or email">
+  </label>
+
+  <p class="help-box">API URL should be reachable over HTTPS. After adding, use Sync stock/prices on the Providers list.</p>
+
+  <div class="provider-add-actions">
+    <button type="submit">Add API provider</button>
+    <a class="btn secondary" href="/admin/providers">Cancel</a>
+  </div>
+</form>
+{% endblock %}

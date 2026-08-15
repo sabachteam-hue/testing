@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Login · SMF SHOP Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/admin/static/css/style.css">
+</head>
+<body class="login-body">
+  <div class="login-shell">
+    <form class="login-card" method="post" action="/admin/login" autocomplete="on">
+      <div class="login-brand">SMF SHOP</div>
+      <h1>Login</h1>
+      <p class="login-subtitle">Telegram shop bot dashboard. Log in to manage products.</p>
+
+      {% if error %}
+      <div class="alert alert-error" role="alert">{{ error }}</div>
+      {% endif %}
+
+      <label class="field">
+        <span>Username</span>
+        <input name="username" type="text" autocomplete="username" required placeholder="admin">
+      </label>
+
+      <label class="field">
+        <span>Password</span>
+        <input name="password" type="password" autocomplete="current-password" required placeholder="••••••••">
+      </label>
+
+      <button class="btn-enter" type="submit">Enter</button>
+    </form>
+  </div>
+</body>
+</html>

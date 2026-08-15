@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Categories{% endblock %}
+{% block page_title %}Categories{% endblock %}
+{% block content %}
+<h2>Categories</h2>
+
+<div class="providers-header">
+  <div class="providers-header-actions">
+    <a class="btn add-entry-btn" href="/admin/categories/new">+ Add Category</a>
+  </div>
+</div>
+
+{% if message %}<div class="alert alert-success">{{ message }}</div>{% endif %}
+{% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+
+<form class="search-bar" method="get" action="/admin/categories">
+  <input type="search" name="q" value="{{ search_q or '' }}" placeholder="Search categories by name…">
+  <button type="submit">Search</button>
+  {% if search_q %}<a class="search-clear" href="/admin/categories">Clear</a>{% endif %}
+</form>
+{% if search_q %}
+<p class="field-hint">Showing {{ categories|length }} result(s) for “{{ search_q }}”.</p>
+{% endif %}
+<div class="table-scroll">
+<table>
+    <thead>
+        <tr>
+            <th>Icon</th>
+            <th>Name</th>
+            <th>Status</th>
+            <th>Order</th>
+            <th>Products</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for category in categories %}
+        <tr>
+            <td>{{ category.emoji|admin_emoji }}</td>
+            <td>{{ category.name|admin_emoji }}</td>
+            <td>{{ "Active" if category.is_active else "Inactive" }}</td>
+            <td>{{ category.sort_order }}</td>
+            <td>{{ category.services|length }}</td>
+            <td>
+                <a class="btn secondary add-entry-btn" href="/admin/categories/{{ category.id }}/edit">Edit</a>
+                <form method="post" action="/admin/categories/{{ category.id }}/toggle" style="display:inline">
+                    <button type="submit">{{ "Deactivate" if category.is_active else "Activate" }}</button>
+                </form>
+                <form method="post" action="/admin/categories/{{ category.id }}/delete" style="display:inline"
+                      onsubmit="return confirm('Delete this category? This cannot be undone.');">
+                    <button type="submit">Delete</button>
+                </form>
+            </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6">No categories yet.</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endblock %}

@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block page_title %}Sales{% endblock %}
+{% block page_subtitle %}<p class="page-subtitle">Flash, seasonal, and promo sales — activate to notify the bot</p>{% endblock %}
+{% block content %}
+<h2>Sales</h2>
+
+{% if request.query_params.get('success') %}
+<p class="help-box" style="border-color:#9ad4b0;color:#147a3f;">{{ request.query_params.get('success') }}</p>
+{% endif %}
+{% if request.query_params.get('error') %}
+<p class="help-box" style="border-color:#f0b4b4;color:#b00020;">{{ request.query_params.get('error') }}</p>
+{% endif %}
+
+<section class="panel">
+  <h3>Create sale</h3>
+  <p class="muted" style="margin-top:0;">Sale type → product → current price → sale price → activate / save.</p>
+  <form method="post" action="/admin/sales/create" class="sales-create" id="saleCreateForm">
+    <div class="sales-create-grid">
+      <label>Sale type
+        <select name="sale_type" required>
+          {% for key, label in sale_types %}
+          <option value="{{ key }}">{{ label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Select product
+        <select name="service_id" id="saleProductSelect" class="premium-named-select" required>
+          <option value="">Choose product…</option>
+          {% for product in products %}
+          <option
+            value="{{ product.id }}"
+            data-price="{{ '%.2f'|format(product.sell_price) }}"
+            data-emoji-id="{{ (product.emoji or product.name)|admin_icon_id }}"
+            data-emoji-fallback="{{ (product.emoji or product.name)|admin_icon_fb }}"
+            data-plain-label="{{ product.name|admin_plain }} — ${{ '%.2f'|format(product.sell_price) }}"
+          >{{ (product.emoji or product.name)|admin_icon_fb }} {{ product.name|admin_plain }} — ${{ '%.2f'|format(product.sell_price) }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Current price (USDT)
+        <input type="text" id="saleCurrentPrice" value="—" readonly>
+      </label>
+      <label>Set sale price (USDT)
+        <input type="number" name="sale_price" step="0.01" min="0.01" placeholder="0.00" required>
+      </label>
+      <label>Duration hours (flash / timed)
+        <input type="number" name="duration_hours" min="1" max="1440" placeholder="24 for flash">
+      </label>
+    </div>
+    <div class="sales-actions">
+      <button type="submit" name="activate" value="1">Create &amp; Activate (notify bot)</button>
+      <button type="submit" class="secondary">Save inactive</button>
+    </div>
+  </form>
+</section>
+
+<section class="panel" style="margin-top:18px;">
+  <h3>All sales</h3>
+  <div class="table-scroll">
+  <table>
+    <tr>
+      <th>Type</th>
+      <th>Product</th>
+      <th>Was</th>
+      <th>Sale</th>
+      <th>Duration</th>
+      <th>Status</th>
+      <th>Ends</th>
+      <th>Actions</th>
+    </tr>
+    {% for sale in sales %}
+    <tr>
+      <td>{{ sale.sale_type_label }}</td>
+      <td>{{ sale.service.name|admin_emoji if sale.service else ('#' ~ sale.service_id) }}</td>
+      <td>${{ '%.2f'|format(sale.original_price) }}</td>
+      <td>${{ '%.2f'|format(sale.sale_price) }}</td>
+      <td>{{ (sale.duration_hours ~ 'h') if sale.duration_hours else '—' }}</td>
+      <td>
+        {% if sale.is_active %}
+        <span class="sale-badge active">Active</span>
+        {% else %}
+        <span class="sale-badge inactive">Inactive</span>
+        {% endif %}
+      </td>
+      <td>{{ sale.ends_at or '—' }}</td>
+      <td class="sales-actions">
+        {% if not sale.is_active %}
+        <form method="post" action="/admin/sales/{{ sale.id }}/activate" class="inline-form"><button>Activate</button></form>
+        {% else %}
+        <form method="post" action="/admin/sales/{{ sale.id }}/deactivate" class="inline-form"><button>Deactivate</button></form>
+        {% endif %}
+        <form method="post" action="/admin/sales/{{ sale.id }}/delete" class="inline-form" onsubmit="return confirm('Delete this sale?');"><button type="submit">Delete</button></form>
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="8" class="muted">No sales yet.</td></tr>
+    {% endfor %}
+  </table>
+  </div>
+</section>
+
+<script>
+(function () {
+  const select = document.getElementById("saleProductSelect");
+  const price = document.getElementById("saleCurrentPrice");
+  if (!select || !price) return;
+  const sync = () => {
+    const opt = select.options[select.selectedIndex];
+    const value = opt && opt.dataset ? opt.dataset.price : "";
+    price.value = value ? ("$" + value) : "—";
+  };
+  select.addEventListener("change", sync);
+  sync();
+})();
+</script>
+{% endblock %}

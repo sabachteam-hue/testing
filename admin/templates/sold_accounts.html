@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Sold Accounts{% endblock %}
+{% block page_title %}Sold Accounts{% endblock %}
+{% block page_subtitle %}<p class="page-subtitle">Per-product completed sales — same calendar as Orders</p>{% endblock %}
+{% block content %}
+<h2>Sold Accounts</h2>
+{% include "_period_stats.html" %}
+
+<form method="get" action="/admin/sold-accounts" class="search-bar sold-accounts-filters">
+  {% if period_stats %}
+  <input type="hidden" name="period" value="{{ period_stats.period }}">
+  {% if period_stats.period == 'custom' %}
+  <input type="hidden" name="from" value="{{ period_stats.date_from }}">
+  <input type="hidden" name="to" value="{{ period_stats.date_to }}">
+  {% endif %}
+  {% endif %}
+  <label class="sold-product-pick">
+    <span>Product</span>
+    <select name="service_id" onchange="this.form.submit()">
+      <option value="">All products</option>
+      {% for product in products %}
+      <option value="{{ product.id }}" {% if service_id == product.id %}selected{% endif %}>
+        {{ product.name|admin_plain }}
+      </option>
+      {% endfor %}
+    </select>
+  </label>
+  <input type="search" name="q" value="{{ q or '' }}" placeholder="Search product name…">
+  <button type="submit">Apply</button>
+  {% if service_id or q %}
+  <a class="search-clear" href="/admin/sold-accounts?period={{ period_stats.period if period_stats else '30' }}{% if period_stats and period_stats.period == 'custom' %}&from={{ period_stats.date_from }}&to={{ period_stats.date_to }}{% endif %}">Clear</a>
+  {% endif %}
+</form>
+
+{% if not show_zeros %}
+<p class="field-hint">Showing products with at least one completed sale (period or all-time). Pick a product or search to include zeros.</p>
+{% endif %}
+
+<div class="table-scroll">
+<table>
+  <thead>
+    <tr>
+      <th>Product</th>
+      <th>Category</th>
+      <th>Sold (period)</th>
+      <th>Orders</th>
+      <th>Revenue</th>
+      <th>Sold (all time)</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in rows %}
+    <tr>
+      <td>
+        <a href="/admin/sold-accounts?service_id={{ row.product.id }}&period={{ period_stats.period }}{% if period_stats.period == 'custom' %}&from={{ period_stats.date_from }}&to={{ period_stats.date_to }}{% endif %}">
+          {{ (row.product.emoji or '🛒')|admin_emoji }} {{ row.product.name|admin_plain }}
+        </a>
+        <div class="muted" style="font-size:0.78rem;">#{{ row.product.id }}</div>
+      </td>
+      <td>{{ row.product.category.name|admin_plain if row.product.category else '—' }}</td>
+      <td><strong>{{ row.sold_units }}</strong></td>
+      <td>{{ row.order_count }}</td>
+      <td>${{ '%.2f'|format(row.revenue) }}</td>
+      <td>{{ row.all_time_sold }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="6">No completed sales in this range.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

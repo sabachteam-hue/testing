@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block page_title %}Add Product{% endblock %}
+{% block content %}
+<h2>Add Product</h2>
+{% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+{% if message %}<div class="alert alert-success">{{ message }}</div>{% endif %}
+
+<form class="panel provider-add-card" method="post" action="/admin/services" enctype="multipart/form-data">
+  <div class="provider-add-head">
+    <div class="provider-add-icon" aria-hidden="true">🛒</div>
+    <div>
+      <h3>Add Manual Product</h3>
+      <p class="muted">Fill each field row by row, then save to your catalog.</p>
+    </div>
+  </div>
+
+  <div class="emoji-field-block">
+    <span class="field-label">Product name *</span>
+    {% with field_id='new-product-name', field_name='name', value='', placeholder='Product name', required=true, mode='text', presets=icon_presets, aria_label='Product name' %}
+      {% include "_emoji_kbd.html" %}
+    {% endwith %}
+  </div>
+  <div class="emoji-field-block description-field-wrap">
+    <span class="field-label">Description</span>
+    {% with desc_field_id='new-product-description' %}
+      {% include "_desc_templates_bar.html" %}
+    {% endwith %}
+    <div class="description-box-style">
+    {% with field_id='new-product-description', field_name='description', value='', placeholder='Product details shown in the bot (Duration, Warranty, Format, links…)', required=false, multiline=true, mode='text', rows=8, presets=icon_presets, aria_label='Description' %}
+      {% include "_emoji_kbd.html" %}
+    {% endwith %}
+    </div>
+    <span class="field-hint">Shown in the bot inside a green quote box (same style as Telegram product card).</span>
+  </div>
+  <label>Warranty
+    <input name="warranty" placeholder="e.g. 25-30 Days" maxlength="200">
+    <span class="field-hint">Shown in the copyable delivery receipt and used by Refund Tool.</span>
+  </label>
+  <label>Product banner image
+    <input type="file" name="icon_image" accept="image/*">
+    <span class="field-hint">Shown as the big photo when a customer opens this product in the bot (price, stock, description appear below it).</span>
+  </label>
+  <label>Provider
+    <select name="provider_id">
+      <option value="">No provider</option>
+      {% for provider in providers %}<option value="{{ provider.id }}">{{ provider.name }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Category
+    <select name="category_id" class="premium-named-select">
+      <option value="">No category</option>
+      {% for category in categories %}
+      <option
+        value="{{ category.id }}"
+        data-emoji-id="{{ category.emoji|admin_icon_id }}"
+        data-emoji-fallback="{{ category.emoji|admin_icon_fb }}"
+        data-plain-label="{{ category.name|admin_plain }}"
+      >{{ category.emoji|admin_icon_fb }} {{ category.name|admin_plain }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Cost price
+    <input name="cost_price" type="number" step="0.000001" placeholder="0.00">
+  </label>
+  <label>Sell price *
+    <input name="sell_price" type="number" step="0.000001" placeholder="0.00" required>
+  </label>
+  <label>Markup %
+    <input name="commission_pct" type="number" step="0.01" placeholder="e.g. 25">
+  </label>
+  <label>Sort order
+    <input name="sort_order" type="number" value="0" min="0" title="Lower number appears first in catalog (1 = top)">
+  </label>
+  <label>Fulfillment
+    <select name="fulfillment_type">
+      <option value="auto">Auto delivery (provider API)</option>
+      <option value="stock">Auto delivery (from stock)</option>
+      <option value="manual">Manual payment / fulfillment</option>
+    </select>
+  </label>
+  <label><input type="checkbox" name="require_email" value="true"> Ask customer email after quantity
+    <span class="field-hint">For invite/team plans: bot asks for email → shows on Orders so you can invite &amp; mark completed. Best with Manual fulfillment.</span>
+  </label>
+
+  <div class="provider-add-actions">
+    <button type="submit" class="btn-box">Add Manual Product</button>
+    <a class="btn secondary btn-box" href="/admin/services">Cancel</a>
+  </div>
+</form>
+{% endblock %}

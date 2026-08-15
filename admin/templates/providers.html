@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block page_title %}API Providers &amp; Integrations{% endblock %}
+{% block page_subtitle %}<p class="page-subtitle">Connect and manage upstream SMM providers</p>{% endblock %}
+{% block content %}
+<h2>Providers</h2>
+
+<div class="providers-header">
+  <div class="providers-header-actions">
+    <a class="btn providers-add-api" href="/admin/providers/new?kind=api">+ Add API provider</a>
+    <a class="btn secondary providers-add-manual" href="/admin/providers/new?kind=manual">+ Add manual provider</a>
+  </div>
+</div>
+
+{% if message %}<p class="alert alert-success">{{ message }}</p>{% endif %}
+{% if error %}<p class="alert">{{ error }}</p>{% endif %}
+
+<div class="panel providers-toolbar">
+  <div class="provider-status-tabs" role="group" aria-label="Provider status">
+    <a href="/admin/providers?status=all{% if q %}&q={{ q|urlencode }}{% endif %}" class="provider-tab {% if status == 'all' %}active{% endif %}">All Providers ({{ counts.all }})</a>
+    <a href="/admin/providers?status=enabled{% if q %}&q={{ q|urlencode }}{% endif %}" class="provider-tab {% if status == 'enabled' %}active{% endif %}">Enabled ({{ counts.enabled }})</a>
+    <a href="/admin/providers?status=disabled{% if q %}&q={{ q|urlencode }}{% endif %}" class="provider-tab {% if status == 'disabled' %}active{% endif %}">Disabled ({{ counts.disabled }})</a>
+  </div>
+  <form method="get" action="/admin/providers" class="search-bar providers-search">
+    <input type="hidden" name="status" value="{{ status }}">
+    <input type="search" name="q" value="{{ q or '' }}" placeholder="Filter providers...">
+    <button type="submit">Search</button>
+    {% if q %}<a class="search-clear" href="/admin/providers?status={{ status }}">Clear</a>{% endif %}
+  </form>
+</div>
+
+<div class="panel table-scroll">
+  <table>
+    <tr>
+      <th>Name</th>
+      <th>Bot</th>
+      <th>Balance</th>
+      <th>Type</th>
+      <th>API URL</th>
+      <th>Status</th>
+      <th>Actions</th>
+    </tr>
+    {% for provider in providers %}
+    <tr>
+      <td><strong>{{ provider.name }}</strong></td>
+      <td>
+        {% if provider.telegram_bot %}
+          {{ provider.telegram_bot if provider.telegram_bot.startswith('@') else '@' ~ provider.telegram_bot }}
+        {% elif provider.api_username %}
+          {{ provider.api_username }}
+        {% else %}
+          —
+        {% endif %}
+      </td>
+      <td>
+        {% if provider.api_balance is not none %}
+          <strong>${{ '%.2f'|format(provider.api_balance) }}</strong>
+          {% if provider.balance_synced_at %}
+            <br><small title="{{ provider.balance_synced_at }}">synced</small>
+          {% endif %}
+        {% else %}
+          —
+        {% endif %}
+      </td>
+      <td><span class="type-pill">{{ provider.type }}</span></td>
+      <td style="max-width:220px;word-break:break-all;font-size:0.85rem;">{{ provider.api_url or "-" }}</td>
+      <td>
+        {% if provider.is_active %}
+        <span class="status-pill status-completed">Active</span>
+        {% else %}
+        <span class="status-pill status-expired">Disabled</span>
+        {% endif %}
+      </td>
+      <td>
+        <form method="post" action="/admin/providers/{{ provider.id }}/toggle" class="inline-form"><button type="submit">{{ "Disable" if provider.is_active else "Enable" }}</button></form>
+        {% if provider.type == "api" %}
+        <form method="post" action="/admin/providers/{{ provider.id }}/sync" class="inline-form" title="Updates cost, stock, sell price, and upstream wallet balance">
+          <button type="submit">Sync stock/prices</button>
+        </form>
+        {% endif %}
+        <a href="/admin/providers/{{ provider.id }}/edit" class="btn secondary add-entry-btn">Edit</a>
+        <form method="post" action="/admin/providers/{{ provider.id }}/remove" class="inline-form" onsubmit="return confirm('Are you sure you want to delete {{ provider.name }}? This cannot be undone.');">
+          <button type="submit" style="background:#d33;color:#fff;">Remove</button>
+        </form>
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="7" class="muted">No providers match this filter.</td></tr>
+    {% endfor %}
+  </table>
+</div>
+{% endblock %}

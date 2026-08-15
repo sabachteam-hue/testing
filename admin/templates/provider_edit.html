@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block page_title %}Edit Provider{% endblock %}
+{% block page_subtitle %}<p class="page-subtitle">Update provider credentials and contact details</p>{% endblock %}
+{% block content %}
+<h2>Edit Provider</h2>
+{% if error %}<p class="alert">{{ error }}</p>{% endif %}
+{% if message %}<p class="alert alert-success">{{ message }}</p>{% endif %}
+
+<form class="panel provider-add-card" method="post" action="/admin/providers/{{ provider.id }}/edit">
+  <div class="provider-add-head">
+    <div class="provider-add-icon" aria-hidden="true">{% if provider.type == 'api' %}⚡{% else %}🤖{% endif %}</div>
+    <div>
+      <h3>Edit {{ "API" if provider.type == "api" else "Manual" }} Provider</h3>
+      <p class="muted">Update name, credentials, and contact details — one field per row.</p>
+    </div>
+  </div>
+
+  <label>Provider name *
+    <input name="name" placeholder="e.g. PeakSMM Main Panel" value="{{ provider.name }}" required>
+  </label>
+  <label>Type
+    <select name="type">
+      <option value="manual" {% if provider.type == "manual" %}selected{% endif %}>Manual</option>
+      <option value="api" {% if provider.type == "api" %}selected{% endif %}>API</option>
+    </select>
+  </label>
+  <label>API base URL
+    <input name="api_url" placeholder="https://panel.example.com/api/v2" value="{{ provider.api_url or '' }}">
+  </label>
+  <label>Balance URL (optional)
+    <input name="balance_url" placeholder="https://panel.example.com/api/balance" value="{{ provider.balance_url or '' }}">
+  </label>
+  <label>API key
+    <input name="api_key" placeholder="API key" value="{{ provider.api_key or '' }}">
+  </label>
+  <label>Telegram bot @username
+    <input name="telegram_bot" placeholder="@supplier_bot" value="{{ provider.telegram_bot or '' }}">
+  </label>
+  <label>Contact
+    <input name="contact" placeholder="@admin or email" value="{{ provider.contact or '' }}">
+  </label>
+
+  <div class="provider-add-actions">
+    <button type="submit" class="btn-box">Save Provider</button>
+    <a class="btn secondary btn-box" href="/admin/providers">Cancel</a>
+  </div>
+</form>
+{% endblock %}

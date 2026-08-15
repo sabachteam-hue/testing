@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block page_title %}Edit Product{% endblock %}
+{% block content %}
+<h2>Edit Product</h2>
+{% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+{% if message %}<div class="alert alert-success">{{ message }}</div>{% endif %}
+
+<form class="panel provider-add-card" method="post" action="/admin/services/{{ service.id }}/edit" enctype="multipart/form-data">
+  <div class="provider-add-head">
+    <div class="provider-add-icon" aria-hidden="true">🛒</div>
+    <div>
+      <h3>Edit Product</h3>
+      <p class="muted">Update fields row by row, then save.</p>
+    </div>
+  </div>
+
+  <div class="emoji-field-block">
+    <span class="field-label">Product name *</span>
+    {% with field_id='edit-product-name', field_name='name', value=service.name, placeholder='Product name', required=true, mode='text', presets=icon_presets, aria_label='Product name' %}
+      {% include "_emoji_kbd.html" %}
+    {% endwith %}
+  </div>
+  <div class="emoji-field-block description-field-wrap">
+    <span class="field-label">Description</span>
+    {% with desc_field_id='edit-product-description' %}
+      {% include "_desc_templates_bar.html" %}
+    {% endwith %}
+    <div class="description-box-style">
+    {% with field_id='edit-product-description', field_name='description', value=service.description or '', placeholder='Product details shown in the bot (Duration, Warranty, Format, links…)', required=false, multiline=true, mode='text', rows=8, presets=icon_presets, aria_label='Description' %}
+      {% include "_emoji_kbd.html" %}
+    {% endwith %}
+    </div>
+    <span class="field-hint">Shown in the bot inside a green quote box (same style as Telegram product card).</span>
+  </div>
+  <label>Warranty
+    <input name="warranty" value="{{ service.warranty or '' }}" placeholder="e.g. 25-30 Days" maxlength="200">
+  </label>
+  <label>Product banner image
+    <input type="file" name="icon_image" accept="image/*">
+  </label>
+  {% if service.image_path %}
+  <label><input type="checkbox" name="remove_image" value="true"> Remove current logo image</label>
+  {% endif %}
+  <label>Provider
+    <select name="provider_id" id="edit-provider-id">
+      <option value="">No provider</option>
+      {% for provider in providers %}
+      <option value="{{ provider.id }}" {% if service.provider_id == provider.id %}selected{% endif %}>{{ provider.name }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Provider product ID
+    <input name="provider_service_id" id="edit-provider-service-id" value="{{ service.provider_service_id or '' }}" placeholder="Same ID as Import Products → ID column" autocomplete="off">
+    <span class="field-hint">Links this catalog product to one provider SKU. Does not change your product ID / SKU or order history.</span>
+  </label>
+  <label><input type="checkbox" name="sync_from_provider" value="true" id="edit-sync-from-provider" {% if service.provider_id %}checked{% endif %}> Sync cost &amp; stock from provider after save</label>
+  <label>Category
+    <select name="category_id" class="premium-named-select">
+      <option value="">No category</option>
+      {% for category in categories %}
+      <option
+        value="{{ category.id }}"
+        data-emoji-id="{{ category.emoji|admin_icon_id }}"
+        data-emoji-fallback="{{ category.emoji|admin_icon_fb }}"
+        data-plain-label="{{ category.name|admin_plain }}"
+        {% if service.category_id == category.id %}selected{% endif %}
+      >{{ category.emoji|admin_icon_fb }} {{ category.name|admin_plain }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Cost price
+    <input name="cost_price" type="number" step="0.000001" value="{{ service.cost_price }}">
+  </label>
+  <label>Sell price *
+    <input name="sell_price" type="number" step="0.000001" value="{{ service.sell_price }}" required>
+  </label>
+  <label>Markup %
+    <input name="commission_pct" type="number" step="0.01" value="{{ service.commission_pct }}">
+  </label>
+  <label>+ Fixed USDT
+    <input name="markup_fixed_usdt" type="number" step="0.01" min="0" value="{{ service.markup_fixed_usdt or 0 }}">
+  </label>
+  <label>Sort order
+    <input name="sort_order" type="number" value="{{ service.sort_order }}" min="0">
+  </label>
+  <label>Fulfillment
+    <select name="fulfillment_type">
+      <option value="auto" {% if service.fulfillment_type != "manual" and service.fulfillment_type != "stock" %}selected{% endif %}>Auto delivery (provider API)</option>
+      <option value="stock" {% if service.fulfillment_type == "stock" %}selected{% endif %}>Auto delivery (from stock)</option>
+      <option value="manual" {% if service.fulfillment_type == "manual" %}selected{% endif %}>Manual fulfillment</option>
+    </select>
+  </label>
+  <label><input type="checkbox" name="require_email" value="true" {% if service.require_email %}checked{% endif %}> Ask customer email after quantity</label>
+
+  <div class="provider-add-actions">
+    <button type="submit" class="btn-box">Save changes</button>
+    <a class="btn secondary btn-box" href="/admin/services">Cancel</a>
+  </div>
+</form>
+{% endblock %}

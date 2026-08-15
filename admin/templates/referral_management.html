@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block page_title %}Referrals{% endblock %}
+{% block page_subtitle %}<p class="page-subtitle">Referral program settings and earnings</p>{% endblock %}
+{% block content %}
+<h2>Referral Management</h2>
+
+<section class="cards">
+  <article class="card"><span>Total Referral Codes</span><strong>{{ codes|length }}</strong></article>
+  <article class="card"><span>Total Earnings</span><strong>{{ "%.2f"|format(total_earned) }} USDT</strong></article>
+  <article class="card"><span>Pending Earnings</span><strong>{{ "%.2f"|format(pending_earned) }} USDT</strong></article>
+  <article class="card"><span>Voided (self-referral)</span><strong>{{ voided_count }}</strong></article>
+</section>
+
+<div class="panel" style="display:flex;align-items:center;justify-content:space-between;gap:16px;">
+  <div>
+    <h3 style="margin:0;">Referral Program: {{ "🟢 Active" if program_enabled else "🔴 Disabled" }}</h3>
+    <p style="margin:4px 0 0;color:#666;">
+      {% if program_enabled %}
+      All users can currently see their referral link (via /referral) and earn {{ commission_label }}
+      ({{ "per purchase" if program_type == "per_purchase" else "per referral joined" }}).
+      {% else %}
+      Users are shown a "program disabled" message instead of their referral link. No new earnings are generated.
+      {% endif %}
+    </p>
+  </div>
+  <form method="post" action="/admin/referrals/program/toggle" onsubmit="return confirm('{{ 'Disable' if program_enabled else 'Enable' }} the referral program for ALL users?{{ ' Everyone will get a notification that it is now active.' if not program_enabled else '' }}');">
+    <button style="{{ 'background:#c0392b;color:#fff;' if program_enabled else 'background:#27ae60;color:#fff;' }}">{{ "Disable Program" if program_enabled else "Activate Program" }}</button>
+  </form>
+</div>
+
+<form class="panel form-grid" method="post" action="/admin/referrals/program/update" id="program-form">
+  <label>Program
+    <select name="program_type" id="program-type">
+      <option value="per_purchase" {{ "selected" if program_type == "per_purchase" else "" }}>Per Purchase Earning (% or fixed on every order they complete)</option>
+      <option value="per_link" {{ "selected" if program_type == "per_link" else "" }}>Per Link Earning (fixed USDT once, when they become active)</option>
+    </select>
+  </label>
+  <label>Commission Type
+    <select name="commission_type" id="commission-type">
+      <option value="percent" {{ "selected" if commission_type == "percent" else "" }}>Percent (%)</option>
+      <option value="fixed" {{ "selected" if commission_type == "fixed" else "" }}>Fixed (USDT)</option>
+    </select>
+  </label>
+  <label>Commission Value <input name="commission_value" id="commission-value" type="number" step="0.01" min="0" value="{{ commission_value }}"></label>
+  <button>Save & Activate Offer</button>
+  <p style="grid-column:1/-1;margin:0;color:#666;font-size:13px;">
+    Only one program runs at a time — switching modes here automatically turns the other one off, so a link
+    can never double-earn. Every user's referral link always shows whatever is saved here, live.
+    "Per Link Earning" always pays a flat USDT amount (a join has no purchase total to take a % of), and only
+    pays out once the referred user completes their first deposit or purchase — this stops fake/throwaway
+    accounts from farming the join bonus.
+  </p>
+</form>
+<script>
+(function () {
+  var programType = document.getElementById('program-type');
+  var commissionType = document.getElementById('commission-type');
+
+  function syncCommissionType() {
+    if (programType.value === 'per_link') {
+      commissionType.value = 'fixed';
+      commissionType.disabled = true;
+    } else {
+      commissionType.disabled = false;
+    }
+  }
+  programType.addEventListener('change', syncCommissionType);
+  syncCommissionType();
+
+  document.getElementById('program-form').addEventListener('submit', function () {
+    // Disabled fields aren't submitted by the browser, so re-enable right
+    // before submit to make sure "fixed" still gets sent for per_link.
+    commissionType.disabled = false;
+  });
+})();
+</script>
+
+<h3>Active Referral Codes</h3>
+<p class="panel" style="color:#666;">Codes are created automatically the first time a user opens /referral or /profile — no setup needed per user. Commission always comes from the Program settings above.</p>
+{% if not codes %}
+<p class="panel">No referral codes yet — they'll appear here once users start sharing their links.</p>
+{% endif %}
+<div class="table-scroll">
+<table>
+  <tr><th>User</th><th>Code</th><th>Usage</th><th>Total Earned</th><th>Status</th><th>Action</th></tr>
+  {% for code in codes %}
+  <tr>
+    <td>{{ user_lookup.get(code.user_id, code.user_id) }}</td>
+    <td><code>{{ code.code }}</code></td>
+    <td>{{ code.usage_count }}</td>
+    <td>{{ "%.2f"|format(code.total_earned) }} USDT</td>
+    <td>{{ "Active" if code.is_active else "Disabled" }}</td>
+    <td><form method="post" action="/admin/referrals/{{ code.id }}/toggle" onsubmit="return confirm('Toggle this code? Disabling it stops that user from earning any further referral commissions/bonuses.');"><button>Toggle</button></form></td>
+  </tr>
+  {% endfor %}
+</table>
+</div>
+
+<h3>Referral Earnings</h3>
+<div class="table-scroll">
+<table>
+  <tr><th>Referrer</th><th>Referred User</th><th>Type</th><th>Order</th><th>Amount</th><th>Status</th><th>Credited</th></tr>
+  {% for earning in earnings %}
+  <tr>
+    <td>{{ user_lookup.get(earning.referrer_id, earning.referrer_id) }}</td>
+    <td>{{ user_lookup.get(earning.referred_user_id, earning.referred_user_id) }}</td>
+    <td>{{ "Per purchase" if earning.earning_type == "per_purchase" else "Per link" }}</td>
+    <td>{{ earning.order_id or "-" }}</td>
+    <td>{{ "%.2f"|format(earning.amount_earned) }}</td>
+    <td>{{ "⚠️ voided (self-referral)" if earning.status == "voided_self_referral" else earning.status }}</td>
+    <td>{{ earning.credited_at or "-" }}</td>
+  </tr>
+  {% endfor %}
+</table>
+</div>
+{% endblock %}

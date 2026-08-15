@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+{% block page_title %}Refund Tool{% endblock %}
+{% block page_subtitle %}<p class="page-subtitle">Prorated refund calculator — wallet credit or manual mark</p>{% endblock %}
+{% block content %}
+<h2>Refund Tool</h2>
+
+{% if success %}
+<p class="help-box" style="border-color:#9ad4b0;color:#147a3f;">{{ success }}</p>
+{% endif %}
+{% if error %}
+<p class="help-box" style="border-color:#f0b4b4;color:#b00020;">{{ error }}</p>
+{% endif %}
+
+<section class="panel">
+  <h3>Find order</h3>
+  <form method="post" action="/admin/refund-tool/search" class="sales-create">
+    <div class="sales-create-grid">
+      <label>Order ID or code
+        <input type="text" name="q" value="{{ search_q or '' }}" placeholder="e.g. 123 or ORD-…" required>
+      </label>
+      <label>Subscription days (optional override)
+        <input type="number" name="subscription_days" min="1" step="1" value="{{ subscription_days_input or '' }}" placeholder="Auto from warranty">
+      </label>
+    </div>
+    <div class="sales-actions">
+      <button type="submit">Calculate</button>
+    </div>
+  </form>
+  <p class="muted" style="margin-top:10px;">Days come from the product <b>Warranty</b> field only (not name or description). Enter days manually if warranty is blank. Warranty does not block refunds.</p>
+</section>
+
+{% if order and breakdown %}
+<section class="panel" style="margin-top:18px;">
+  <h3>Order {{ order.order_code }}</h3>
+  <div class="table-scroll">
+  <table>
+    <tr><th>Field</th><th>Value</th></tr>
+    <tr><td>User</td><td>{{ order.user.username or order.user.full_name or order.user.telegram_id }}</td></tr>
+    <tr><td>Product</td><td>{{ order.service.name if order.service else '—' }}</td></tr>
+    <tr><td>Status</td><td>{{ order.status }}{% if order.refund_method %} ({{ order.refund_method }}){% endif %}</td></tr>
+    <tr><td>Paid</td><td>${{ '%.2f'|format(order.amount_usdt) }}</td></tr>
+    <tr><td>Purchase date</td><td>{{ breakdown.purchase_date or '—' }}</td></tr>
+    <tr><td>Warranty field</td><td>{{ breakdown.warranty_text or '—' }}{% if breakdown.parsed_from_warranty %} <span class="muted">(auto)</span>{% endif %}</td></tr>
+    <tr><td>Subscription days</td><td>{{ breakdown.subscription_days or '—' }}</td></tr>
+    <tr><td>Days used</td><td>{{ breakdown.days_used }}</td></tr>
+    <tr><td>Remaining days</td><td>{{ breakdown.remaining_days }}</td></tr>
+    <tr><td>Daily rate</td><td>${{ '%.2f'|format(breakdown.daily_rate) }}</td></tr>
+    <tr><td>Refund amount</td><td><strong>${{ '%.2f'|format(breakdown.refund_amount) }}</strong></td></tr>
+  </table>
+  </div>
+
+  {% if breakdown.message %}
+  <p class="help-box" style="margin-top:14px;border-color:#f0b4b4;color:#b00020;">{{ breakdown.message }}</p>
+  {% endif %}
+
+  {% if breakdown.has_refund %}
+  <form method="post" action="/admin/refund-tool/confirm" class="sales-create" style="margin-top:16px;" onsubmit="return confirm('Confirm refund of ${{ '%.2f'|format(breakdown.refund_amount) }} for {{ order.order_code }}?');">
+    <input type="hidden" name="order_id" value="{{ order.id }}">
+    <input type="hidden" name="subscription_days" value="{{ breakdown.subscription_days }}">
+    <div class="sales-create-grid">
+      <label>Note (optional)
+        <input type="text" name="note" placeholder="Reason / ticket ref">
+      </label>
+    </div>
+    <div class="sales-actions">
+      <button type="submit" name="refund_method" value="wallet">Refund to Wallet</button>
+      <button type="submit" name="refund_method" value="manual" class="secondary">Mark Manual Refund</button>
+    </div>
+  </form>
+  {% endif %}
+</section>
+{% endif %}
+
+<section class="panel" style="margin-top:18px;">
+  <h3>Check refund status</h3>
+  <form method="post" action="/admin/refund-tool/check-order" class="sales-create">
+    <div class="sales-create-grid">
+      <label>Order ID or code
+        <input type="text" name="order_lookup" value="{{ lookup_q or '' }}" placeholder="e.g. 123 or ORD-…" required>
+      </label>
+    </div>
+    <div class="sales-actions">
+      <button type="submit">Search</button>
+    </div>
+  </form>
+  <p class="muted" style="margin-top:10px;">Lookup only — checking here does <strong>not</strong> perform a refund.</p>
+
+  {% if lookup_result %}
+  <div class="table-scroll" style="margin-top:14px;">
+  <table>
+    <tr><th>Field</th><th>Value</th></tr>
+    <tr><td>Order</td><td>{{ lookup_result.order_code }}</td></tr>
+    <tr>
+      <td>Refund status</td>
+      <td>
+        {% if lookup_result.refunded %}
+        <span class="status-pill status-completed">Refunded</span>
+        {% else %}
+        <span class="status-pill status-pending">Not refunded</span>
+        {% endif %}
+      </td>
+    </tr>
+    {% if lookup_result.refunded %}
+    <tr><td>Refund amount</td><td>{{ '$%.2f'|format(lookup_result.refund_amount) if lookup_result.refund_amount is not none else '—' }}</td></tr>
+    <tr><td>Refund method</td><td>{{ lookup_result.refund_method or '—' }}</td></tr>
+    <tr><td>Refund date/time</td><td>{{ lookup_result.refunded_at or '—' }}</td></tr>
+    <tr><td>Refund note</td><td>{{ lookup_result.note or '—' }}</td></tr>
+    {% endif %}
+  </table>
+  </div>
+  {% endif %}
+</section>
+
+<section class="panel" style="margin-top:18px;">
+  <h3>Reported problems</h3>
+  <div class="table-scroll">
+  <table>
+    <tr>
+      <th>When</th>
+      <th>Order ID</th>
+      <th>Client</th>
+      <th>Message</th>
+      <th>Note</th>
+      <th>Status / Action</th>
+    </tr>
+    {% for report in issue_reports %}
+    <tr>
+      <td>{{ report.created_at }}</td>
+      <td>{{ report.order_code }}</td>
+      <td>{{ report.user.username or report.user.full_name or report.user.telegram_id if report.user else '—' }}</td>
+      <td>{{ report.message }}</td>
+      {% if report.status == "resolved" %}
+      <td>{{ report.admin_note or '—' }}</td>
+      <td><span class="status-pill status-completed">Resolved</span></td>
+      {% else %}
+      <td>
+        <form method="post" action="/admin/refund-tool/report/{{ report.id }}/resolve" class="issue-resolve-form" onsubmit="return confirm('Send this note to the client and mark resolved?');">
+          <input type="text" name="admin_note" placeholder="Note to send the client" required>
+          <button type="submit" class="secondary">Resolve</button>
+        </form>
+      </td>
+      <td><span class="status-pill status-pending">Pending</span></td>
+      {% endif %}
+    </tr>
+    {% else %}
+    <tr><td colspan="6" class="muted">No reported problems yet.</td></tr>
+    {% endfor %}
+  </table>
+  </div>
+</section>
+
+<section class="panel" style="margin-top:18px;">
+  <h3>Recent refunds</h3>
+  <div class="table-scroll">
+  <table>
+    <tr>
+      <th>When</th>
+      <th>Order</th>
+      <th>Amount</th>
+      <th>Method</th>
+      <th>Days</th>
+      <th>Admin</th>
+      <th>Note</th>
+    </tr>
+    {% for log in recent_logs %}
+    <tr>
+      <td>{{ log.created_at }}</td>
+      <td>{{ log.order_code }}</td>
+      <td>${{ '%.2f'|format(log.refund_amount) }}</td>
+      <td>{{ log.refund_method }}</td>
+      <td>{{ log.days_used }}/{{ log.days_total }} ({{ log.days_remaining }} left)</td>
+      <td>{{ log.admin_name }}</td>
+      <td>{{ log.note or '—' }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="7" class="muted">No refunds yet.</td></tr>
+    {% endfor %}
+  </table>
+  </div>
+</section>
+{% endblock %}

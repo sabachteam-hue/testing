@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block page_title %}Products{% endblock %}
+{% block page_subtitle %}<p class="page-subtitle">Create and edit catalog products</p>{% endblock %}
+{% block content %}
+<h2>Products</h2>
+
+<div class="providers-header">
+  <div class="providers-header-actions">
+    <a class="btn add-entry-btn" href="/admin/services/new">+ Add Product</a>
+    <a class="btn secondary add-entry-btn" href="/admin/merge-products">Merge Products</a>
+  </div>
+</div>
+
+{% if message %}<div class="alert alert-success">{{ message }}</div>{% endif %}
+{% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+
+<form class="search-bar" method="get" action="/admin/services">
+  <input type="search" name="q" value="{{ search_q or '' }}" placeholder="Search products by name, SKU, category, provider…" autofocus>
+  <button type="submit">Search</button>
+  {% if search_q %}<a class="search-clear" href="/admin/services">Clear</a>{% endif %}
+</form>
+{% if search_q %}
+<p class="field-hint">Showing {{ services|length }} result(s) for “{{ search_q }}”.</p>
+{% endif %}
+<div class="table-scroll">
+<table>
+  <thead>
+    <tr>
+      <th>Icon</th>
+      <th>ID</th>
+      <th>Name</th>
+      <th>Category</th>
+      <th>Provider</th>
+      <th>Cost</th>
+      <th>Price</th>
+      <th>Stock</th>
+      <th>Order</th>
+      <th>Fulfillment</th>
+      <th>Status</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for service in services %}
+    <tr>
+      <td>
+        {% if service.image_path %}
+          <img src="{{ service.image_path }}" alt="{{ service.name|admin_plain }}" style="width:24px;height:24px;object-fit:cover;border-radius:4px;">
+        {% else %}
+          {{ service.emoji|admin_emoji }}
+        {% endif %}
+      </td>
+      <td>{{ service.id }}</td>
+      <td>{{ service.name|admin_emoji }}</td>
+      <td>{{ service.category.name if service.category else "-" }}</td>
+      <td>{{ service.provider.name if service.provider else "Manual" }}</td>
+      <td>{{ "%.4f"|format(service.cost_price) }}</td>
+      <td>{{ "%.4f"|format(service.sell_price) }}</td>
+      <td>{{ service.stock.available_qty if service.stock else 0 }}</td>
+      <td>{{ service.sort_order }}</td>
+      <td>{{ "🛠 Manual" if service.fulfillment_type == "manual" else ("📦 Stock" if service.fulfillment_type == "stock" else "⚡ Auto") }}{% if service.require_email %} · 📧{% endif %}</td>
+      <td>{{ "Active" if service.is_active else "Disabled" }}</td>
+      <td>
+        <a class="btn secondary add-entry-btn" href="/admin/services/{{ service.id }}/edit">Edit</a>
+        <form method="post" action="/admin/services/{{ service.id }}/toggle" style="display:inline">
+          <button type="submit">{{ "Deactivate" if service.is_active else "Activate" }}</button>
+        </form>
+        <form method="post" action="/admin/services/{{ service.id }}/delete" style="display:inline" onsubmit="return confirm('Delete {{ service.name|admin_plain|e }}?');">
+          <button type="submit">Delete</button>
+        </form>
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="12">No products yet.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

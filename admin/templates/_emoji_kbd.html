@@ -1,0 +1,28 @@
+{# Reusable premium-emoji keyboard field.
+   Expects: field_id, field_name, presets
+   Optional: value, placeholder, required, multiline, mode ('text'|'icon'), rows, aria_label
+#}
+{% set _mode = mode|default('text') %}
+{% set _multiline = multiline|default(false) %}
+{% set _placeholder = placeholder|default('') %}
+{% set _value = value|default('') %}
+{% set _required = required|default(false) %}
+{% set _rows = rows|default(5) %}
+{% set _aria = aria_label|default(_placeholder or field_name) %}
+<div class="inline-emoji-field{% if _multiline %} emoji-rich-multiline{% endif %}">
+  {% if _multiline %}
+  <textarea id="{{ field_id }}" class="emoji-rich-source{% if _mode == 'icon' %} emoji-icon-source{% endif %}{% if 'description' in field_name %} description-field{% endif %}" name="{{ field_name }}" rows="{{ _rows }}" placeholder="{{ _placeholder }}" {% if _required %}required{% endif %}>{{ _value }}</textarea>
+  {% else %}
+  <input type="hidden" id="{{ field_id }}" class="emoji-rich-source{% if _mode == 'icon' %} emoji-icon-source{% endif %}" name="{{ field_name }}" value="{{ _value }}" {% if _required %}required{% endif %}>
+  {% endif %}
+  <div class="emoji-rich-surface{% if _multiline %} description-field{% endif %}" contenteditable="true" role="textbox" data-for="{{ field_id }}" data-mode="{{ _mode }}" data-placeholder="{{ _placeholder }}" aria-label="{{ _aria }}"></div>
+  <button type="button" class="emoji-kbd-toggle" data-emoji-kbd title="Insert premium emoji" aria-label="Insert premium emoji">✨</button>
+  <div class="emoji-kbd-panel" hidden>
+    <select class="emoji-text-picker" data-target="#{{ field_id }}"{% if _mode == 'icon' %} data-icon-mode="1"{% endif %}>
+      <option value="">— pick from Icon Presets —</option>
+      {% for preset in presets %}
+      <option value="{{ preset.emoji_id }}" data-emoji-id="{{ preset.emoji_id }}" data-fallback="{{ preset.fallback_emoji }}">{{ preset.fallback_emoji }} {{ preset.name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+</div>
