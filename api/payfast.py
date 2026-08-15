@@ -1,0 +1,543 @@
+import logging
+from datetime import datetime
+
+from fastapi import APIRouter, Query, Request
+from fastapi.responses import HTMLResponse, PlainTextResponse
+
+from database.models import BotConfig, Order, PaymentVerification, SessionLocal, Transaction
+from utils.background_tasks import credit_referral_join_bonus
+from utils.checkout_expire import (
+    SESSION_CLOSED_HTML,
+    expire_unpaid_checkout_tx,
+    linked_order_id_from_tx,
+)
+from utils.notifications import (
+    maybe_send_delivery_file,
+    notify_admin_new_order,
+    notify_channel_order_completed,
+    notify_referrer_earning,
+    stock_note_text,
+)
+from utils.payfast import PayFastConfig, build_checkout_html, get_payfast_token, validate_callback_hash
+from utils.payment_security import (
+    assert_order_owned_by_tx,
+    can_apply_payfast_success,
+    expected_payfast_basket_id,
+    normalize_payment_ref,
+    payfast_callback_matches_tx,
+    payment_ref_already_used,
+)
+from utils.stock_manager import release_stock
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/pay/payfast", tags=["payfast"])
+
+
+def _get_payfast_config(config: BotConfig) -> PayFastConfig | None:
+    if not config or not config.payfast_merchant_id or not config.payfast_secured_key:
+        return None
+    return PayFastConfig(
+        merchant_id=config.payfast_merchant_id,
+        secured_key=config.payfast_secured_key,
+        base_url=config.payfast_base_url or "https://ipg2.apps.net.pk",
+        store_id=config.payfast_store_id or "",
+    )
+
+
+def _public_base_url(request: Request) -> str:
+    import os
+
+    base_url = os.getenv("WEBHOOK_URL") or os.getenv("RAILWAY_PUBLIC_DOMAIN")
+    if base_url:
+        if not base_url.startswith("http"):
+            base_url = f"https://{base_url}"
+        return base_url.rstrip("/")
+    return str(request.base_url).rstrip("/")
+
+
+@router.get("/checkout/{transaction_id}", response_class=HTMLResponse)
+async def payfast_checkout(transaction_id: int, request: Request) -> HTMLResponse:
+    db = SessionLocal()
+    try:
+        tx = db.get(Transaction, transaction_id)
+        if not tx:
+            return HTMLResponse("<h3>This payment link is no longer valid.</h3>", status_code=400)
+
+        # Lazy expire: if the customer opens the link after the expire window,
+        # free stock immediately instead of waiting for the background job.
+        if tx.status == "pending" and expire_unpaid_checkout_tx(db, tx):
+            db.commit()
+
+        if tx.status == "expired":
+            return HTMLResponse(SESSION_CLOSED_HTML, status_code=410)
+        if tx.status != "pending":
+            return HTMLResponse("<h3>This payment link is no longer valid.</h3>", status_code=400)
+
+        config = db.query(BotConfig).first()
+        pf_config = _get_payfast_config(config)
+        if not pf_config:
+            return HTMLResponse("<h3>PayFast is not configured. Please contact support.</h3>", status_code=500)
+
+        pkr_amount = round(tx.amount * (config.usd_to_pkr_rate or 280.0), 2)
+        basket_id = expected_payfast_basket_id(tx.id)
+        order_date = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+
+        try:
+            token = await get_payfast_token(pf_config, pkr_amount, basket_id)
+        except Exception:  # noqa: BLE001
+            logger.exception("[PAYFAST] Unexpected error while getting access token for tx=%s", tx.id)
+            token = None
+
+        if not token:
+            return HTMLResponse(
+                "<h3>Could not connect to PayFast right now. Please try again shortly, "
+                "or contact support if this keeps happening.</h3>",
+                status_code=502,
+            )
+
+        base_url = _public_base_url(request)
+        success_url = f"{base_url}/pay/payfast/callback?redirect=Y&order_id={tx.id}"
+        failure_url = success_url
+        callback_url = f"{base_url}/pay/payfast/callback?order_id={tx.id}"
+
+        linked_id = linked_order_id_from_tx(tx)
+        linked_order = db.get(Order, linked_id) if linked_id else None
+
+        # PayFast's own dashboard only ever shows what we send it here — until
+        # now that was just "Order SMM-XXXXXXXX" / "Wallet top-up #123" with
+        # no name, username, or email attached. That made it impossible to
+        # tell which Telegram client a given expired/failed PayFast payment
+        # belonged to without pulling up this bot's DB. Put the Telegram
+        # username (or full name / telegram id as a fallback) directly in the
+        # description PayFast displays, and pass along a real customer email
+        # when the order collected one, so admin can match a PayFast entry to
+        # a client at a glance.
+        customer = tx.user
+        if customer and customer.username:
+            customer_ref = f"@{customer.username}"
+        elif customer and customer.full_name:
+            customer_ref = customer.full_name
+        elif customer:
+            customer_ref = f"tg:{customer.telegram_id}"
+        else:
+            customer_ref = None
+
+        description = f"Order {linked_order.order_code}" if linked_order else f"Wallet top-up #{tx.id}"
+        if customer_ref:
+            description = f"{description} | {customer_ref}"
+        # PayFast's TXNDESC has a practical length limit — keep it short and safe.
+        description = description[:100]
+
+        customer_email = (linked_order.customer_email if linked_order else None) or ""
+
+        try:
+            html_page = build_checkout_html(
+                pf_config,
+                token=token,
+                amount=pkr_amount,
+                basket_id=basket_id,
+                order_id=str(tx.id),
+                order_date=order_date,
+                store_name="SMF SHOP",
+                description=description,
+                customer_mobile="",
+                customer_email=customer_email,
+                success_url=success_url,
+                failure_url=failure_url,
+                callback_url=callback_url,
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception("[PAYFAST] Unexpected error while building checkout HTML for tx=%s", tx.id)
+            return HTMLResponse("<h3>Something went wrong preparing your payment. Please try again.</h3>", status_code=500)
+
+        return HTMLResponse(html_page)
+    finally:
+        db.close()
+
+
+@router.api_route("/callback", methods=["GET", "POST"])
+async def payfast_callback(
+    request: Request,
+    order_id: str = Query(""),
+    redirect: str = Query(""),
+    basket_id: str = Query(""),
+    err_code: str = Query(""),
+    err_msg: str = Query(""),
+    transaction_id: str = Query(""),
+    validation_hash: str = Query(""),
+):
+    db = SessionLocal()
+    try:
+        config = db.query(BotConfig).first()
+        pf_config = _get_payfast_config(config)
+        if not pf_config or not validate_callback_hash(basket_id, err_code, validation_hash, pf_config):
+            logger.warning("[PAYFAST] Rejected callback with invalid hash: order_id=%s err_code=%s", order_id, err_code)
+            if redirect == "Y":
+                return HTMLResponse("<h3>This payment could not be verified.</h3>", status_code=400)
+            return PlainTextResponse("Unauthorized (invalid hash)", status_code=401)
+
+        # PayFast fires TWO callbacks for the same payment — the browser's
+        # redirect (?redirect=Y) AND a separate server-to-server webhook —
+        # often within milliseconds of each other. Without a row lock here,
+        # both requests can read tx.status == "pending" before either has
+        # committed, so both fall through and fulfil the SAME order — which
+        # is exactly what sent the same order_code to the provider twice and
+        # got "Duplicate external order id" back. with_for_update makes the
+        # second callback block until the first commits, so it then sees the
+        # already-confirmed status below and exits via the idempotent-replay
+        # check instead of fulfilling a second time.
+        tx = db.get(Transaction, int(order_id), with_for_update=True) if order_id.isdigit() else None
+        if not tx:
+            if redirect == "Y":
+                return HTMLResponse("<h3>Transaction not found.</h3>", status_code=404)
+            return PlainTextResponse("Transaction not found", status_code=404)
+
+        bound_ok, bound_reason = payfast_callback_matches_tx(tx, order_id=order_id, basket_id=basket_id)
+        if not bound_ok:
+            logger.warning(
+                "[PAYFAST] Rejected unbound callback tx=%s order_id=%s basket_id=%s reason=%s",
+                tx.id,
+                order_id,
+                basket_id,
+                bound_reason,
+            )
+            if redirect == "Y":
+                return HTMLResponse("<h3>This payment could not be matched to your checkout.</h3>", status_code=400)
+            return PlainTextResponse("Basket/order mismatch", status_code=400)
+
+        # Idempotent replay: already credited this checkout — never credit again.
+        if tx.status == "confirmed" and tx.verified_at is not None:
+            if redirect == "Y":
+                return HTMLResponse("<h3>✅ Payment already confirmed. You can return to Telegram.</h3>")
+            return PlainTextResponse("OK", status_code=200)
+
+        success = err_code == "000"
+        payfast_tid = normalize_payment_ref(transaction_id)
+
+        # Success credits require PayFast's own transaction id (not just basket_id).
+        if success and not payfast_tid:
+            logger.warning("[PAYFAST] Success callback missing transaction_id for tx=%s", tx.id)
+            if redirect == "Y":
+                return HTMLResponse("<h3>Payment response incomplete. Contact support with your receipt.</h3>", status_code=400)
+            return PlainTextResponse("Missing PayFast transaction_id", status_code=400)
+
+        if success:
+            duplicate = payment_ref_already_used(db, payfast_tid, exclude_transaction_id=tx.id)
+            if duplicate:
+                logger.warning(
+                    "[PAYFAST] Rejected reused PayFast TXID=%s on tx=%s (already used by tx=%s user=%s)",
+                    payfast_tid,
+                    tx.id,
+                    duplicate.id,
+                    duplicate.user_id,
+                )
+                if redirect == "Y":
+                    return HTMLResponse(
+                        "<h3>This PayFast payment was already used on another deposit.</h3>",
+                        status_code=409,
+                    )
+                return PlainTextResponse("Duplicate PayFast transaction_id", status_code=409)
+
+        # Late payment after auto-expire: credit ONLY this checkout's user wallet.
+        if tx.status == "expired" and success:
+            user_message = _credit_verified_payfast_to_wallet(
+                db,
+                tx,
+                payfast_tid=payfast_tid,
+                basket_id=basket_id,
+                err_msg=err_msg,
+                late=True,
+            )
+            db.commit()
+            await _notify_payfast_user(request, tx, user_message)
+            if redirect == "Y":
+                return HTMLResponse(
+                    "<h3>✅ Payment received.</h3>"
+                    "<p>The original checkout had already expired, so the amount was credited to "
+                    "<strong>your</strong> wallet only. Please place a new order from Telegram.</p>"
+                )
+            return PlainTextResponse("OK", status_code=200)
+
+        user_message = None
+        if tx.status == "pending":
+            # Expire first if the window already passed (callback race with timer).
+            if expire_unpaid_checkout_tx(db, tx):
+                db.commit()
+                if success:
+                    user_message = _credit_verified_payfast_to_wallet(
+                        db,
+                        tx,
+                        payfast_tid=payfast_tid,
+                        basket_id=basket_id,
+                        err_msg=err_msg,
+                        late=True,
+                    )
+                    db.commit()
+                await _notify_payfast_user(request, tx, user_message)
+                if redirect == "Y":
+                    if success:
+                        return HTMLResponse(
+                            "<h3>✅ Payment received.</h3>"
+                            "<p>Checkout had expired; amount credited to your wallet only. "
+                            "Start a new order in Telegram.</p>"
+                        )
+                    return HTMLResponse(SESSION_CLOSED_HTML)
+                return PlainTextResponse("OK", status_code=200)
+
+            verification = PaymentVerification(
+                transaction_id=tx.id,
+                tx_hash=payfast_tid or basket_id,
+                blockchain="PAYFAST",
+                to_address="PAYFAST",
+                amount_verified=tx.amount,
+                verification_status="verified" if success else "failed",
+                reason=err_msg or ("PayFast confirmed payment" if success else "PayFast reported failure"),
+                api_response=(
+                    f'{{"err_code": "{err_code}", "transaction_id": "{payfast_tid}", '
+                    f'"basket_id": "{basket_id}"}}'
+                ),
+            )
+            db.add(verification)
+
+            referral_notifications: list[dict] = []
+            linked_id = linked_order_id_from_tx(tx)
+            purchase_order = db.get(Order, linked_id) if linked_id else None
+
+            if success:
+                ok, reason = can_apply_payfast_success(tx)
+                if not ok:
+                    logger.warning("[PAYFAST] Refusing success credit for tx=%s: %s", tx.id, reason)
+                    db.rollback()
+                    if redirect == "Y":
+                        return HTMLResponse("<h3>This payment cannot be applied.</h3>", status_code=409)
+                    return PlainTextResponse("Cannot apply payment", status_code=409)
+
+                tx.status = "confirmed"
+                tx.blockchain_status = "confirmed"
+                tx.tx_hash = payfast_tid
+                tx.verified_at = datetime.utcnow()
+                verification.verified_at = tx.verified_at
+
+                if purchase_order is not None:
+                    owned, ownership_reason = assert_order_owned_by_tx(purchase_order, tx)
+                    if not owned:
+                        # Never fulfill / credit anyone else — keep funds on the paying user wallet.
+                        logger.error("[PAYFAST] %s — falling back to wallet credit for tx=%s", ownership_reason, tx.id)
+                        tx.user.wallet_usdt += tx.amount
+                        referral_notifications = credit_referral_join_bonus(db, tx.user)
+                        user_message = (
+                            f"✅ Your PayFast payment of ${tx.amount:.2f} was confirmed and added to your wallet."
+                        )
+                    elif purchase_order.status == "pending":
+                        user_message = await _fulfill_payfast_order(db, purchase_order, tx)
+                    else:
+                        # Order already expired/cancelled — credit only the payer's wallet.
+                        tx.user.wallet_usdt += tx.amount
+                        referral_notifications = credit_referral_join_bonus(db, tx.user)
+                        user_message = (
+                            f"✅ PayFast payment of ${tx.amount:.2f} confirmed. "
+                            f"Order {purchase_order.order_code} was no longer pending, "
+                            f"so the amount was credited to your wallet."
+                        )
+                elif tx.tx_type == "deposit":
+                    tx.user.wallet_usdt += tx.amount
+                    referral_notifications = credit_referral_join_bonus(db, tx.user)
+                    user_message = (
+                        f"✅ Your PayFast top-up of ${tx.amount:.2f} was confirmed and added to your wallet."
+                    )
+            else:
+                tx.status = "rejected"
+                tx.blockchain_status = "failed"
+                if purchase_order and purchase_order.status == "pending":
+                    owned, _ = assert_order_owned_by_tx(purchase_order, tx)
+                    if owned:
+                        purchase_order.status = "cancelled"
+                        purchase_order.note = f"PayFast payment failed: {err_msg or err_code}"
+                        try:
+                            release_stock(db, purchase_order.service_id, purchase_order.quantity)
+                        except Exception:  # noqa: BLE001
+                            logger.exception(
+                                "[PAYFAST] Failed to release stock for order=%s",
+                                purchase_order.order_code,
+                            )
+                    user_message = (
+                        f"❌ PayFast payment for order {purchase_order.order_code} was not successful. "
+                        f"{err_msg or 'Please try again from the shop.'}"
+                    )
+                else:
+                    user_message = (
+                        f"❌ Your PayFast payment of ${tx.amount:.2f} was not successful. {err_msg or ''}"
+                    )
+
+            db.commit()
+            for payload in referral_notifications:
+                try:
+                    await notify_referrer_earning(**payload)
+                except Exception:  # noqa: BLE001
+                    logger.exception("[PAYFAST] Failed to send referral notification")
+
+            delivery_order = (
+                purchase_order
+                if purchase_order is not None and purchase_order.status == "completed"
+                else None
+            )
+            await _notify_payfast_user(
+                request,
+                tx,
+                user_message,
+                order=delivery_order,
+                service=delivery_order.service if delivery_order else None,
+            )
+
+        if redirect == "Y":
+            if tx.status == "confirmed":
+                return HTMLResponse("<h3>✅ Payment successful! You can return to Telegram now.</h3>")
+            if tx.status == "expired":
+                return HTMLResponse(SESSION_CLOSED_HTML)
+            return HTMLResponse("<h3>❌ Payment was not successful. You can return to Telegram and try again.</h3>")
+
+        return PlainTextResponse("OK", status_code=200)
+    finally:
+        db.close()
+
+
+async def _notify_payfast_user(
+    request: Request,
+    tx: Transaction,
+    user_message: str | None,
+    *,
+    order: Order | None = None,
+    service=None,
+) -> None:
+    if not user_message:
+        return
+    try:
+        bot = request.app.state.bot
+        if bot and tx.user:
+            await bot.send_message(tx.user.telegram_id, user_message, parse_mode="HTML")
+            if order is not None and service is not None:
+                await maybe_send_delivery_file(
+                    order=order,
+                    service=service,
+                    credentials=getattr(order, "delivered_info", None),
+                    bot=bot,
+                    telegram_id=tx.user.telegram_id,
+                )
+    except Exception:  # noqa: BLE001
+        logger.exception("[PAYFAST] Failed to notify user for tx=%s", tx.id)
+
+
+def _credit_verified_payfast_to_wallet(
+    db,
+    tx: Transaction,
+    *,
+    payfast_tid: str,
+    basket_id: str,
+    err_msg: str,
+    late: bool = False,
+) -> str:
+    """Credit ONLY the checkout owner's wallet after a verified PayFast success.
+
+    Never fulfills an order from this path (used after expire / ownership mismatch).
+    """
+    ok, reason = can_apply_payfast_success(tx)
+    if not ok:
+        logger.warning("[PAYFAST] Skip wallet credit for tx=%s: %s", tx.id, reason)
+        return ""
+
+    duplicate = payment_ref_already_used(db, payfast_tid, exclude_transaction_id=tx.id)
+    if duplicate:
+        logger.warning(
+            "[PAYFAST] Skip wallet credit — PayFast TXID=%s already used by tx=%s",
+            payfast_tid,
+            duplicate.id,
+        )
+        return ""
+
+    if not payfast_tid:
+        logger.warning("[PAYFAST] Skip wallet credit — empty PayFast transaction_id for tx=%s", tx.id)
+        return ""
+
+    verification = PaymentVerification(
+        transaction_id=tx.id,
+        tx_hash=payfast_tid,
+        blockchain="PAYFAST",
+        to_address="PAYFAST",
+        amount_verified=tx.amount,
+        verification_status="verified",
+        reason=err_msg
+        or (
+            "PayFast paid after checkout expired — credited to payer wallet only"
+            if late
+            else "PayFast confirmed payment — credited to payer wallet only"
+        ),
+        api_response=(
+            f'{{"err_code": "000", "transaction_id": "{payfast_tid}", '
+            f'"basket_id": "{basket_id}", "late": {str(late).lower()}}}'
+        ),
+        verified_at=datetime.utcnow(),
+    )
+    db.add(verification)
+    tx.status = "confirmed"
+    tx.blockchain_status = "confirmed"
+    tx.tx_hash = payfast_tid
+    tx.verified_at = verification.verified_at
+    suffix = "Late PayFast payment credited to payer wallet only" if late else "PayFast credited to payer wallet only"
+    if tx.note and suffix not in tx.note:
+        tx.note = f"{tx.note} | {suffix}"
+    elif not tx.note:
+        tx.note = suffix
+
+    # Explicit: only the user_id on this transaction row is credited.
+    payer = tx.user
+    payer.wallet_usdt += tx.amount
+
+    linked_id = linked_order_id_from_tx(tx)
+    order = db.get(Order, linked_id) if linked_id else None
+    if order and int(order.user_id) != int(tx.user_id):
+        logger.error(
+            "[PAYFAST] Linked order user mismatch on wallet credit; ignoring order. order=%s",
+            order.id,
+        )
+        order = None
+    order_code = order.order_code if order else None
+    return (
+        f"✅ PayFast payment of ${tx.amount:.2f} was received"
+        + (" after the checkout expired" if late else "")
+        + ".\n"
+        f"The amount was added to your wallet only"
+        + (f" (order {order_code} was already released)." if order_code else ".")
+        + "\nPlease place a new order from the shop if you still want the product."
+    )
+
+
+async def _fulfill_payfast_order(db, order: Order, tx: Transaction) -> str:
+    """Mark order paid via PayFast and run the same fulfillment as wallet checkout."""
+    from bot.handlers.products import fulfill_provider_order
+
+    owned, reason = assert_order_owned_by_tx(order, tx)
+    if not owned:
+        raise RuntimeError(reason)
+
+    service = order.service
+    order.status = "manual_pending"
+    order.payment_method = order.payment_method or "PAYFAST"
+    order.note = f"Paid via PayFast. TX: {tx.tx_hash or tx.id}"
+    fulfillment = await fulfill_provider_order(db, order, service)
+    await notify_admin_new_order(order, order.user, service)
+    if order.status == "completed":
+        await notify_channel_order_completed(order, service, db)
+
+    note = stock_note_text(service) if order.status == "completed" else None
+    from utils.ui_icons import label_icons
+
+    icons = label_icons(db)
+    body = (
+        f"{icons['tick']} PayFast payment confirmed!\n"
+        f"{icons['order']} Order: {order.order_code}"
+        f"{fulfillment}"
+    )
+    if note:
+        body = f"{body}\n\n{icons['note']} Note:\n{note}"
+    return body
