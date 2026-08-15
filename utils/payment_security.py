@@ -11,8 +11,11 @@ from __future__ import annotations
 
 import logging
 import re
+import secrets
+from collections import defaultdict
 from datetime import datetime, timedelta
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from database.models import PaymentVerification, Transaction
@@ -43,6 +46,99 @@ def recent_failed_verification_count(db: Session, user_id: int, *, minutes: int 
     )
 
 _PAYFAST_BASKET = re.compile(r"^SMFSHOP(\d+)$", re.IGNORECASE)
+
+# ---------------------------------------------------------------------------
+# Secure, random, customer-facing PayFast reference (e.g. "SMFSHOP-A7K29Q").
+#
+# The OLD basket_id ("SMFSHOP<transaction_id>") was just the row's primary
+# key, so it was sequential and trivially guessable/enumerable. This new
+# reference is generated with `secrets` (CSPRNG), is never derived from the
+# row id, and is enforced unique at the database level (see
+# migrate_payfast_reference.py). Customers paste this value back to the bot
+# to look up a PayFast payment — see `lookup_payfast_reference` below and
+# api/payfast.py's `verify_payfast_reference`.
+# ---------------------------------------------------------------------------
+PAYFAST_REFERENCE_PREFIX = "SMFSHOP-"
+# Unambiguous alphabet (no 0/O/1/I) to avoid customer transcription mistakes.
+_PAYFAST_REF_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
+_PAYFAST_REF_LEN = 8
+PAYFAST_REFERENCE_RE = re.compile(r"^SMFSHOP-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{6,10}$")
+
+
+def generate_payfast_reference() -> str:
+    """Cryptographically secure random reference — never Math.random()/incremental."""
+    body = "".join(secrets.choice(_PAYFAST_REF_ALPHABET) for _ in range(_PAYFAST_REF_LEN))
+    return f"{PAYFAST_REFERENCE_PREFIX}{body}"
+
+
+def normalize_payfast_reference(value: str | None) -> str:
+    ref = (value or "").strip().upper()
+    # Tolerate customers pasting without the "SMFSHOP-" prefix or with the
+    # legacy no-dash spacing; still requires the full random body to match.
+    if ref and not ref.startswith(PAYFAST_REFERENCE_PREFIX) and ref.startswith("SMFSHOP"):
+        rest = ref[len("SMFSHOP"):].lstrip("-")
+        ref = f"{PAYFAST_REFERENCE_PREFIX}{rest}"
+    return ref
+
+
+def assign_payfast_reference(db: Session, tx: Transaction) -> str:
+    """Generate + persist a unique payfast_reference for this transaction.
+
+    Idempotent: if the transaction already has one (e.g. customer reloaded
+    the checkout page), the existing value is reused instead of issuing a
+    new one. Retries on a DB-level unique-constraint collision (belt AND
+    braces on top of the CSPRNG's astronomically low collision odds) so two
+    concurrent checkouts can never be assigned the same reference.
+    """
+    if tx.payfast_reference:
+        return tx.payfast_reference
+
+    for _ in range(8):
+        candidate = generate_payfast_reference()
+        tx.payfast_reference = candidate
+        try:
+            db.flush()
+        except IntegrityError:
+            db.rollback()
+            # Re-attach tx to the (rolled-back) session state isn't needed here
+            # because the caller commits separately after this returns; just
+            # retry with a fresh candidate.
+            tx.payfast_reference = None
+            continue
+        return candidate
+    raise RuntimeError("Could not generate a unique PayFast reference after several attempts")
+
+
+def payfast_basket_id_for_tx(tx: Transaction) -> str:
+    """Basket id sent to PayFast — the secure reference, not the row id."""
+    if not tx.payfast_reference:
+        raise ValueError("Transaction has no payfast_reference assigned yet")
+    return tx.payfast_reference
+
+
+# ---------------------------------------------------------------------------
+# Rate limiting for manual "paste your PayFast Order ID" lookups. Kept
+# separate from MAX_FAILED_VERIFICATIONS (crypto TXID limiter) since this
+# guards a *lookup* (find-by-reference), not a specific transaction's retry
+# count — a malicious customer could otherwise try many random-looking
+# SMFSHOP-XXXXXX strings hoping to hit someone else's real reference.
+# In-memory (per-process) — consistent with the existing ApiKey rate
+# limiter in api/__init__.py; fine for this bot's single-instance deploys.
+# ---------------------------------------------------------------------------
+MAX_PAYFAST_LOOKUPS = 8
+PAYFAST_LOOKUP_WINDOW_MINUTES = 10
+_payfast_lookup_attempts: dict[int, list[datetime]] = defaultdict(list)
+
+
+def payfast_lookup_rate_limited(user_telegram_id: int | str) -> bool:
+    key = int(user_telegram_id) if str(user_telegram_id).lstrip("-").isdigit() else hash(user_telegram_id)
+    cutoff = datetime.utcnow() - timedelta(minutes=PAYFAST_LOOKUP_WINDOW_MINUTES)
+    attempts = [ts for ts in _payfast_lookup_attempts[key] if ts >= cutoff]
+    _payfast_lookup_attempts[key] = attempts
+    if len(attempts) >= MAX_PAYFAST_LOOKUPS:
+        return True
+    attempts.append(datetime.utcnow())
+    return False
 
 
 def normalize_payment_ref(value: str | None) -> str:
@@ -124,15 +220,19 @@ def payfast_callback_matches_tx(
     order_id: str,
     basket_id: str,
 ) -> tuple[bool, str]:
-    """Ensure the PayFast callback is bound to THIS checkout row only."""
+    """Ensure the PayFast callback is bound to THIS checkout row only.
+
+    order_id is our own internal correlation param (not customer-supplied —
+    it's embedded in the checkout URL we generate), so tying it to tx.id is
+    fine. basket_id is the customer-facing reference and must match the
+    secure random value we assigned at checkout time — NOT be recomputed
+    from tx.id (that old "SMFSHOP<id>" scheme was sequential/guessable).
+    """
     if not order_id or not str(order_id).isdigit() or int(order_id) != tx.id:
         return False, "order_id does not match transaction"
-    expected = expected_payfast_basket_id(tx.id)
+    expected = tx.payfast_reference or expected_payfast_basket_id(tx.id)
     if (basket_id or "").strip().upper() != expected.upper():
         return False, f"basket_id mismatch (got {basket_id!r}, expected {expected!r})"
-    match = _PAYFAST_BASKET.match((basket_id or "").strip())
-    if not match or int(match.group(1)) != tx.id:
-        return False, "basket_id does not encode this transaction id"
     return True, ""
 
 
