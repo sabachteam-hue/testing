@@ -141,6 +141,48 @@ def payfast_lookup_rate_limited(user_telegram_id: int | str) -> bool:
     return False
 
 
+def claim_payfast_user_notification(db: Session, tx_id: int) -> bool:
+    """Atomically claim the single right to send the user a Telegram message
+    about this transaction's outcome.
+
+    Two independent code paths can both end up wanting to tell the customer
+    "your payment is confirmed" for the SAME transaction: the authenticated
+    PayFast webhook's own push notification, and the bot's "paste your Order
+    ID" status check / background poll loop reporting the same already-
+    resolved state. Both call this first — whichever call lands first sets
+    `user_notified_at` and gets `True` (send your message); the other sees it
+    already set and gets `False` (stay silent), so the customer only ever
+    sees one message no matter which side wins the race.
+
+    A plain conditional UPDATE (not a row lock + read-modify-write) so it's
+    safe under real concurrent access from two separate requests/tasks.
+    """
+    from sqlalchemy import text as _text
+
+    result = db.execute(
+        _text(
+            "UPDATE transactions SET user_notified_at = :now "
+            "WHERE id = :tx_id AND user_notified_at IS NULL"
+        ),
+        {"now": datetime.utcnow(), "tx_id": tx_id},
+    )
+    db.commit()
+    return result.rowcount > 0
+
+
+# ---------------------------------------------------------------------------
+# Fallback lookup key: PayFast's own Transaction ID (shown on PayFast's page
+# only AFTER a payment completes), as an alternative to our own Order No.
+# for customers who didn't copy the Order No. beforehand. Read-only, same as
+# the Order No. lookup — never used to credit/confirm anything by itself.
+# ---------------------------------------------------------------------------
+PAYFAST_TID_RE = re.compile(r"^[a-z0-9._-]{4,40}$")
+
+
+def looks_like_payfast_tid(normalized_value: str) -> bool:
+    return bool(normalized_value) and bool(PAYFAST_TID_RE.match(normalized_value))
+
+
 def normalize_payment_ref(value: str | None) -> str:
     """Canonicalize a TXID / payment reference.
 
