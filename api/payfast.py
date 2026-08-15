@@ -1,4 +1,6 @@
 import logging
+import re
+from dataclasses import dataclass
 from datetime import datetime
 
 from fastapi import APIRouter, Query, Request
@@ -21,10 +23,12 @@ from utils.notifications import (
 from utils.payfast import PayFastConfig, build_checkout_html, get_payfast_token, validate_callback_hash
 from utils.payment_security import (
     assert_order_owned_by_tx,
+    assign_payfast_reference,
     can_apply_payfast_success,
-    expected_payfast_basket_id,
+    normalize_payfast_reference,
     normalize_payment_ref,
     payfast_callback_matches_tx,
+    payfast_lookup_rate_limited,
     payment_ref_already_used,
 )
 from utils.stock_manager import release_stock
@@ -80,7 +84,11 @@ async def payfast_checkout(transaction_id: int, request: Request) -> HTMLRespons
             return HTMLResponse("<h3>PayFast is not configured. Please contact support.</h3>", status_code=500)
 
         pkr_amount = round(tx.amount * (config.usd_to_pkr_rate or 280.0), 2)
-        basket_id = expected_payfast_basket_id(tx.id)
+        # Secure, random, DB-unique reference — NOT derived from tx.id (that
+        # old scheme let anyone enumerate "SMFSHOP1", "SMFSHOP2", ...).
+        # Idempotent: reused as-is if the customer reloads this checkout page.
+        basket_id = assign_payfast_reference(db, tx)
+        db.commit()
         order_date = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
 
         try:
@@ -541,3 +549,152 @@ async def _fulfill_payfast_order(db, order: Order, tx: Transaction) -> str:
     if note:
         body = f"{body}\n\n{icons['note']} Note:\n{note}"
     return body
+
+
+@dataclass
+class PayfastReferenceOutcome:
+    """Result of a customer pasting their PayFast Order ID back to the bot.
+
+    `code` is for backend/audit logging only — Telegram never sees it, only
+    `message` (which is deliberately generic for wrong_owner/wrong_order so
+    we never reveal whose reference it actually is).
+    """
+
+    code: str
+    message: str
+    order: Order | None = None
+    delivered: bool = False
+
+
+async def verify_payfast_reference(db, *, telegram_id: str, raw_reference: str) -> PayfastReferenceOutcome:
+    """Manual "paste your PayFast Order ID" lookup/recovery path.
+
+    Mirrors the Binance/BEP20 paste-and-verify UX, but a pasted reference is
+    NEVER treated as proof of payment by itself. It is only a lookup key into
+    our own trusted payment record. The actual PayFast-confirmed/failed
+    status on that record is set exclusively by the authenticated PayFast
+    callback in `payfast_callback` above (validated via
+    `validate_callback_hash`, which uses the merchant secured_key that is
+    never exposed to customers) — this function never marks a payment
+    confirmed on its own, and never fulfils/credits anything outside the
+    same canonical, idempotent `_fulfill_payfast_order` /
+    `_credit_verified_payfast_to_wallet` helpers the callback itself uses.
+
+    Note: PayFast's ipg2.apps.net.pk gateway does not expose a documented
+    standalone "query transaction status" API separate from the callback/IPN,
+    so this cannot make a fresh live call to PayFast on every paste. Instead
+    it reports the current, already-authenticated status of the matching
+    payment record. This keeps the system fail-closed: a payment is only
+    ever recognised as successful once PayFast's own signed callback has
+    said so.
+    """
+    ref = normalize_payfast_reference(raw_reference)
+    # Loose sanity check only (length/charset) — NOT the strict new-format
+    # regex, so a reference issued just before this feature was deployed
+    # (old numeric "SMFSHOP123" style) can still be looked up and reported
+    # on; it simply will never be found among payfast_reference values
+    # assigned going forward, which correctly falls through to
+    # "invalid_reference" below rather than being rejected up front.
+    if not ref or len(ref) > 40 or not re.match(r"^SMFSHOP-?[A-Z0-9]{1,20}$", ref):
+        return PayfastReferenceOutcome(
+            "invalid_format",
+            "❌ Please send a valid PayFast Order ID, e.g. SMFSHOP-A7K29Q.",
+        )
+
+    if payfast_lookup_rate_limited(telegram_id):
+        logger.warning("[PAYFAST] Reference lookup rate-limited for telegram_id=%s", telegram_id)
+        return PayfastReferenceOutcome(
+            "rate_limited",
+            "⚠️ Too many attempts. Please wait a few minutes and try again, or contact support.",
+        )
+
+    from database.models import User
+
+    user = db.query(User).filter(User.telegram_id == str(telegram_id)).first()
+    if not user:
+        return PayfastReferenceOutcome(
+            "invalid_reference",
+            "❌ We could not verify this PayFast Order ID. Please check the ID and try again.",
+        )
+
+    # Row-locked: serializes against a concurrent callback for the same tx so
+    # we always report the final, post-callback state rather than a stale one.
+    tx = (
+        db.query(Transaction)
+        .filter(Transaction.payfast_reference == ref)
+        .with_for_update()
+        .first()
+    )
+    if not tx:
+        logger.info("[PAYFAST] Reference lookup miss ref=%s telegram_id=%s", ref, telegram_id)
+        return PayfastReferenceOutcome(
+            "invalid_reference",
+            "❌ We could not verify this PayFast Order ID. Please check the ID and try again.",
+        )
+
+    if int(tx.user_id) != int(user.id):
+        logger.warning(
+            "[PAYFAST] Reference lookup wrong_owner ref=%s tx_user=%s requester=%s",
+            ref, tx.user_id, user.id,
+        )
+        return PayfastReferenceOutcome(
+            "wrong_owner",
+            "❌ This PayFast Order ID is not valid for your current order.",
+        )
+
+    linked_id = linked_order_id_from_tx(tx)
+    order = db.get(Order, linked_id) if linked_id else None
+    if order is not None:
+        owned, reason = assert_order_owned_by_tx(order, tx)
+        if not owned:
+            logger.error(
+                "[PAYFAST] Reference lookup wrong_order ref=%s tx=%s order=%s reason=%s",
+                ref, tx.id, order.id, reason,
+            )
+            return PayfastReferenceOutcome(
+                "wrong_order",
+                "❌ This PayFast Order ID is not valid for your current order.",
+            )
+
+    # Already fully processed — never fulfil/credit twice, whether that
+    # happened via the callback earlier or is happening concurrently right
+    # now (the row lock above waits for it, then we land here).
+    if tx.verified_at is not None:
+        if order is not None and order.status == "completed":
+            return PayfastReferenceOutcome(
+                "already_delivered",
+                "✅ This order has already been completed.",
+                order=order,
+                delivered=True,
+            )
+        return PayfastReferenceOutcome(
+            "already_used",
+            "⚠️ This PayFast payment has already been used for an order.\n\n"
+            "Please use the PayFast Order ID from your current payment.",
+            order=order,
+        )
+
+    if tx.status == "rejected":
+        return PayfastReferenceOutcome(
+            "failed",
+            "❌ This PayFast payment was not successful. Please try again from the shop or contact support.",
+            order=order,
+        )
+
+    if tx.status in {"pending", "expired"}:
+        # Not yet confirmed by PayFast's own authenticated callback. Covers
+        # both "still on the payment screen" and "checkout idle-expired but
+        # a delayed Raast/Wallet approval may still land" — the customer can
+        # safely resubmit the same reference; nothing is destroyed by time.
+        return PayfastReferenceOutcome(
+            "pending",
+            "⏳ Your PayFast payment is still being confirmed. Please wait a little and submit the same Order ID again.",
+            order=order,
+        )
+
+    logger.warning("[PAYFAST] Reference lookup unexpected tx status=%s ref=%s tx=%s", tx.status, ref, tx.id)
+    return PayfastReferenceOutcome(
+        "pending",
+        "⚠️ We could not verify your payment right now. Please try again shortly.",
+        order=order,
+    )
