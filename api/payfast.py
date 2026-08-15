@@ -3,7 +3,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime
 
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse
 
 from database.models import BotConfig, Order, PaymentVerification, SessionLocal, Transaction
@@ -164,17 +164,48 @@ async def payfast_checkout(transaction_id: int, request: Request) -> HTMLRespons
         db.close()
 
 
+async def _collect_payfast_params(request: Request) -> dict[str, str]:
+    """PayFast sends two very different kinds of callback here:
+
+    1. The browser's redirect after checkout (GET, our own SUCCESS_URL/
+       FAILURE_URL) — params arrive as normal URL query string.
+    2. The real server-to-server IPN webhook (POST) — this is the one that
+       actually confirms/rejects the payment, and PayFast posts it as an
+       `application/x-www-form-urlencoded` BODY, using the SAME uppercase
+       field names as their hosted-checkout form (BASKET_ID, ERR_CODE,
+       VALIDATION_HASH, TRANSACTION_ID, ...), not lowercase query params.
+
+    Declaring the route params as FastAPI `Query(...)` only ever reads the
+    URL query string, so the POST webhook's form body was silently ignored
+    — every field came through empty, the hash never matched, and PayFast
+    got 401 back for every real payment. Reading BOTH sources here, merged
+    case-insensitively, fixes that for good regardless of which casing
+    PayFast uses on a given call.
+    """
+    merged: dict[str, str] = {}
+    for key, value in request.query_params.items():
+        merged[key.lower()] = value
+    if request.method == "POST":
+        try:
+            form = await request.form()
+        except Exception:  # noqa: BLE001 - not form-encoded, nothing to add
+            form = {}
+        for key, value in form.items():
+            merged[key.lower()] = str(value)
+    return merged
+
+
 @router.api_route("/callback", methods=["GET", "POST"])
-async def payfast_callback(
-    request: Request,
-    order_id: str = Query(""),
-    redirect: str = Query(""),
-    basket_id: str = Query(""),
-    err_code: str = Query(""),
-    err_msg: str = Query(""),
-    transaction_id: str = Query(""),
-    validation_hash: str = Query(""),
-):
+async def payfast_callback(request: Request):
+    params = await _collect_payfast_params(request)
+    order_id = params.get("order_id", "")
+    redirect = params.get("redirect", "")
+    basket_id = params.get("basket_id", "")
+    err_code = params.get("err_code", "")
+    err_msg = params.get("err_msg", "")
+    transaction_id = params.get("transaction_id", "")
+    validation_hash = params.get("validation_hash", "")
+
     db = SessionLocal()
     try:
         config = db.query(BotConfig).first()
@@ -247,8 +278,17 @@ async def payfast_callback(
                     )
                 return PlainTextResponse("Duplicate PayFast transaction_id", status_code=409)
 
-        # Late payment after auto-expire: credit ONLY this checkout's user wallet.
-        if tx.status == "expired" and success:
+        # Late/recovered payment: credit ONLY this checkout's user wallet in
+        # either of two cases where a real success arrives after the fact —
+        # 1) "expired": idle timeout passed before payment completed.
+        # 2) "rejected": an earlier failure ping (e.g. a premature timeout on
+        #    PayFast's own payment screen) already marked this tx rejected,
+        #    and PayFast's real, authenticated success IPN is only landing
+        #    now for the same payment. Never re-fulfil the original order
+        #    here (it may already be cancelled/stock-released) — wallet
+        #    credit is the safe, idempotent recovery in both cases.
+        if tx.status in {"expired", "rejected"} and success:
+            was_rejected = tx.status == "rejected"
             user_message = _credit_verified_payfast_to_wallet(
                 db,
                 tx,
@@ -260,6 +300,13 @@ async def payfast_callback(
             db.commit()
             await _notify_payfast_user(request, tx, user_message)
             if redirect == "Y":
+                if was_rejected:
+                    return HTMLResponse(
+                        "<h3>✅ Payment received.</h3>"
+                        "<p>This checkout was earlier reported as failed, but your payment was "
+                        "actually confirmed by PayFast — the amount was credited to "
+                        "<strong>your</strong> wallet. Please place a new order from Telegram.</p>"
+                    )
                 return HTMLResponse(
                     "<h3>✅ Payment received.</h3>"
                     "<p>The original checkout had already expired, so the amount was credited to "
