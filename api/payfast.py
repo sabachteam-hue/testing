@@ -25,6 +25,8 @@ from utils.payment_security import (
     assert_order_owned_by_tx,
     assign_payfast_reference,
     can_apply_payfast_success,
+    claim_payfast_user_notification,
+    looks_like_payfast_tid,
     normalize_payfast_reference,
     normalize_payment_ref,
     payfast_callback_matches_tx,
@@ -298,7 +300,7 @@ async def payfast_callback(request: Request):
                 late=True,
             )
             db.commit()
-            await _notify_payfast_user(request, tx, user_message, show_products_button=True)
+            await _notify_payfast_user(request, db, tx, user_message, show_products_button=True)
             if redirect == "Y":
                 if was_rejected:
                     return HTMLResponse(
@@ -329,7 +331,7 @@ async def payfast_callback(request: Request):
                         late=True,
                     )
                     db.commit()
-                await _notify_payfast_user(request, tx, user_message, show_products_button=success)
+                await _notify_payfast_user(request, db, tx, user_message, show_products_button=success)
                 if redirect == "Y":
                     if success:
                         return HTMLResponse(
@@ -443,6 +445,7 @@ async def payfast_callback(request: Request):
             )
             await _notify_payfast_user(
                 request,
+                db,
                 tx,
                 user_message,
                 order=delivery_order,
@@ -464,6 +467,7 @@ async def payfast_callback(request: Request):
 
 async def _notify_payfast_user(
     request: Request,
+    db,
     tx: Transaction,
     user_message: str | None,
     *,
@@ -472,6 +476,12 @@ async def _notify_payfast_user(
     show_products_button: bool = False,
 ) -> None:
     if not user_message:
+        return
+    # Single-notify guard: if the bot's own "paste your Order ID" status
+    # check/poll loop already showed the user this same resolved outcome
+    # (race with this webhook call), don't send a second, duplicate message.
+    if not claim_payfast_user_notification(db, tx.id):
+        logger.info("[PAYFAST] Skipping webhook notify for tx=%s — already notified elsewhere", tx.id)
         return
     try:
         bot = request.app.state.bot
@@ -624,6 +634,7 @@ class PayfastReferenceOutcome:
     message: str
     order: Order | None = None
     delivered: bool = False
+    tx_id: int | None = None
 
 
 async def verify_payfast_reference(db, *, telegram_id: str, raw_reference: str) -> PayfastReferenceOutcome:
@@ -655,11 +666,23 @@ async def verify_payfast_reference(db, *, telegram_id: str, raw_reference: str) 
     # on; it simply will never be found among payfast_reference values
     # assigned going forward, which correctly falls through to
     # "invalid_reference" below rather than being rejected up front.
-    if not ref or len(ref) > 40 or not re.match(r"^SMFSHOP-?[A-Z0-9]{1,20}$", ref):
-        return PayfastReferenceOutcome(
-            "invalid_format",
-            "❌ Please send a valid PayFast Order ID, e.g. SMFSHOP-A7K29Q.",
-        )
+    is_order_no = bool(ref) and len(ref) <= 40 and re.match(r"^SMFSHOP-?[A-Z0-9]{1,20}$", ref)
+
+    tid = None
+    if not is_order_no:
+        # Not our own Order No. format — the customer may instead have
+        # pasted PayFast's own Transaction ID, which only appears on
+        # PayFast's page AFTER a payment completes (customers who didn't
+        # note the Order No. beforehand only have this to paste). Try it as
+        # a fallback lookup key — still purely read-only, see docstring.
+        candidate_tid = normalize_payment_ref(raw_reference)
+        if looks_like_payfast_tid(candidate_tid):
+            tid = candidate_tid
+        else:
+            return PayfastReferenceOutcome(
+                "invalid_format",
+                "❌ Please send a valid PayFast Order ID or Transaction ID, e.g. SMFSHOP-A7K29Q.",
+            )
 
     if payfast_lookup_rate_limited(telegram_id):
         logger.warning("[PAYFAST] Reference lookup rate-limited for telegram_id=%s", telegram_id)
@@ -668,10 +691,12 @@ async def verify_payfast_reference(db, *, telegram_id: str, raw_reference: str) 
             "⚠️ Too many attempts. Please wait a few minutes and try again, or contact support.",
         )
 
-    return lookup_payfast_reference_status(db, telegram_id=telegram_id, ref=ref)
+    return lookup_payfast_reference_status(db, telegram_id=telegram_id, ref=ref if is_order_no else None, tid=tid)
 
 
-def lookup_payfast_reference_status(db, *, telegram_id: str, ref: str) -> "PayfastReferenceOutcome":
+def lookup_payfast_reference_status(
+    db, *, telegram_id: str, ref: str | None = None, tid: str | None = None
+) -> "PayfastReferenceOutcome":
     """Core status lookup, split out of `verify_payfast_reference` so an
     automatic background poll (bot repeatedly re-checking the same
     already-validated reference while showing a live progress bar) can call
@@ -691,13 +716,25 @@ def lookup_payfast_reference_status(db, *, telegram_id: str, ref: str) -> "Payfa
 
     # Row-locked: serializes against a concurrent callback for the same tx so
     # we always report the final, post-callback state rather than a stale one.
-    tx = (
-        db.query(Transaction)
-        .filter(Transaction.payfast_reference == ref)
-        .with_for_update()
-        .first()
-    )
+    query = db.query(Transaction)
+    if ref:
+        query = query.filter(Transaction.payfast_reference == ref)
+    else:
+        # TID only ever gets written to tx_hash once PayFast's authenticated
+        # callback has already confirmed the payment (see api/payfast.py
+        # success handling) — so a still-pending checkout will never be
+        # found this way, only already-resolved ones. That's expected: the
+        # customer only ever sees a Transaction ID once payment succeeded.
+        query = query.filter(Transaction.tx_hash == tid)
+    tx = query.with_for_update().first()
     if not tx:
+        if tid:
+            logger.info("[PAYFAST] TID lookup miss tid=%s telegram_id=%s", tid, telegram_id)
+            return PayfastReferenceOutcome(
+                "invalid_reference",
+                "❌ We could not find this Transaction ID yet. If you just paid, please wait "
+                "a minute and try again, or use your PayFast Order ID instead.",
+            )
         logger.info("[PAYFAST] Reference lookup miss ref=%s telegram_id=%s", ref, telegram_id)
         return PayfastReferenceOutcome(
             "invalid_reference",
@@ -738,6 +775,7 @@ def lookup_payfast_reference_status(db, *, telegram_id: str, ref: str) -> "Payfa
                 "✅ This order has already been completed.",
                 order=order,
                 delivered=True,
+                tx_id=tx.id,
             )
         if order is None or order.status not in {"pending", "manual_pending"}:
             # Confirmed by PayFast's callback, but not (or no longer) fulfilling
@@ -755,12 +793,14 @@ def lookup_payfast_reference_status(db, *, telegram_id: str, ref: str) -> "Payfa
                 + (f" (order {order_code} was already released)." if order_code else ".")
                 + "\nPlease place a new order from the shop if you still want the product.",
                 order=order,
+                tx_id=tx.id,
             )
         return PayfastReferenceOutcome(
             "already_used",
             "⚠️ This PayFast payment has already been used for an order.\n\n"
             "Please use the PayFast Order ID from your current payment.",
             order=order,
+            tx_id=tx.id,
         )
 
     if tx.status == "rejected":
@@ -768,6 +808,7 @@ def lookup_payfast_reference_status(db, *, telegram_id: str, ref: str) -> "Payfa
             "failed",
             "❌ This PayFast payment was not successful. Please try again from the shop or contact support.",
             order=order,
+            tx_id=tx.id,
         )
 
     if tx.status in {"pending", "expired"}:
