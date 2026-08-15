@@ -744,9 +744,17 @@ async def payfast_check_prompt(callback: CallbackQuery, state: FSMContext) -> No
 # The bar's % reflects real elapsed wait time, is capped below 100 while
 # still pending, and only ever reaches 100% together with the actual
 # confirmed message — never faked ahead of the real DB status.
-_PAYFAST_POLL_TOTAL_SECONDS = 45
-_PAYFAST_POLL_INTERVAL_SECONDS = 3
-_PAYFAST_POLL_MAX_PENDING_PERCENT = 92
+#
+# Window is 6 minutes: observed real-world confirmations (a delayed/late
+# PayFast callback landing after the checkout's own idle-expiry) have taken
+# up to ~5 minutes end to end, so a short window used to time out and fall
+# back to "please resubmit" before the real confirmation ever arrived. The
+# interval is deliberately slow (6s) so the bar creeps rather than looking
+# like it's stuck — ~60 edits over the full window, well within Telegram's
+# edit-rate limits.
+_PAYFAST_POLL_TOTAL_SECONDS = 360
+_PAYFAST_POLL_INTERVAL_SECONDS = 6
+_PAYFAST_POLL_MAX_PENDING_PERCENT = 96
 
 _PRODUCTS_KEYBOARD = InlineKeyboardMarkup(
     inline_keyboard=[[InlineKeyboardButton(text="🛍 Products", callback_data="open_products")]]
@@ -761,8 +769,18 @@ def _payfast_progress_bar(percent: int, *, width: int = 10) -> str:
 def _payfast_progress_text(percent: int) -> str:
     return (
         "🔎 Your payment is being checked by our system...\n"
+        "This usually takes 1–2 minutes, but can occasionally take up to "
+        "5 minutes if the payment gateway is under heavy load.\n"
         f"{_payfast_progress_bar(percent)} {percent}%"
     )
+
+
+def _payfast_resolved_text(outcome_message: str) -> str:
+    """The bar's very last frame and the outcome message land in the same
+    edit, so the bar visibly reaches 100% at the exact moment the result
+    appears — never a 96% bar sitting there while a separate message shows
+    up afterwards."""
+    return f"{_payfast_progress_bar(100)} 100%\n\n{outcome_message}"
 
 
 @router.message(PayFastReferenceFlow.waiting_reference)
@@ -807,11 +825,15 @@ async def payfast_check_reference_received(message: Message, state: FSMContext) 
             fallback=outcome,
         )
 
+    # Still pending after the whole poll window is the one case that isn't
+    # "resolved" — don't claim 100% for a check that genuinely isn't done.
+    final_text = outcome.message if outcome.code == "pending" else _payfast_resolved_text(outcome.message)
+
     keyboard = _PRODUCTS_KEYBOARD if outcome.code == "wallet_credited" else None
     try:
-        await status_msg.edit_text(outcome.message, parse_mode=None, reply_markup=keyboard)
+        await status_msg.edit_text(final_text, parse_mode=None, reply_markup=keyboard)
     except Exception:  # noqa: BLE001 - fall back to a fresh message if the edit fails
-        await message.answer(outcome.message, parse_mode=None, reply_markup=keyboard)
+        await message.answer(final_text, parse_mode=None, reply_markup=keyboard)
 
 
 async def _poll_payfast_until_resolved(status_msg: Message, *, telegram_id: str, ref: str, fallback):
