@@ -237,14 +237,25 @@ def payfast_callback_matches_tx(
 
 
 def can_apply_payfast_success(tx: Transaction) -> tuple[bool, str]:
-    """Only unpaid PayFast checkouts may be credited/fulfilled from a success callback."""
+    """Only unpaid PayFast checkouts may be credited/fulfilled from a success callback.
+
+    "rejected" is included alongside "pending"/"expired" on purpose: PayFast
+    sometimes fires an early failure ping (e.g. the customer's session/page
+    timing out) BEFORE the real, authenticated success IPN lands a moment
+    later for the same payment. If we only ever recover from "expired", that
+    genuine later success would be silently dropped once the tx was marked
+    rejected. verified_at is the actual double-credit guard here (it is only
+    ever set once, by the branch that applies a verified success) — status
+    alone is just where a checkout currently sits, not proof money was never
+    actually received.
+    """
     if tx.tx_type != "deposit":
         return False, "not a deposit"
     if tx.verified_at is not None:
         return False, "already credited"
     if tx.status == "confirmed":
         return False, "already confirmed"
-    if tx.status not in {"pending", "expired"}:
+    if tx.status not in {"pending", "expired", "rejected"}:
         return False, f"status {tx.status} cannot receive payment credit"
     return True, ""
 
