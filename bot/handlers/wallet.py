@@ -756,6 +756,13 @@ _PAYFAST_POLL_TOTAL_SECONDS = 360
 _PAYFAST_POLL_INTERVAL_SECONDS = 6
 _PAYFAST_POLL_MAX_PENDING_PERCENT = 96
 
+# Outcome codes that mean the payment was actually settled by PayFast's
+# authenticated webhook (tx.verified_at set / tx.status == "rejected") —
+# i.e. the webhook itself either already sent, or is about to send, its own
+# confirmation message for this same event. See the single-notify guard
+# (claim_payfast_user_notification) applied right after these are produced.
+_WEBHOOK_NOTIFIED_CODES = {"wallet_credited", "already_delivered", "already_used", "failed"}
+
 _PRODUCTS_KEYBOARD = InlineKeyboardMarkup(
     inline_keyboard=[[InlineKeyboardButton(text="🛍 Products", callback_data="open_products")]]
 )
@@ -824,6 +831,27 @@ async def payfast_check_reference_received(message: Message, state: FSMContext) 
             ref=normalize_payfast_reference(raw_reference),
             fallback=outcome,
         )
+
+    # Single-notify guard: these outcome codes mean the payment was actually
+    # settled by PayFast's authenticated webhook (not just looked up here) —
+    # so the webhook either already sent its own confirmation message, or is
+    # about to. Claim the guard before showing our own text: if the webhook
+    # already claimed it first, don't print a second, duplicate confirmation
+    # here — just quietly clear the progress bubble instead.
+    if outcome.code in _WEBHOOK_NOTIFIED_CODES and outcome.tx_id is not None:
+        from utils.payment_security import claim_payfast_user_notification
+
+        db = SessionLocal()
+        try:
+            we_won = claim_payfast_user_notification(db, outcome.tx_id)
+        finally:
+            db.close()
+        if not we_won:
+            try:
+                await status_msg.delete()
+            except Exception:  # noqa: BLE001
+                pass
+            return
 
     # Still pending after the whole poll window is the one case that isn't
     # "resolved" — don't claim 100% for a check that genuinely isn't done.
