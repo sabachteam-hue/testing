@@ -711,7 +711,7 @@ def lookup_payfast_reference_status(
     if not user:
         return PayfastReferenceOutcome(
             "invalid_reference",
-            "❌ We could not verify this PayFast Order ID. Please check the ID and try again.",
+            "❌ We could not verify this PayFast Order No. / Transaction ID. Please check it and try again.",
         )
 
     # Row-locked: serializes against a concurrent callback for the same tx so
@@ -733,12 +733,12 @@ def lookup_payfast_reference_status(
             return PayfastReferenceOutcome(
                 "invalid_reference",
                 "❌ We could not find this Transaction ID yet. If you just paid, please wait "
-                "a minute and try again, or use your PayFast Order ID instead.",
+                "a minute and try again, or use your PayFast Order No. instead.",
             )
         logger.info("[PAYFAST] Reference lookup miss ref=%s telegram_id=%s", ref, telegram_id)
         return PayfastReferenceOutcome(
             "invalid_reference",
-            "❌ We could not verify this PayFast Order ID. Please check the ID and try again.",
+            "❌ We could not verify this PayFast Order No. / Transaction ID. Please check it and try again.",
         )
 
     if int(tx.user_id) != int(user.id):
@@ -748,7 +748,7 @@ def lookup_payfast_reference_status(
         )
         return PayfastReferenceOutcome(
             "wrong_owner",
-            "❌ This PayFast Order ID is not valid for your current order.",
+            "❌ This PayFast Order No. / Transaction ID is not valid for your current order.",
         )
 
     linked_id = linked_order_id_from_tx(tx)
@@ -762,7 +762,7 @@ def lookup_payfast_reference_status(
             )
             return PayfastReferenceOutcome(
                 "wrong_order",
-                "❌ This PayFast Order ID is not valid for your current order.",
+                "❌ This PayFast Order No. / Transaction ID is not valid for your current order.",
             )
 
     # Already fully processed — never fulfil/credit twice, whether that
@@ -798,7 +798,7 @@ def lookup_payfast_reference_status(
         return PayfastReferenceOutcome(
             "already_used",
             "⚠️ This PayFast payment has already been used for an order.\n\n"
-            "Please use the PayFast Order ID from your current payment.",
+            "Please use the PayFast Order No. / Transaction ID from your current payment.",
             order=order,
             tx_id=tx.id,
         )
