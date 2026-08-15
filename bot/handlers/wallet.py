@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime
 import html
 import logging
@@ -735,6 +736,42 @@ async def payfast_check_prompt(callback: CallbackQuery, state: FSMContext) -> No
     )
 
 
+_PAYFAST_CHECK_PROGRESS_STEPS = (0, 25, 50, 75, 100)
+_PAYFAST_CHECK_STEP_DELAY_SECONDS = 0.45
+
+
+def _payfast_progress_bar(percent: int, *, width: int = 10) -> str:
+    filled = round(width * percent / 100)
+    return "▓" * filled + "░" * (width - filled)
+
+
+def _payfast_progress_text(percent: int) -> str:
+    return (
+        "🔎 Your payment is being checked by our system...\n"
+        f"{_payfast_progress_bar(percent)} {percent}%"
+    )
+
+
+async def _show_payfast_check_progress(message: Message) -> Message:
+    """Animated 'checking' status shown while we look up a manually-pasted
+    PayFast Order ID (the recovery flow for a checkout that showed expired
+    or failed). Purely a UX reassurance step — the lookup itself is a fast
+    local DB read (see verify_payfast_reference's docstring on why this can
+    never be a live PayFast API call), not something that actually takes
+    several seconds. This only fires for the manual paste-and-check flow;
+    an on-time payment still gets its success/order notification instantly
+    and automatically from the callback webhook, with no paste needed.
+    """
+    status_msg = await message.answer(_payfast_progress_text(0))
+    for percent in _PAYFAST_CHECK_PROGRESS_STEPS[1:]:
+        await asyncio.sleep(_PAYFAST_CHECK_STEP_DELAY_SECONDS)
+        try:
+            await status_msg.edit_text(_payfast_progress_text(percent))
+        except Exception:  # noqa: BLE001 - edit races (e.g. rate limit) are harmless here
+            pass
+    return status_msg
+
+
 @router.message(PayFastReferenceFlow.waiting_reference)
 async def payfast_check_reference_received(message: Message, state: FSMContext) -> None:
     if await _bypass_deposit_menu_press(message, state):
@@ -748,6 +785,8 @@ async def payfast_check_reference_received(message: Message, state: FSMContext) 
 
     from api.payfast import verify_payfast_reference
 
+    status_msg = await _show_payfast_check_progress(message)
+
     db = SessionLocal()
     try:
         outcome = await verify_payfast_reference(
@@ -759,9 +798,15 @@ async def payfast_check_reference_received(message: Message, state: FSMContext) 
     except Exception:  # noqa: BLE001
         db.rollback()
         logger.exception("[PAYFAST] verify_payfast_reference crashed for ref=%s", raw_reference)
-        await message.answer("⚠️ We could not verify your payment right now. Please try again shortly.")
+        try:
+            await status_msg.edit_text("⚠️ We could not verify your payment right now. Please try again shortly.")
+        except Exception:  # noqa: BLE001
+            await message.answer("⚠️ We could not verify your payment right now. Please try again shortly.")
         return
     finally:
         db.close()
 
-    await message.answer(outcome.message, parse_mode=None)
+    try:
+        await status_msg.edit_text(outcome.message, parse_mode=None)
+    except Exception:  # noqa: BLE001 - fall back to a fresh message if the edit fails
+        await message.answer(outcome.message, parse_mode=None)
