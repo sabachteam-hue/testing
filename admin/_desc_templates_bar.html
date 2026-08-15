@@ -1,0 +1,27 @@
+{# Description templates toolbar — expects description_templates, desc_field_id #}
+{% set _fid = desc_field_id|default('new-product-description') %}
+<div class="desc-template-bar">
+  <label class="desc-template-pick">
+    <span>Use saved template</span>
+    <select id="descTemplateSelect-{{ _fid }}" class="desc-template-select" data-desc-target="{{ _fid }}">
+      <option value="">— choose a saved template —</option>
+      {% for tpl in description_templates or [] %}
+      <option value="{{ tpl.id }}">{{ tpl.name }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <details class="desc-template-save">
+    <summary>Save current as template</summary>
+    <div class="desc-template-save-row">
+      <input type="text" class="desc-template-name" data-desc-target="{{ _fid }}" placeholder="Template name (e.g. CapCut standard)" maxlength="120">
+      <button type="button" class="secondary desc-template-save-btn" data-desc-target="{{ _fid }}">Save template</button>
+    </div>
+  </details>
+</div>
+<script type="application/json" class="desc-templates-json" data-desc-target="{{ _fid }}">
+[
+  {% for tpl in description_templates or [] %}
+  {"id": {{ tpl.id }}, "name": {{ tpl.name|tojson }}, "body": {{ tpl.body|tojson }}}{% if not loop.last %},{% endif %}
+  {% endfor %}
+]
+</script>
