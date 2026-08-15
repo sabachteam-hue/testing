@@ -298,7 +298,7 @@ async def payfast_callback(request: Request):
                 late=True,
             )
             db.commit()
-            await _notify_payfast_user(request, tx, user_message)
+            await _notify_payfast_user(request, tx, user_message, show_products_button=True)
             if redirect == "Y":
                 if was_rejected:
                     return HTMLResponse(
@@ -329,7 +329,7 @@ async def payfast_callback(request: Request):
                         late=True,
                     )
                     db.commit()
-                await _notify_payfast_user(request, tx, user_message)
+                await _notify_payfast_user(request, tx, user_message, show_products_button=success)
                 if redirect == "Y":
                     if success:
                         return HTMLResponse(
@@ -356,6 +356,7 @@ async def payfast_callback(request: Request):
             db.add(verification)
 
             referral_notifications: list[dict] = []
+            wallet_credited = False
             linked_id = linked_order_id_from_tx(tx)
             purchase_order = db.get(Order, linked_id) if linked_id else None
 
@@ -384,6 +385,7 @@ async def payfast_callback(request: Request):
                         user_message = (
                             f"✅ Your PayFast payment of ${tx.amount:.2f} was confirmed and added to your wallet."
                         )
+                        wallet_credited = True
                     elif purchase_order.status == "pending":
                         user_message = await _fulfill_payfast_order(db, purchase_order, tx)
                     else:
@@ -395,12 +397,14 @@ async def payfast_callback(request: Request):
                             f"Order {purchase_order.order_code} was no longer pending, "
                             f"so the amount was credited to your wallet."
                         )
+                        wallet_credited = True
                 elif tx.tx_type == "deposit":
                     tx.user.wallet_usdt += tx.amount
                     referral_notifications = credit_referral_join_bonus(db, tx.user)
                     user_message = (
                         f"✅ Your PayFast top-up of ${tx.amount:.2f} was confirmed and added to your wallet."
                     )
+                    wallet_credited = True
             else:
                 tx.status = "rejected"
                 tx.blockchain_status = "failed"
@@ -443,6 +447,7 @@ async def payfast_callback(request: Request):
                 user_message,
                 order=delivery_order,
                 service=delivery_order.service if delivery_order else None,
+                show_products_button=wallet_credited,
             )
 
         if redirect == "Y":
@@ -464,13 +469,21 @@ async def _notify_payfast_user(
     *,
     order: Order | None = None,
     service=None,
+    show_products_button: bool = False,
 ) -> None:
     if not user_message:
         return
     try:
         bot = request.app.state.bot
         if bot and tx.user:
-            await bot.send_message(tx.user.telegram_id, user_message, parse_mode="HTML")
+            reply_markup = None
+            if show_products_button:
+                from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+                reply_markup = InlineKeyboardMarkup(
+                    inline_keyboard=[[InlineKeyboardButton(text="🛍 Products", callback_data="open_products")]]
+                )
+            await bot.send_message(tx.user.telegram_id, user_message, parse_mode="HTML", reply_markup=reply_markup)
             if order is not None and service is not None:
                 await maybe_send_delivery_file(
                     order=order,
@@ -563,8 +576,7 @@ def _credit_verified_payfast_to_wallet(
         + ".\n"
         f"The amount was added to your wallet only"
         + (f" (order {order_code} was already released)." if order_code else ".")
-        + "\nPlease place a new order from the shop if you still want the product.\n"
-        + "🛍 /products"
+        + "\nPlease place a new order from the shop if you still want the product."
     )
 
 
@@ -656,6 +668,18 @@ async def verify_payfast_reference(db, *, telegram_id: str, raw_reference: str) 
             "⚠️ Too many attempts. Please wait a few minutes and try again, or contact support.",
         )
 
+    return lookup_payfast_reference_status(db, telegram_id=telegram_id, ref=ref)
+
+
+def lookup_payfast_reference_status(db, *, telegram_id: str, ref: str) -> "PayfastReferenceOutcome":
+    """Core status lookup, split out of `verify_payfast_reference` so an
+    automatic background poll (bot repeatedly re-checking the same
+    already-validated reference while showing a live progress bar) can call
+    this directly without burning through `payfast_lookup_rate_limited`'s
+    budget, which is meant to limit distinct user-submitted references, not
+    our own internal re-checks of the one reference the user already gave us.
+    `ref` must already be normalized (see `normalize_payfast_reference`).
+    """
     from database.models import User
 
     user = db.query(User).filter(User.telegram_id == str(telegram_id)).first()
@@ -714,6 +738,23 @@ async def verify_payfast_reference(db, *, telegram_id: str, raw_reference: str) 
                 "✅ This order has already been completed.",
                 order=order,
                 delivered=True,
+            )
+        if order is None or order.status not in {"pending", "manual_pending"}:
+            # Confirmed by PayFast's callback, but not (or no longer) fulfilling
+            # an order that's pending or awaiting manual delivery — this is
+            # exactly the wallet-only credit path (late payment, or order
+            # already released/cancelled by the time it landed). Report the
+            # real outcome instead of a generic "already used" — same wording
+            # whether the customer is seeing this for the first time via the
+            # poll or on a later resubmit. ("completed" is excluded here —
+            # it's already handled above.)
+            order_code = order.order_code if order is not None else None
+            return PayfastReferenceOutcome(
+                "wallet_credited",
+                f"✅ PayFast payment of ${tx.amount:.2f} was confirmed and added to your wallet"
+                + (f" (order {order_code} was already released)." if order_code else ".")
+                + "\nPlease place a new order from the shop if you still want the product.",
+                order=order,
             )
         return PayfastReferenceOutcome(
             "already_used",
