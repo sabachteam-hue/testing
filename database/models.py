@@ -429,6 +429,13 @@ class Transaction(Base):
     # to look up/recover a PayFast payment (see utils/payment_security.py and
     # api/payfast.py). Null for non-PayFast transactions.
     payfast_reference: Mapped[str | None] = mapped_column(String(40), unique=True, nullable=True, index=True)
+    # Set the FIRST time the user is actually sent a Telegram message about
+    # this transaction's final outcome — by whichever path (webhook push or
+    # the bot's own "paste your Order ID" status check / poll loop) gets
+    # there first. Acts as a single-notify guard so the other path can see
+    # a message has already gone out and skip sending its own duplicate.
+    # See utils/payment_security.py::claim_payfast_user_notification.
+    user_notified_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     user: Mapped[User] = relationship(back_populates="transactions")
     verification: Mapped["PaymentVerification | None"] = relationship(back_populates="transaction", uselist=False)
@@ -734,6 +741,9 @@ def run_light_migrations() -> None:
         if "expire_notify" not in existing_columns:
             with engine.begin() as connection:
                 connection.execute(text("ALTER TABLE transactions ADD COLUMN expire_notify BOOLEAN DEFAULT 1"))
+        if "user_notified_at" not in existing_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE transactions ADD COLUMN user_notified_at DATETIME"))
 
     if "issue_reports" in table_names:
         existing_columns = {col["name"] for col in inspector.get_columns("issue_reports")}
