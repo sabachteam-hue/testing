@@ -41,6 +41,12 @@ def get_webhook_url() -> str | None:
 async def lifespan(app: FastAPI):
     init_db()
     try:
+        from migrate_payfast_reference import run as migrate_payfast_reference
+
+        migrate_payfast_reference()
+    except Exception as e:
+        logger.info(f"Migration skip (payfast_reference, likely already applied): {e}")
+    try:
         conn = sqlite3.connect('/app/data/smm_reseller.db')
         cursor = conn.cursor()
         cursor.execute("ALTER TABLE announcements ADD COLUMN image_path TEXT")
