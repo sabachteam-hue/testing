@@ -43,6 +43,15 @@ class DepositFlow(StatesGroup):
     waiting_reference = State()
 
 
+class PayFastReferenceFlow(StatesGroup):
+    """"Paste your PayFast Order ID" recovery/status-check flow — mirrors the
+    Binance/BEP20 TXID paste UX. See api/payfast.py::verify_payfast_reference
+    for why this only ever reports status and never fulfils/credits by
+    itself (that stays exclusively the authenticated callback's job)."""
+
+    waiting_reference = State()
+
+
 async def _bypass_deposit_menu_press(message: Message, state: FSMContext) -> bool:
     """Reply-keyboard menu presses must not be treated as amount/TXID."""
     text = (message.text or "").strip()
@@ -657,7 +666,8 @@ async def _send_payfast_checkout_message(
                 icon_fallback="💳",
                 url=checkout_link,
             )
-        ]
+        ],
+        [InlineKeyboardButton(text="✅ I Have Paid", callback_data=f"payfast_check:{tx_id}")],
     ]
     tutorial_text = ""
     if config.payfast_tutorial_url:
@@ -686,15 +696,19 @@ async def _send_payfast_checkout_message(
             f"{labels['product']} Product: {html.escape(strip_html_tags(product_name) or 'Product')}\n"
             f"{labels['order']} Order: {html.escape(order_code or '-')}\n"
             f"{price_icon} Amount: {format_usdt(amount)} (≈ Rs. {pkr_amount:,.0f})\n\n"
-            "Tap the button below to pay securely on PayFast. Your order will be completed "
-            "automatically once payment is confirmed — no need to send any reference."
+            "Tap the button below to pay securely on PayFast. Your order is completed "
+            "automatically once payment is confirmed. If it's been a few minutes and nothing "
+            "happened yet (e.g. Raast approval was delayed), tap <b>✅ I Have Paid</b> and paste "
+            "your PayFast Order ID shown on the payment page to check its status."
         )
     else:
         detail = (
             f"{methods_block}\n\n"
             f"{price_icon} Amount: {format_usdt(amount)} (≈ Rs. {pkr_amount:,.0f})\n\n"
-            "Tap the button below to pay securely on PayFast. Your wallet will be credited "
-            "automatically the moment the payment is confirmed - no need to send any reference."
+            "Tap the button below to pay securely on PayFast. Your wallet is credited "
+            "automatically the moment payment is confirmed. If it's been a few minutes and "
+            "nothing happened yet, tap <b>✅ I Have Paid</b> and paste your PayFast Order ID "
+            "shown on the payment page to check its status."
         )
 
     await message.answer(
@@ -702,3 +716,52 @@ async def _send_payfast_checkout_message(
         reply_markup=keyboard,
         parse_mode="HTML",
     )
+
+
+@router.callback_query(F.data.startswith("payfast_check:"))
+async def payfast_check_prompt(callback: CallbackQuery, state: FSMContext) -> None:
+    try:
+        tx_id = int(callback.data.split(":", 1)[1])
+    except (IndexError, ValueError):
+        await callback.answer()
+        return
+    await state.set_state(PayFastReferenceFlow.waiting_reference)
+    await state.update_data(payfast_tx_id=tx_id)
+    await callback.answer()
+    await callback.message.answer(
+        "📋 Please paste your <b>PayFast Order ID</b> (shown as \"Order no.\" on the PayFast "
+        "payment page, e.g. <code>SMFSHOP-A7K29Q</code>).",
+        parse_mode="HTML",
+    )
+
+
+@router.message(PayFastReferenceFlow.waiting_reference)
+async def payfast_check_reference_received(message: Message, state: FSMContext) -> None:
+    if await _bypass_deposit_menu_press(message, state):
+        return
+    raw_reference = (message.text or "").strip()
+    if not raw_reference or len(raw_reference) > 40:
+        await message.answer("⚠️ Please send a valid PayFast Order ID, e.g. SMFSHOP-A7K29Q.")
+        return
+
+    await state.clear()
+
+    from api.payfast import verify_payfast_reference
+
+    db = SessionLocal()
+    try:
+        outcome = await verify_payfast_reference(
+            db,
+            telegram_id=str(message.from_user.id),
+            raw_reference=raw_reference,
+        )
+        db.commit()
+    except Exception:  # noqa: BLE001
+        db.rollback()
+        logger.exception("[PAYFAST] verify_payfast_reference crashed for ref=%s", raw_reference)
+        await message.answer("⚠️ We could not verify your payment right now. Please try again shortly.")
+        return
+    finally:
+        db.close()
+
+    await message.answer(outcome.message, parse_mode=None)
