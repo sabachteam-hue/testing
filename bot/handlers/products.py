@@ -193,9 +193,12 @@ async def _show_order_payment_methods(
     await message.answer(caption, reply_markup=markup, parse_mode="HTML")
 
 
-@router.message(Command("products"))
-@router.message(MenuCommandFilter("shop"))
-async def products_command(message: Message) -> None:
+async def _send_products_catalog(
+    target: Message, *, telegram_id: str, username: str | None, full_name: str | None
+) -> None:
+    """Shared by /products, the shop menu button, and the inline 'Products'
+    button we attach to PayFast status messages — same catalog render
+    regardless of what triggered it."""
     db = SessionLocal()
     try:
         services = (
@@ -207,12 +210,7 @@ async def products_command(message: Message) -> None:
         )
         from utils.pricing import service_unit_prices
 
-        user = get_or_create_user(
-            db,
-            str(message.from_user.id),
-            message.from_user.username,
-            message.from_user.full_name,
-        )
+        user = get_or_create_user(db, telegram_id, username, full_name)
         prices = service_unit_prices(db, services, user)
         commands = get_command_map(db)
         icons = build_ui_icons(db)
@@ -221,14 +219,36 @@ async def products_command(message: Message) -> None:
     finally:
         db.close()
     if not services:
-        await message.answer("No products are available yet.")
+        await target.answer("No products are available yet.")
         return
     await send_catalog_photo(
-        message,
+        target,
         items,
         title="Available Products",
         caption=f"{stock_legend}\nChoose a product:",
         reply_markup=services_keyboard(services, commands=commands, icons=icons, prices=prices),
+    )
+
+
+@router.message(Command("products"))
+@router.message(MenuCommandFilter("shop"))
+async def products_command(message: Message) -> None:
+    await _send_products_catalog(
+        message,
+        telegram_id=str(message.from_user.id),
+        username=message.from_user.username,
+        full_name=message.from_user.full_name,
+    )
+
+
+@router.callback_query(F.data == "open_products")
+async def open_products_callback(callback: CallbackQuery) -> None:
+    await callback.answer()
+    await _send_products_catalog(
+        callback.message,
+        telegram_id=str(callback.from_user.id),
+        username=callback.from_user.username,
+        full_name=callback.from_user.full_name,
     )
 
 
