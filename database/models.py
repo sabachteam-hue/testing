@@ -423,6 +423,12 @@ class Transaction(Base):
     expire_notify: Mapped[bool] = mapped_column(Boolean, default=True)
     verified_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    # Customer-facing PayFast checkout reference (e.g. "SMFSHOP-A7K29Q").
+    # Cryptographically random and DB-unique — NOT derived from this row's id,
+    # so it can't be guessed/enumerated. Customers paste this back to the bot
+    # to look up/recover a PayFast payment (see utils/payment_security.py and
+    # api/payfast.py). Null for non-PayFast transactions.
+    payfast_reference: Mapped[str | None] = mapped_column(String(40), unique=True, nullable=True, index=True)
 
     user: Mapped[User] = relationship(back_populates="transactions")
     verification: Mapped["PaymentVerification | None"] = relationship(back_populates="transaction", uselist=False)
