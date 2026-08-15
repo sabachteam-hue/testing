@@ -736,8 +736,21 @@ async def payfast_check_prompt(callback: CallbackQuery, state: FSMContext) -> No
     )
 
 
-_PAYFAST_CHECK_PROGRESS_STEPS = (0, 25, 50, 75, 100)
-_PAYFAST_CHECK_STEP_DELAY_SECONDS = 0.45
+# Real (not animated) background polling: once a user pastes a reference
+# that isn't confirmed yet, we keep re-checking it ourselves — on the same
+# progress message — for up to _PAYFAST_POLL_TOTAL_SECONDS, instead of
+# telling the customer to manually resend the same ID over and over (which
+# used to spam a fresh "still being confirmed" bubble on every resubmit).
+# The bar's % reflects real elapsed wait time, is capped below 100 while
+# still pending, and only ever reaches 100% together with the actual
+# confirmed message — never faked ahead of the real DB status.
+_PAYFAST_POLL_TOTAL_SECONDS = 45
+_PAYFAST_POLL_INTERVAL_SECONDS = 3
+_PAYFAST_POLL_MAX_PENDING_PERCENT = 92
+
+_PRODUCTS_KEYBOARD = InlineKeyboardMarkup(
+    inline_keyboard=[[InlineKeyboardButton(text="🛍 Products", callback_data="open_products")]]
+)
 
 
 def _payfast_progress_bar(percent: int, *, width: int = 10) -> str:
@@ -752,26 +765,6 @@ def _payfast_progress_text(percent: int) -> str:
     )
 
 
-async def _show_payfast_check_progress(message: Message) -> Message:
-    """Animated 'checking' status shown while we look up a manually-pasted
-    PayFast Order ID (the recovery flow for a checkout that showed expired
-    or failed). Purely a UX reassurance step — the lookup itself is a fast
-    local DB read (see verify_payfast_reference's docstring on why this can
-    never be a live PayFast API call), not something that actually takes
-    several seconds. This only fires for the manual paste-and-check flow;
-    an on-time payment still gets its success/order notification instantly
-    and automatically from the callback webhook, with no paste needed.
-    """
-    status_msg = await message.answer(_payfast_progress_text(0))
-    for percent in _PAYFAST_CHECK_PROGRESS_STEPS[1:]:
-        await asyncio.sleep(_PAYFAST_CHECK_STEP_DELAY_SECONDS)
-        try:
-            await status_msg.edit_text(_payfast_progress_text(percent))
-        except Exception:  # noqa: BLE001 - edit races (e.g. rate limit) are harmless here
-            pass
-    return status_msg
-
-
 @router.message(PayFastReferenceFlow.waiting_reference)
 async def payfast_check_reference_received(message: Message, state: FSMContext) -> None:
     if await _bypass_deposit_menu_press(message, state):
@@ -783,17 +776,17 @@ async def payfast_check_reference_received(message: Message, state: FSMContext) 
 
     await state.clear()
 
-    from api.payfast import verify_payfast_reference
+    from api.payfast import normalize_payfast_reference, verify_payfast_reference
 
-    status_msg = await _show_payfast_check_progress(message)
+    telegram_id = str(message.from_user.id)
+    status_msg = await message.answer(_payfast_progress_text(0))
 
+    # First check goes through the normal, rate-limited, format-validated
+    # path — this is what actually consumes one of the user's lookup
+    # attempts and catches typos/invalid ids/wrong-owner instantly.
     db = SessionLocal()
     try:
-        outcome = await verify_payfast_reference(
-            db,
-            telegram_id=str(message.from_user.id),
-            raw_reference=raw_reference,
-        )
+        outcome = await verify_payfast_reference(db, telegram_id=telegram_id, raw_reference=raw_reference)
         db.commit()
     except Exception:  # noqa: BLE001
         db.rollback()
@@ -801,12 +794,59 @@ async def payfast_check_reference_received(message: Message, state: FSMContext) 
         try:
             await status_msg.edit_text("⚠️ We could not verify your payment right now. Please try again shortly.")
         except Exception:  # noqa: BLE001
-            await message.answer("⚠️ We could not verify your payment right now. Please try again shortly.")
+            pass
         return
     finally:
         db.close()
 
+    if outcome.code == "pending":
+        outcome = await _poll_payfast_until_resolved(
+            status_msg,
+            telegram_id=telegram_id,
+            ref=normalize_payfast_reference(raw_reference),
+            fallback=outcome,
+        )
+
+    keyboard = _PRODUCTS_KEYBOARD if outcome.code == "wallet_credited" else None
     try:
-        await status_msg.edit_text(outcome.message, parse_mode=None)
+        await status_msg.edit_text(outcome.message, parse_mode=None, reply_markup=keyboard)
     except Exception:  # noqa: BLE001 - fall back to a fresh message if the edit fails
-        await message.answer(outcome.message, parse_mode=None)
+        await message.answer(outcome.message, parse_mode=None, reply_markup=keyboard)
+
+
+async def _poll_payfast_until_resolved(status_msg: Message, *, telegram_id: str, ref: str, fallback):
+    """Re-check `ref` on a timer, editing `status_msg` in place, until the
+    authenticated PayFast callback has actually settled it (confirmed/
+    failed/etc.) or the poll window runs out. Never marks anything
+    confirmed itself — every check goes through the same read-only,
+    callback-populated status lookup as the manual flow.
+    """
+    from api.payfast import lookup_payfast_reference_status
+
+    elapsed = 0
+    outcome = fallback
+    while elapsed < _PAYFAST_POLL_TOTAL_SECONDS:
+        await asyncio.sleep(_PAYFAST_POLL_INTERVAL_SECONDS)
+        elapsed += _PAYFAST_POLL_INTERVAL_SECONDS
+
+        db = SessionLocal()
+        try:
+            outcome = lookup_payfast_reference_status(db, telegram_id=telegram_id, ref=ref)
+            db.commit()
+        except Exception:  # noqa: BLE001
+            db.rollback()
+            logger.exception("[PAYFAST] background poll crashed for ref=%s", ref)
+            break
+        finally:
+            db.close()
+
+        if outcome.code != "pending":
+            return outcome
+
+        percent = min(_PAYFAST_POLL_MAX_PENDING_PERCENT, round(100 * elapsed / _PAYFAST_POLL_TOTAL_SECONDS))
+        try:
+            await status_msg.edit_text(_payfast_progress_text(percent))
+        except Exception:  # noqa: BLE001 - edit races (e.g. rate limit) are harmless here
+            pass
+
+    return outcome
