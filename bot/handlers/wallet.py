@@ -698,18 +698,19 @@ async def _send_payfast_checkout_message(
             f"{labels['order']} Order: {html.escape(order_code or '-')}\n"
             f"{price_icon} Amount: {format_usdt(amount)} (≈ Rs. {pkr_amount:,.0f})\n\n"
             "Tap the button below to pay securely on PayFast. Your order is completed "
-            "automatically once payment is confirmed. If it's been a few minutes and nothing "
-            "happened yet (e.g. Raast approval was delayed), tap <b>✅ I Have Paid</b> and paste "
-            "your PayFast Order ID shown on the payment page to check its status."
+            "automatically once payment is confirmed.\n\n"
+            "<b>⚠️ If a few minutes pass and nothing happens (e.g. Raast approval was delayed), "
+            "tap ✅ I Have Paid and paste your PayFast Order No. or Transaction ID (TID) to check "
+            "its status.</b>"
         )
     else:
         detail = (
             f"{methods_block}\n\n"
             f"{price_icon} Amount: {format_usdt(amount)} (≈ Rs. {pkr_amount:,.0f})\n\n"
             "Tap the button below to pay securely on PayFast. Your wallet is credited "
-            "automatically the moment payment is confirmed. If it's been a few minutes and "
-            "nothing happened yet, tap <b>✅ I Have Paid</b> and paste your PayFast Order ID "
-            "shown on the payment page to check its status."
+            "automatically the moment payment is confirmed.\n\n"
+            "<b>⚠️ If a few minutes pass and nothing happens, tap ✅ I Have Paid and paste your "
+            "PayFast Order No. or Transaction ID (TID) to check its status.</b>"
         )
 
     await message.answer(
@@ -730,8 +731,10 @@ async def payfast_check_prompt(callback: CallbackQuery, state: FSMContext) -> No
     await state.update_data(payfast_tx_id=tx_id)
     await callback.answer()
     await callback.message.answer(
-        "📋 Please paste your <b>PayFast Order ID</b> (shown as \"Order no.\" on the PayFast "
-        "payment page, e.g. <code>SMFSHOP-A7K29Q</code>).",
+        "📋 Please paste your <b>PayFast Order No.</b> or <b>Transaction ID (TID)</b>:\n"
+        "• Order No. — shown as \"Order no.\" on the PayFast payment page, "
+        "e.g. <code>SMFSHOP-A7K29Q</code>.\n"
+        "• Transaction ID (TID) — the transaction ID you got after a successful payment.",
         parse_mode="HTML",
     )
 
@@ -796,7 +799,9 @@ async def payfast_check_reference_received(message: Message, state: FSMContext) 
         return
     raw_reference = (message.text or "").strip()
     if not raw_reference or len(raw_reference) > 40:
-        await message.answer("⚠️ Please send a valid PayFast Order ID, e.g. SMFSHOP-A7K29Q.")
+        await message.answer(
+            "⚠️ Please send a valid PayFast Order No. or Transaction ID (TID), e.g. SMFSHOP-A7K29Q."
+        )
         return
 
     await state.clear()
