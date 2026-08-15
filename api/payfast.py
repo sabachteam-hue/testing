@@ -563,7 +563,9 @@ def _credit_verified_payfast_to_wallet(
         + ".\n"
         f"The amount was added to your wallet only"
         + (f" (order {order_code} was already released)." if order_code else ".")
-        + "\nPlease place a new order from the shop if you still want the product."
+        + "+ "\nPlease place a new order from the shop if you still want the product.\n"
+"🛍 /products"
+)"
     )
 
 
