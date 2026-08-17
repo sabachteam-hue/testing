@@ -30,6 +30,7 @@ from utils.payment_security import (
     normalize_payfast_reference,
     normalize_payment_ref,
     payfast_callback_matches_tx,
+    payfast_checking_lock,
     payfast_lookup_rate_limited,
     payment_ref_already_used,
     take_payfast_checking_from_tx,
@@ -440,9 +441,10 @@ async def payfast_callback(request: Request):
                 except Exception:  # noqa: BLE001
                     logger.exception("[PAYFAST] Failed to send referral notification")
 
+            paid_order = purchase_order if success and purchase_order is not None else None
             delivery_order = (
-                purchase_order
-                if purchase_order is not None and purchase_order.status == "completed"
+                paid_order
+                if paid_order is not None and paid_order.status == "completed"
                 else None
             )
             await _notify_payfast_user(
@@ -450,8 +452,12 @@ async def payfast_callback(request: Request):
                 db,
                 tx,
                 user_message,
-                order=delivery_order,
-                service=delivery_order.service if delivery_order else None,
+                order=paid_order,
+                service=(
+                    delivery_order.service
+                    if delivery_order is not None
+                    else (paid_order.service if paid_order is not None else None)
+                ),
                 show_products_button=wallet_credited,
             )
 
@@ -488,53 +494,61 @@ async def _notify_payfast_user(
     try:
         bot = request.app.state.bot
         if bot and tx.user:
+            telegram_id = str(tx.user.telegram_id)
             reply_markup = None
-            if show_products_button:
+            if order is not None:
+                from bot.handlers.products import _post_order_keyboard
+
+                reply_markup = _post_order_keyboard(order.id)
+            elif show_products_button:
                 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
                 reply_markup = InlineKeyboardMarkup(
                     inline_keyboard=[[InlineKeyboardButton(text="🛍 Products", callback_data="open_products")]]
                 )
-            telegram_id = str(tx.user.telegram_id)
-            try:
-                db.refresh(tx)
-            except Exception:  # noqa: BLE001
-                pass
-            checking = take_payfast_checking_from_tx(tx)
-            mem = take_payfast_checking_message(telegram_id)
-            checking = checking or mem
-            if checking:
-                # Persist the pop so a later poll does not also try to edit/delete.
+            async with payfast_checking_lock(telegram_id):
                 try:
-                    db.commit()
+                    db.refresh(tx)
                 except Exception:  # noqa: BLE001
-                    db.rollback()
-            reused = False
-            if checking:
-                chat_id, message_id = checking
-                try:
-                    await bot.edit_message_text(
-                        text=user_message,
-                        chat_id=chat_id,
-                        message_id=message_id,
-                        parse_mode="HTML",
-                        reply_markup=reply_markup,
-                    )
-                    reused = True
-                except Exception:  # noqa: BLE001
-                    logger.info(
-                        "[PAYFAST] Could not edit Checking... message for tx=%s; sending a new one",
-                        tx.id,
-                    )
+                    pass
+                checking = take_payfast_checking_from_tx(tx)
+                mem = take_payfast_checking_message(telegram_id)
+                checking = checking or mem
+                if checking:
                     try:
-                        await bot.delete_message(chat_id=chat_id, message_id=message_id)
+                        db.commit()
                     except Exception:  # noqa: BLE001
-                        pass
-            if not reused:
-                await bot.send_message(
-                    telegram_id, user_message, parse_mode="HTML", reply_markup=reply_markup
-                )
-            if order is not None and service is not None:
+                        db.rollback()
+                reused = False
+                if checking:
+                    chat_id, message_id = checking
+                    try:
+                        await bot.edit_message_text(
+                            text=user_message,
+                            chat_id=chat_id,
+                            message_id=message_id,
+                            parse_mode="HTML",
+                            reply_markup=reply_markup,
+                        )
+                        reused = True
+                    except Exception:  # noqa: BLE001
+                        logger.info(
+                            "[PAYFAST] Could not edit Checking... message for tx=%s; sending a new one",
+                            tx.id,
+                        )
+                        try:
+                            await bot.delete_message(chat_id=chat_id, message_id=message_id)
+                        except Exception:  # noqa: BLE001
+                            pass
+                if not reused:
+                    await bot.send_message(
+                        telegram_id, user_message, parse_mode="HTML", reply_markup=reply_markup
+                    )
+            if (
+                order is not None
+                and service is not None
+                and getattr(order, "status", None) == "completed"
+            ):
                 await maybe_send_delivery_file(
                     order=order,
                     service=service,
