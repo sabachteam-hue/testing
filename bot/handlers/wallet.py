@@ -31,6 +31,7 @@ from utils.ui_icons import build_ui_icons, wallet_method_icon, wallet_screen_cop
 
 
 router = Router()
+logger = logging.getLogger(__name__)
 
 USER_DEPOSIT_PENDING = (
     "⏳ Deposit submitted. We're verifying your payment — you'll get a confirmation shortly.\n"
@@ -746,18 +747,20 @@ async def payfast_check_prompt(callback: CallbackQuery, state: FSMContext) -> No
 # used to spam a fresh "still being confirmed" bubble on every resubmit).
 # The bar's % reflects real elapsed wait time, is capped below 100 while
 # still pending, and only ever reaches 100% together with the actual
-# confirmed message — never faked ahead of the real DB status.
+# confirmed / not-found message — never faked ahead of the real DB status.
 #
-# Window is 6 minutes: observed real-world confirmations (a delayed/late
-# PayFast callback landing after the checkout's own idle-expiry) have taken
-# up to ~5 minutes end to end, so a short window used to time out and fall
-# back to "please resubmit" before the real confirmation ever arrived. The
-# interval is deliberately slow (6s) so the bar creeps rather than looking
-# like it's stuck — ~60 edits over the full window, well within Telegram's
-# edit-rate limits.
-_PAYFAST_POLL_TOTAL_SECONDS = 360
+# Window is 5 minutes: the loading copy tells the customer the check can
+# take that long, and we only show "Transaction not found" after the full
+# wait — never while the PayFast callback may still be in flight.
+# The interval is deliberately slow (6s) so the bar creeps rather than
+# looking like it's stuck — ~50 edits over the full window, well within
+# Telegram's edit-rate limits.
+_PAYFAST_POLL_TOTAL_SECONDS = 300
 _PAYFAST_POLL_INTERVAL_SECONDS = 6
 _PAYFAST_POLL_MAX_PENDING_PERCENT = 96
+_PAYFAST_NOT_FOUND_AFTER_WAIT = (
+    "❌ Transaction not found. We could not find this payment within 5 minutes."
+)
 
 # Outcome codes that mean the payment was actually settled by PayFast's
 # authenticated webhook (tx.verified_at set / tx.status == "rejected") —
@@ -806,7 +809,7 @@ async def payfast_check_reference_received(message: Message, state: FSMContext) 
 
     await state.clear()
 
-    from api.payfast import normalize_payfast_reference, verify_payfast_reference
+    from api.payfast import payfast_manual_lookup_keys, verify_payfast_reference
 
     telegram_id = str(message.from_user.id)
     status_msg = await message.answer(_payfast_progress_text(0))
@@ -830,10 +833,12 @@ async def payfast_check_reference_received(message: Message, state: FSMContext) 
         db.close()
 
     if outcome.code == "pending":
+        ref, tid = payfast_manual_lookup_keys(raw_reference)
         outcome = await _poll_payfast_until_resolved(
             status_msg,
             telegram_id=telegram_id,
-            ref=normalize_payfast_reference(raw_reference),
+            ref=ref,
+            tid=tid,
             fallback=outcome,
         )
 
@@ -858,23 +863,29 @@ async def payfast_check_reference_received(message: Message, state: FSMContext) 
                 pass
             return
 
-    # Still pending after the whole poll window is the one case that isn't
-    # "resolved" — don't claim 100% for a check that genuinely isn't done.
-    final_text = outcome.message if outcome.code == "pending" else _payfast_resolved_text(outcome.message)
-
-    keyboard = _PRODUCTS_KEYBOARD if outcome.code == "wallet_credited" else None
+    # After the full 5-minute check, pending means the payment never showed
+    # up in our transactions — that is a completed (failed) result, so the
+    # bar reaches 100% together with Transaction not found.
+    if outcome.code == "pending":
+        final_text = _payfast_resolved_text(_PAYFAST_NOT_FOUND_AFTER_WAIT)
+        keyboard = None
+    else:
+        final_text = _payfast_resolved_text(outcome.message)
+        keyboard = _PRODUCTS_KEYBOARD if outcome.code == "wallet_credited" else None
     try:
         await status_msg.edit_text(final_text, parse_mode=None, reply_markup=keyboard)
     except Exception:  # noqa: BLE001 - fall back to a fresh message if the edit fails
         await message.answer(final_text, parse_mode=None, reply_markup=keyboard)
 
 
-async def _poll_payfast_until_resolved(status_msg: Message, *, telegram_id: str, ref: str, fallback):
-    """Re-check `ref` on a timer, editing `status_msg` in place, until the
-    authenticated PayFast callback has actually settled it (confirmed/
-    failed/etc.) or the poll window runs out. Never marks anything
-    confirmed itself — every check goes through the same read-only,
-    callback-populated status lookup as the manual flow.
+async def _poll_payfast_until_resolved(
+    status_msg: Message, *, telegram_id: str, ref: str | None, tid: str | None, fallback
+):
+    """Re-check Order No. / TID on a timer, editing `status_msg` in place,
+    until the authenticated PayFast callback has actually settled it
+    (confirmed/failed/etc.) or the poll window runs out. Never marks
+    anything confirmed itself — every check goes through the same
+    read-only, callback-populated status lookup as the manual flow.
     """
     from api.payfast import lookup_payfast_reference_status
 
@@ -886,11 +897,13 @@ async def _poll_payfast_until_resolved(status_msg: Message, *, telegram_id: str,
 
         db = SessionLocal()
         try:
-            outcome = lookup_payfast_reference_status(db, telegram_id=telegram_id, ref=ref)
+            outcome = lookup_payfast_reference_status(
+                db, telegram_id=telegram_id, ref=ref, tid=tid
+            )
             db.commit()
         except Exception:  # noqa: BLE001
             db.rollback()
-            logger.exception("[PAYFAST] background poll crashed for ref=%s", ref)
+            logger.exception("[PAYFAST] background poll crashed for ref=%s tid=%s", ref, tid)
             break
         finally:
             db.close()

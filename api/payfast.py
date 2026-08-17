@@ -659,30 +659,12 @@ async def verify_payfast_reference(db, *, telegram_id: str, raw_reference: str) 
     ever recognised as successful once PayFast's own signed callback has
     said so.
     """
-    ref = normalize_payfast_reference(raw_reference)
-    # Loose sanity check only (length/charset) — NOT the strict new-format
-    # regex, so a reference issued just before this feature was deployed
-    # (old numeric "SMFSHOP123" style) can still be looked up and reported
-    # on; it simply will never be found among payfast_reference values
-    # assigned going forward, which correctly falls through to
-    # "invalid_reference" below rather than being rejected up front.
-    is_order_no = bool(ref) and len(ref) <= 40 and re.match(r"^SMFSHOP-?[A-Z0-9]{1,20}$", ref)
-
-    tid = None
-    if not is_order_no:
-        # Not our own Order No. format — the customer may instead have
-        # pasted PayFast's own Transaction ID, which only appears on
-        # PayFast's page AFTER a payment completes (customers who didn't
-        # note the Order No. beforehand only have this to paste). Try it as
-        # a fallback lookup key — still purely read-only, see docstring.
-        candidate_tid = normalize_payment_ref(raw_reference)
-        if looks_like_payfast_tid(candidate_tid):
-            tid = candidate_tid
-        else:
-            return PayfastReferenceOutcome(
-                "invalid_format",
-                "❌ Please send a valid PayFast Order ID or Transaction ID, e.g. SMFSHOP-A7K29Q.",
-            )
+    ref, tid = payfast_manual_lookup_keys(raw_reference)
+    if ref is None and tid is None:
+        return PayfastReferenceOutcome(
+            "invalid_format",
+            "❌ Please send a valid PayFast Order ID or Transaction ID, e.g. SMFSHOP-A7K29Q.",
+        )
 
     if payfast_lookup_rate_limited(telegram_id):
         logger.warning("[PAYFAST] Reference lookup rate-limited for telegram_id=%s", telegram_id)
@@ -691,7 +673,29 @@ async def verify_payfast_reference(db, *, telegram_id: str, raw_reference: str) 
             "⚠️ Too many attempts. Please wait a few minutes and try again, or contact support.",
         )
 
-    return lookup_payfast_reference_status(db, telegram_id=telegram_id, ref=ref if is_order_no else None, tid=tid)
+    return lookup_payfast_reference_status(db, telegram_id=telegram_id, ref=ref, tid=tid)
+
+
+def payfast_manual_lookup_keys(raw_reference: str) -> tuple[str | None, str | None]:
+    """Split a pasted value into (order_no, tid) for status lookup.
+
+    Exactly one side is set for a well-formed paste. Both None means the
+    value is not a PayFast Order No. or Transaction ID.
+    """
+    ref = normalize_payfast_reference(raw_reference)
+    # Loose sanity check only (length/charset) — NOT the strict new-format
+    # regex, so a reference issued just before this feature was deployed
+    # (old numeric "SMFSHOP123" style) can still be looked up and reported
+    # on; it simply will never be found among payfast_reference values
+    # assigned going forward, which correctly falls through to
+    # "invalid_reference" in lookup_payfast_reference_status.
+    is_order_no = bool(ref) and len(ref) <= 40 and re.match(r"^SMFSHOP-?[A-Z0-9]{1,20}$", ref)
+    if is_order_no:
+        return ref, None
+    candidate_tid = normalize_payment_ref(raw_reference)
+    if looks_like_payfast_tid(candidate_tid):
+        return None, candidate_tid
+    return None, None
 
 
 def lookup_payfast_reference_status(
@@ -720,20 +724,22 @@ def lookup_payfast_reference_status(
     if ref:
         query = query.filter(Transaction.payfast_reference == ref)
     else:
-        # TID only ever gets written to tx_hash once PayFast's authenticated
-        # callback has already confirmed the payment (see api/payfast.py
-        # success handling) — so a still-pending checkout will never be
-        # found this way, only already-resolved ones. That's expected: the
-        # customer only ever sees a Transaction ID once payment succeeded.
+        # TID is written to tx_hash only after PayFast's authenticated
+        # callback confirms the payment. A just-paid paste can miss until
+        # that write lands; the caller keeps polling while this is pending.
         query = query.filter(Transaction.tx_hash == tid)
     tx = query.with_for_update().first()
     if not tx:
         if tid:
+            # TID is only written to tx_hash after PayFast's authenticated
+            # callback lands — a just-paid customer can paste it before that
+            # write. Treat as still-pending so the bot keeps the loading bar
+            # and re-checks instead of showing "not found" while the webhook
+            # is still in flight.
             logger.info("[PAYFAST] TID lookup miss tid=%s telegram_id=%s", tid, telegram_id)
             return PayfastReferenceOutcome(
-                "invalid_reference",
-                "❌ We could not find this Transaction ID yet. If you just paid, please wait "
-                "a minute and try again, or use your PayFast Order No. instead.",
+                "pending",
+                "⏳ Your PayFast payment is still being confirmed.",
             )
         logger.info("[PAYFAST] Reference lookup miss ref=%s telegram_id=%s", ref, telegram_id)
         return PayfastReferenceOutcome(

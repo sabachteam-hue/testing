@@ -31,7 +31,24 @@ class SilenceCheckoutNotifyMiddleware(BaseMiddleware):
         elif isinstance(event, CallbackQuery) and event.from_user:
             telegram_id = str(event.from_user.id)
 
-        if telegram_id:
+        # I Have Paid / paste-ID is still the payment screen — do not expire
+        # the checkout just because the customer is checking status. Expiring
+        # here made the later PayFast callback look like a late recovery
+        # ("after the checkout expired") and raced the loading check.
+        skip_expire = False
+        if isinstance(event, CallbackQuery) and (event.data or "").startswith("payfast_check:"):
+            skip_expire = True
+        else:
+            state = data.get("state")
+            if state is not None:
+                try:
+                    current = await state.get_state()
+                except Exception:  # noqa: BLE001
+                    current = None
+                if current == "PayFastReferenceFlow:waiting_reference":
+                    skip_expire = True
+
+        if telegram_id and not skip_expire:
             try:
                 from utils.checkout_expire import expire_pending_checkouts_silently_for_telegram
 
