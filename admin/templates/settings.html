@@ -39,6 +39,25 @@
   <div class="panel">
     <div class="settings-card-head">
       <div>
+        <h3>Web Mini App</h3>
+        <p class="muted settings-card-sub">Same admin products, live on the Telegram Mini App / website</p>
+      </div>
+    </div>
+    <div class="settings-fields">
+      <label class="full">Mini App / storefront URL
+        <input name="mini_app_url" value="{{ config.mini_app_url if config and config.mini_app_url else '' }}" placeholder="https://your-shop.vercel.app">
+        <span class="field-hint">
+          Next.js web folder alag rehti hai. Wahan <code>NEXT_PUBLIC_API_BASE_URL</code> is Railway API par set karo
+          (jaise <code>https://web-production-80fac.up.railway.app</code>) taake live products yahan se aayein.
+          Save ke baad bot ke andar <strong>Shop</strong> Mini App button attach ho jata hai. HTTPS zaroori hai.
+        </span>
+      </label>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="settings-card-head">
+      <div>
         <h3>Maintenance Mode</h3>
       </div>
       <label class="switch">

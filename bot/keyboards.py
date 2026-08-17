@@ -1,4 +1,4 @@
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton, WebAppInfo
 
 from utils.helpers import icon_button
 from utils.menu_commands import CommandView, get_command_map
@@ -37,10 +37,17 @@ def _plain(icon_value: str | None, fallback: str) -> str:
     return icon_value
 
 
+def _mini_app_url() -> str | None:
+    from utils.helpers import get_mini_app_url
+
+    return get_mini_app_url()
+
+
 def main_menu_keyboard(
     commands: dict[str, CommandView] | None = None,
     *,
     show_admin: bool = False,
+    mini_app_url: str | None = None,
 ) -> ReplyKeyboardMarkup:
     """Persistent bottom quick-menu (reply keyboard — no colored styles / premium
     icon_custom_emoji_id support; use inline start menu for those).
@@ -52,20 +59,26 @@ def main_menu_keyboard(
     orders = _cmd(commands, "orders")
     api = _cmd(commands, "api")
     support = _cmd(commands, "support")
-    rows = [
+    url = mini_app_url if mini_app_url is not None else _mini_app_url()
+    rows: list[list[KeyboardButton]] = []
+    if url:
+        rows.append([KeyboardButton(text="🛍 Open Shop", web_app=WebAppInfo(url=url))])
+    rows.extend(
         [
-            KeyboardButton(text=f"{_plain(catalog.icon, '🗂')} {catalog.reply_name}"),
-            KeyboardButton(text=f"{_plain(shop.icon, '🛍')} {shop.reply_name}"),
-        ],
-        [
-            KeyboardButton(text=f"{_plain(wallet.icon, '👛')} {wallet.reply_name}"),
-            KeyboardButton(text=f"{_plain(orders.icon, '📦')} {orders.reply_name}"),
-        ],
-        [
-            KeyboardButton(text=f"{_plain(api.icon, '🔗')} {api.reply_name}"),
-            KeyboardButton(text=f"{_plain(support.icon, '💬')} {support.reply_name}"),
-        ],
-    ]
+            [
+                KeyboardButton(text=f"{_plain(catalog.icon, '🗂')} {catalog.reply_name}"),
+                KeyboardButton(text=f"{_plain(shop.icon, '🛍')} {shop.reply_name}"),
+            ],
+            [
+                KeyboardButton(text=f"{_plain(wallet.icon, '👛')} {wallet.reply_name}"),
+                KeyboardButton(text=f"{_plain(orders.icon, '📦')} {orders.reply_name}"),
+            ],
+            [
+                KeyboardButton(text=f"{_plain(api.icon, '🔗')} {api.reply_name}"),
+                KeyboardButton(text=f"{_plain(support.icon, '💬')} {support.reply_name}"),
+            ],
+        ]
+    )
     if show_admin:
         rows.append([KeyboardButton(text="🔐 Admin Panel")])
     return ReplyKeyboardMarkup(
@@ -140,6 +153,7 @@ def start_menu_keyboard(
     *,
     show_admin: bool = False,
     premium: bool = True,
+    mini_app_url: str | None = None,
 ) -> InlineKeyboardMarkup:
     """Inline menu under /start — Admin → Commands icons.
 
@@ -160,6 +174,7 @@ def start_menu_keyboard(
     catalog = _cmd(commands, "catalog")
     api = _cmd(commands, "api")
     language = _cmd(commands, "language")
+    url = mini_app_url if mini_app_url is not None else _mini_app_url()
 
     def _plain_btn(label: str, icon_value: str | None, fallback: str, callback_data: str) -> InlineKeyboardButton:
         return InlineKeyboardButton(
@@ -178,25 +193,32 @@ def start_menu_keyboard(
             callback_data=callback_data,
         )
 
-    rows: list[list[InlineKeyboardButton]] = [
-        [_btn(shop.name, shop.icon, "🛍", "menu:shopall")],
+    rows: list[list[InlineKeyboardButton]] = []
+    if url:
+        rows.append(
+            [InlineKeyboardButton(text="🛍 Open Mini Shop", web_app=WebAppInfo(url=url))]
+        )
+    rows.extend(
         [
-            _btn(catalog.name, catalog.icon, "🗂", "menu:catalog"),
-            _btn(topup.name, topup.icon or wallet.icon, "💰", "menu:wallet"),
-        ],
-        [
-            _btn(orders.name, orders.icon, "📦", "menu:orders"),
-            _btn(refer.name, refer.icon, "⭐", "menu:refer"),
-        ],
-        [
-            _btn(api.name, api.icon, "🔗", "menu:api"),
-            _btn(support.name, support.icon, "💬", "menu:support"),
-        ],
-        [
-            _btn(language.name, language.icon, "🌐", "menu:language"),
-            _btn(settings.name, settings.icon or profile.icon, "🔑", "menu:profile"),
-        ],
-    ]
+            [_btn(shop.name, shop.icon, "🛍", "menu:shopall")],
+            [
+                _btn(catalog.name, catalog.icon, "🗂", "menu:catalog"),
+                _btn(topup.name, topup.icon or wallet.icon, "💰", "menu:wallet"),
+            ],
+            [
+                _btn(orders.name, orders.icon, "📦", "menu:orders"),
+                _btn(refer.name, refer.icon, "⭐", "menu:refer"),
+            ],
+            [
+                _btn(api.name, api.icon, "🔗", "menu:api"),
+                _btn(support.name, support.icon, "💬", "menu:support"),
+            ],
+            [
+                _btn(language.name, language.icon, "🌐", "menu:language"),
+                _btn(settings.name, settings.icon or profile.icon, "🔑", "menu:profile"),
+            ],
+        ]
+    )
     if show_admin:
         rows.append([_btn("Admin Panel", None, "🔐", "menu:admin")])
     return InlineKeyboardMarkup(inline_keyboard=rows)

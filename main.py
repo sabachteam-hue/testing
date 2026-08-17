@@ -5,6 +5,7 @@ import sqlite3
 from contextlib import asynccontextmanager
 from aiogram.types import Update
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
@@ -12,6 +13,7 @@ from admin.routes import router as admin_router
 from api.docs import router as docs_router
 from api.payfast import router as payfast_router
 from api.v1 import router as api_v1_router
+from api.web import cors_allow_origins, router as api_web_router
 from api.webhooks import router as api_webhooks_router
 from bot.bot_main import create_bot, setup_webhook_bot
 from database.models import init_db
@@ -95,10 +97,19 @@ app.add_middleware(
     SessionMiddleware,
     secret_key=os.getenv("SECRET_KEY", "insecure-dev-secret-change-me"),
 )
+_cors_origins = cors_allow_origins()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"] if _cors_origins == "*" else _cors_origins,
+    allow_credentials=False,
+    allow_methods=["GET", "OPTIONS"],
+    allow_headers=["*"],
+)
 app.mount("/admin/static", StaticFiles(directory="admin/static"), name="admin-static")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 app.include_router(admin_router)
 app.include_router(api_v1_router)
+app.include_router(api_web_router)
 app.include_router(docs_router)
 app.include_router(api_webhooks_router)
 app.include_router(payfast_router)

@@ -514,6 +514,8 @@ class BotConfig(Base):
     sidebar_seen_sold_accounts_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     sidebar_seen_orders_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     sidebar_seen_users_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # HTTPS URL of the Next.js storefront / Telegram Mini App. Empty = no Mini App button.
+    mini_app_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
 
 class Announcement(Base, TimestampMixin):
@@ -852,6 +854,8 @@ def run_light_migrations() -> None:
                 connection.execute(text("ALTER TABLE bot_configs ADD COLUMN sidebar_seen_orders_at DATETIME"))
             if "sidebar_seen_users_at" not in existing_columns:
                 connection.execute(text("ALTER TABLE bot_configs ADD COLUMN sidebar_seen_users_at DATETIME"))
+            if "mini_app_url" not in existing_columns:
+                connection.execute(text("ALTER TABLE bot_configs ADD COLUMN mini_app_url VARCHAR(500)"))
 
     if "users" in table_names:
         existing_columns = {col["name"] for col in inspector.get_columns("users")}

@@ -63,6 +63,7 @@ async def start_bot() -> None:
 
     dispatcher = build_dispatcher()
     await register_bot_commands(bot)
+    await apply_mini_app_menu_button(bot)
     await bot.delete_webhook(drop_pending_updates=True)
     try:
         await dispatcher.start_polling(bot, allowed_updates=dispatcher.resolve_used_update_types())
@@ -76,6 +77,7 @@ async def setup_webhook_bot(webhook_url: str) -> tuple[Bot, Dispatcher]:
         raise RuntimeError("BOT_TOKEN is not configured")
     dispatcher = build_dispatcher()
     await register_bot_commands(bot)
+    await apply_mini_app_menu_button(bot)
     await bot.set_webhook(
         webhook_url,
         allowed_updates=dispatcher.resolve_used_update_types(),
@@ -83,6 +85,26 @@ async def setup_webhook_bot(webhook_url: str) -> tuple[Bot, Dispatcher]:
     )
     logging.info("Telegram webhook configured: %s", webhook_url)
     return bot, dispatcher
+
+
+async def apply_mini_app_menu_button(bot: Bot) -> None:
+    """Attach (or clear) the Telegram Mini App menu button for this bot."""
+    from aiogram.types import MenuButtonCommands, MenuButtonWebApp, WebAppInfo
+
+    from utils.helpers import get_mini_app_url
+
+    url = get_mini_app_url()
+    try:
+        if url:
+            await bot.set_chat_menu_button(
+                menu_button=MenuButtonWebApp(text="Shop", web_app=WebAppInfo(url=url))
+            )
+            logging.info("Telegram Mini App menu button set: %s", url)
+        else:
+            await bot.set_chat_menu_button(menu_button=MenuButtonCommands())
+            logging.info("Telegram Mini App URL empty — menu button reset to commands.")
+    except Exception:  # noqa: BLE001
+        logging.exception("Failed to set Telegram Mini App menu button")
 
 
 async def register_bot_commands(bot: Bot) -> None:
