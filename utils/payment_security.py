@@ -182,8 +182,27 @@ def register_payfast_checking_message(telegram_id: str | int, chat_id: int, mess
 
 
 def take_payfast_checking_message(telegram_id: str | int) -> tuple[int, int] | None:
-    """Pop the Checking... bubble so only one side edits or deletes it."""
+    """Pop the in-memory Checking... bubble so only one side edits or deletes it."""
     return _payfast_checking_messages.pop(str(telegram_id), None)
+
+
+def save_payfast_checking_on_tx(tx, *, chat_id: int, message_id: int) -> None:
+    tx.payfast_check_chat_id = str(chat_id)
+    tx.payfast_check_message_id = int(message_id)
+
+
+def take_payfast_checking_from_tx(tx) -> tuple[int, int] | None:
+    """Pop the Checking... bubble stored on the checkout row (survives workers)."""
+    chat_id = getattr(tx, "payfast_check_chat_id", None)
+    message_id = getattr(tx, "payfast_check_message_id", None)
+    if not chat_id or not message_id:
+        return None
+    tx.payfast_check_chat_id = None
+    tx.payfast_check_message_id = None
+    try:
+        return int(chat_id), int(message_id)
+    except (TypeError, ValueError):
+        return None
 
 
 # ---------------------------------------------------------------------------

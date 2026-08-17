@@ -436,6 +436,11 @@ class Transaction(Base):
     # a message has already gone out and skip sending its own duplicate.
     # See utils/payment_security.py::claim_payfast_user_notification.
     user_notified_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # Telegram bubble shown while the customer waits on "I Have Paid" — the
+    # PayFast callback edits this same message into the confirmation so a
+    # stale Checking... / % bar is not left sitting above the result.
+    payfast_check_chat_id: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    payfast_check_message_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     user: Mapped[User] = relationship(back_populates="transactions")
     verification: Mapped["PaymentVerification | None"] = relationship(back_populates="transaction", uselist=False)
@@ -744,6 +749,12 @@ def run_light_migrations() -> None:
         if "user_notified_at" not in existing_columns:
             with engine.begin() as connection:
                 connection.execute(text("ALTER TABLE transactions ADD COLUMN user_notified_at DATETIME"))
+        if "payfast_check_chat_id" not in existing_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE transactions ADD COLUMN payfast_check_chat_id VARCHAR(40)"))
+        if "payfast_check_message_id" not in existing_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE transactions ADD COLUMN payfast_check_message_id INTEGER"))
 
     if "issue_reports" in table_names:
         existing_columns = {col["name"] for col in inspector.get_columns("issue_reports")}

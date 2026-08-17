@@ -27,7 +27,11 @@ from utils.notifications import send_admin_message
 from utils.payment_verify import verify_payment
 from utils.menu_commands import MenuCommandFilter, get_command_map, text_matches_any_menu
 from utils.stock_display import preset_icon
-from utils.payment_security import register_payfast_checking_message, take_payfast_checking_message
+from utils.payment_security import (
+    register_payfast_checking_message,
+    save_payfast_checking_on_tx,
+    take_payfast_checking_message,
+)
 from utils.ui_icons import build_ui_icons, wallet_method_icon, wallet_screen_copy
 
 
@@ -784,6 +788,8 @@ async def payfast_check_reference_received(message: Message, state: FSMContext) 
         )
         return
 
+    data = await state.get_data()
+    checkout_tx_id = data.get("payfast_tx_id")
     await state.clear()
 
     from api.payfast import payfast_manual_lookup_keys, verify_payfast_reference
@@ -791,13 +797,40 @@ async def payfast_check_reference_received(message: Message, state: FSMContext) 
     telegram_id = str(message.from_user.id)
     status_msg = await message.answer(_payfast_checking_text())
     register_payfast_checking_message(telegram_id, status_msg.chat.id, status_msg.message_id)
+    try:
+        checkout_tx_id = int(checkout_tx_id) if checkout_tx_id is not None else None
+    except (TypeError, ValueError):
+        checkout_tx_id = None
+
+    # Persist the Checking... bubble on the checkout row so the PayFast
+    # callback can edit THIS message into the confirmation even if the
+    # in-memory map is empty (another worker / process).
+    if checkout_tx_id is not None:
+        db = SessionLocal()
+        try:
+            tx = db.get(Transaction, checkout_tx_id)
+            if tx is not None:
+                save_payfast_checking_on_tx(
+                    tx, chat_id=status_msg.chat.id, message_id=status_msg.message_id
+                )
+                db.commit()
+        except Exception:  # noqa: BLE001
+            db.rollback()
+            logger.exception("[PAYFAST] Failed to save Checking... message on tx=%s", checkout_tx_id)
+        finally:
+            db.close()
 
     # First check goes through the normal, rate-limited, format-validated
     # path — this is what actually consumes one of the user's lookup
     # attempts and catches typos/invalid ids/wrong-owner instantly.
     db = SessionLocal()
     try:
-        outcome = await verify_payfast_reference(db, telegram_id=telegram_id, raw_reference=raw_reference)
+        outcome = await verify_payfast_reference(
+            db,
+            telegram_id=telegram_id,
+            raw_reference=raw_reference,
+            checkout_tx_id=checkout_tx_id,
+        )
         db.commit()
     except Exception:  # noqa: BLE001
         db.rollback()
@@ -817,6 +850,7 @@ async def payfast_check_reference_received(message: Message, state: FSMContext) 
             telegram_id=telegram_id,
             ref=ref,
             tid=tid,
+            checkout_tx_id=checkout_tx_id,
             fallback=outcome,
         )
 
@@ -865,12 +899,17 @@ async def payfast_check_reference_received(message: Message, state: FSMContext) 
 
 
 async def _poll_payfast_until_resolved(
-    *, telegram_id: str, ref: str | None, tid: str | None, fallback
+    *,
+    telegram_id: str,
+    ref: str | None,
+    tid: str | None,
+    checkout_tx_id: int | None,
+    fallback,
 ):
-    """Re-check Order No. / TID on a timer until the authenticated PayFast
-    callback has settled it (confirmed/failed/etc.) or the poll window
-    runs out. Does not touch the Checking... bubble — the webhook edits
-    that same message into the confirmation as soon as payment lands.
+    """Re-check Order No. / TID / checkout row until PayFast settles it or
+    the poll window runs out. Does not touch the Checking... bubble — the
+    webhook edits that same message into the confirmation as soon as
+    payment lands.
     """
     from api.payfast import lookup_payfast_reference_status
 
@@ -883,12 +922,19 @@ async def _poll_payfast_until_resolved(
         db = SessionLocal()
         try:
             outcome = lookup_payfast_reference_status(
-                db, telegram_id=telegram_id, ref=ref, tid=tid
+                db,
+                telegram_id=telegram_id,
+                ref=ref,
+                tid=tid,
+                checkout_tx_id=checkout_tx_id,
             )
             db.commit()
         except Exception:  # noqa: BLE001
             db.rollback()
-            logger.exception("[PAYFAST] background poll crashed for ref=%s tid=%s", ref, tid)
+            logger.exception(
+                "[PAYFAST] background poll crashed for ref=%s tid=%s checkout_tx=%s",
+                ref, tid, checkout_tx_id,
+            )
             break
         finally:
             db.close()

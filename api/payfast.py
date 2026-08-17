@@ -32,6 +32,7 @@ from utils.payment_security import (
     payfast_callback_matches_tx,
     payfast_lookup_rate_limited,
     payment_ref_already_used,
+    take_payfast_checking_from_tx,
     take_payfast_checking_message,
 )
 from utils.stock_manager import release_stock
@@ -495,7 +496,19 @@ async def _notify_payfast_user(
                     inline_keyboard=[[InlineKeyboardButton(text="🛍 Products", callback_data="open_products")]]
                 )
             telegram_id = str(tx.user.telegram_id)
-            checking = take_payfast_checking_message(telegram_id)
+            try:
+                db.refresh(tx)
+            except Exception:  # noqa: BLE001
+                pass
+            checking = take_payfast_checking_from_tx(tx)
+            mem = take_payfast_checking_message(telegram_id)
+            checking = checking or mem
+            if checking:
+                # Persist the pop so a later poll does not also try to edit/delete.
+                try:
+                    db.commit()
+                except Exception:  # noqa: BLE001
+                    db.rollback()
             reused = False
             if checking:
                 chat_id, message_id = checking
@@ -664,7 +677,9 @@ class PayfastReferenceOutcome:
     tx_id: int | None = None
 
 
-async def verify_payfast_reference(db, *, telegram_id: str, raw_reference: str) -> PayfastReferenceOutcome:
+async def verify_payfast_reference(
+    db, *, telegram_id: str, raw_reference: str, checkout_tx_id: int | None = None
+) -> PayfastReferenceOutcome:
     """Manual "paste your PayFast Order ID" lookup/recovery path.
 
     Mirrors the Binance/BEP20 paste-and-verify UX, but a pasted reference is
@@ -700,7 +715,9 @@ async def verify_payfast_reference(db, *, telegram_id: str, raw_reference: str) 
             "⚠️ Too many attempts. Please wait a few minutes and try again, or contact support.",
         )
 
-    return lookup_payfast_reference_status(db, telegram_id=telegram_id, ref=ref, tid=tid)
+    return lookup_payfast_reference_status(
+        db, telegram_id=telegram_id, ref=ref, tid=tid, checkout_tx_id=checkout_tx_id
+    )
 
 
 def payfast_manual_lookup_keys(raw_reference: str) -> tuple[str | None, str | None]:
@@ -726,7 +743,12 @@ def payfast_manual_lookup_keys(raw_reference: str) -> tuple[str | None, str | No
 
 
 def lookup_payfast_reference_status(
-    db, *, telegram_id: str, ref: str | None = None, tid: str | None = None
+    db,
+    *,
+    telegram_id: str,
+    ref: str | None = None,
+    tid: str | None = None,
+    checkout_tx_id: int | None = None,
 ) -> "PayfastReferenceOutcome":
     """Core status lookup, split out of `verify_payfast_reference` so an
     automatic background poll (bot repeatedly re-checking the same
@@ -735,6 +757,8 @@ def lookup_payfast_reference_status(
     budget, which is meant to limit distinct user-submitted references, not
     our own internal re-checks of the one reference the user already gave us.
     `ref` must already be normalized (see `normalize_payfast_reference`).
+    `checkout_tx_id` is the PayFast checkout the customer tapped I Have Paid
+    on — used when a pasted TID is not on tx_hash yet (callback still in flight).
     """
     from database.models import User
 
@@ -750,20 +774,28 @@ def lookup_payfast_reference_status(
     query = db.query(Transaction)
     if ref:
         query = query.filter(Transaction.payfast_reference == ref)
-    else:
-        # TID is written to tx_hash only after PayFast's authenticated
-        # callback confirms the payment. A just-paid paste can miss until
-        # that write lands; the caller keeps polling while this is pending.
+        tx = query.with_for_update().first()
+    elif tid:
         query = query.filter(Transaction.tx_hash == tid)
-    tx = query.with_for_update().first()
+        tx = query.with_for_update().first()
+    else:
+        tx = None
+
+    if not tx and checkout_tx_id:
+        candidate = db.get(Transaction, int(checkout_tx_id), with_for_update=True)
+        if candidate is not None and int(candidate.user_id) == int(user.id):
+            tx = candidate
+
     if not tx:
-        if tid:
-            # TID is only written to tx_hash after PayFast's authenticated
-            # callback lands — a just-paid customer can paste it before that
-            # write. Treat as still-pending so the bot keeps the loading bar
-            # and re-checks instead of showing "not found" while the webhook
-            # is still in flight.
-            logger.info("[PAYFAST] TID lookup miss tid=%s telegram_id=%s", tid, telegram_id)
+        if tid or checkout_tx_id:
+            # TID is written to tx_hash only after PayFast's authenticated
+            # callback lands — a just-paid paste can miss until that write.
+            # Keep Checking... instead of showing "not found" while the
+            # webhook is still in flight.
+            logger.info(
+                "[PAYFAST] lookup miss tid=%s checkout_tx=%s telegram_id=%s",
+                tid, checkout_tx_id, telegram_id,
+            )
             return PayfastReferenceOutcome(
                 "pending",
                 "⏳ Your PayFast payment is still being confirmed.",
