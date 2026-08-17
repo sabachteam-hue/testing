@@ -751,12 +751,12 @@ async def payfast_check_prompt(callback: CallbackQuery, state: FSMContext) -> No
 # us how long confirmation will take, so this message stays a static
 # "Checking..." (no % bar). The same bubble is edited into the payment /
 # order confirmation — or deleted if the webhook already reused it — the
-# moment the callback lands. "Transaction not found" only after 5 minutes.
-_PAYFAST_POLL_TOTAL_SECONDS = 300
+# moment the callback lands. "Transaction not found" only after 10 minutes.
+_PAYFAST_POLL_TOTAL_SECONDS = 600
 _PAYFAST_POLL_INTERVAL_SECONDS = 6
 _PAYFAST_TIMER_SECONDS = 1
 _PAYFAST_NOT_FOUND_AFTER_WAIT = (
-    "❌ Transaction not found. We could not find this payment within 5 minutes."
+    "❌ Transaction not found. We could not find this payment within 10 minutes."
 )
 
 # Outcome codes that mean the payment was actually settled by PayFast's
@@ -784,7 +784,7 @@ def _payfast_checking_text(elapsed_seconds: int, loading_icon: str) -> str:
     return (
         "🔎 Your payment is being checked by our system...\n"
         "This usually takes 1–2 minutes, but can occasionally take up to "
-        "5 minutes if the payment gateway is under heavy load.\n\n"
+        "10 minutes if the payment gateway is under heavy load.\n\n"
         f"{loading_icon} Checking... {secs}s"
     )
 
