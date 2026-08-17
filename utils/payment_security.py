@@ -9,6 +9,7 @@ Rules enforced across PayFast + TXID deposits:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 import secrets
@@ -175,10 +176,24 @@ def claim_payfast_user_notification(db: Session, tx_id: int) -> bool:
 # message into the confirmation (or delete it) the instant payment lands —
 # otherwise the poll loop would leave Checking... on screen until it wakes.
 _payfast_checking_messages: dict[str, tuple[int, int]] = {}
+_payfast_checking_locks: dict[str, asyncio.Lock] = {}
+
+
+def payfast_checking_lock(telegram_id: str | int) -> asyncio.Lock:
+    key = str(telegram_id)
+    lock = _payfast_checking_locks.get(key)
+    if lock is None:
+        lock = asyncio.Lock()
+        _payfast_checking_locks[key] = lock
+    return lock
 
 
 def register_payfast_checking_message(telegram_id: str | int, chat_id: int, message_id: int) -> None:
     _payfast_checking_messages[str(telegram_id)] = (int(chat_id), int(message_id))
+
+
+def has_payfast_checking_message(telegram_id: str | int) -> bool:
+    return str(telegram_id) in _payfast_checking_messages
 
 
 def take_payfast_checking_message(telegram_id: str | int) -> tuple[int, int] | None:

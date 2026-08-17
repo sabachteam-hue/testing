@@ -28,6 +28,8 @@ from utils.payment_verify import verify_payment
 from utils.menu_commands import MenuCommandFilter, get_command_map, text_matches_any_menu
 from utils.stock_display import preset_icon
 from utils.payment_security import (
+    has_payfast_checking_message,
+    payfast_checking_lock,
     register_payfast_checking_message,
     save_payfast_checking_on_tx,
     take_payfast_checking_message,
@@ -752,6 +754,7 @@ async def payfast_check_prompt(callback: CallbackQuery, state: FSMContext) -> No
 # moment the callback lands. "Transaction not found" only after 5 minutes.
 _PAYFAST_POLL_TOTAL_SECONDS = 300
 _PAYFAST_POLL_INTERVAL_SECONDS = 6
+_PAYFAST_TIMER_SECONDS = 1
 _PAYFAST_NOT_FOUND_AFTER_WAIT = (
     "❌ Transaction not found. We could not find this payment within 5 minutes."
 )
@@ -768,13 +771,36 @@ _PRODUCTS_KEYBOARD = InlineKeyboardMarkup(
 )
 
 
-def _payfast_checking_text() -> str:
+def _payfast_loading_icon() -> str:
+    db = SessionLocal()
+    try:
+        return preset_icon(db, ("loading",), "🔄")
+    finally:
+        db.close()
+
+
+def _payfast_checking_text(elapsed_seconds: int, loading_icon: str) -> str:
+    secs = max(int(elapsed_seconds), 1)
     return (
         "🔎 Your payment is being checked by our system...\n"
         "This usually takes 1–2 minutes, but can occasionally take up to "
         "5 minutes if the payment gateway is under heavy load.\n\n"
-        "🔄 Checking..."
+        f"{loading_icon} Checking... {secs}s"
     )
+
+
+def _payfast_post_order_keyboard(order_id: int):
+    from bot.keyboards import post_order_actions_keyboard
+    from utils.menu_commands import get_command_map
+    from utils.ui_icons import build_ui_icons
+
+    db = SessionLocal()
+    try:
+        return post_order_actions_keyboard(
+            order_id, commands=get_command_map(db), icons=build_ui_icons(db)
+        )
+    finally:
+        db.close()
 
 
 @router.message(PayFastReferenceFlow.waiting_reference)
@@ -795,7 +821,10 @@ async def payfast_check_reference_received(message: Message, state: FSMContext) 
     from api.payfast import payfast_manual_lookup_keys, verify_payfast_reference
 
     telegram_id = str(message.from_user.id)
-    status_msg = await message.answer(_payfast_checking_text())
+    loading_icon = _payfast_loading_icon()
+    status_msg = await message.answer(
+        _payfast_checking_text(1, loading_icon), parse_mode="HTML"
+    )
     register_payfast_checking_message(telegram_id, status_msg.chat.id, status_msg.message_id)
     try:
         checkout_tx_id = int(checkout_tx_id) if checkout_tx_id is not None else None
@@ -847,10 +876,12 @@ async def payfast_check_reference_received(message: Message, state: FSMContext) 
     if outcome.code == "pending":
         ref, tid = payfast_manual_lookup_keys(raw_reference)
         outcome = await _poll_payfast_until_resolved(
+            status_msg,
             telegram_id=telegram_id,
             ref=ref,
             tid=tid,
             checkout_tx_id=checkout_tx_id,
+            loading_icon=loading_icon,
             fallback=outcome,
         )
 
@@ -871,53 +902,72 @@ async def payfast_check_reference_received(message: Message, state: FSMContext) 
         if not we_won:
             # Webhook already turned Checking... into the confirmation (or
             # deleted it). Only remove a leftover bubble if it is still ours.
-            leftover = take_payfast_checking_message(telegram_id)
-            if leftover:
-                try:
-                    await status_msg.delete()
-                except Exception:  # noqa: BLE001
-                    pass
+            async with payfast_checking_lock(telegram_id):
+                leftover = take_payfast_checking_message(telegram_id)
+                if leftover:
+                    try:
+                        await status_msg.delete()
+                    except Exception:  # noqa: BLE001
+                        pass
             return
 
-    leftover = take_payfast_checking_message(telegram_id)
-    if leftover is None:
-        # Webhook already reused this bubble as the confirmation.
-        return
-
-    # After the full 5-minute check, pending means the payment never showed
-    # up in our transactions — replace Checking... with not found.
-    if outcome.code == "pending":
-        final_text = _PAYFAST_NOT_FOUND_AFTER_WAIT
-        keyboard = None
-    else:
-        final_text = outcome.message
-        keyboard = _PRODUCTS_KEYBOARD if outcome.code == "wallet_credited" else None
-    try:
-        await status_msg.edit_text(final_text, parse_mode=None, reply_markup=keyboard)
-    except Exception:  # noqa: BLE001 - fall back to a fresh message if the edit fails
-        await message.answer(final_text, parse_mode=None, reply_markup=keyboard)
+    async with payfast_checking_lock(telegram_id):
+        leftover = take_payfast_checking_message(telegram_id)
+        if leftover is None:
+            return
+        if outcome.code == "pending":
+            final_text = _PAYFAST_NOT_FOUND_AFTER_WAIT
+            keyboard = None
+        else:
+            final_text = outcome.message
+            if outcome.order is not None:
+                keyboard = _payfast_post_order_keyboard(outcome.order.id)
+            else:
+                keyboard = _PRODUCTS_KEYBOARD if outcome.code == "wallet_credited" else None
+        try:
+            await status_msg.edit_text(final_text, parse_mode="HTML", reply_markup=keyboard)
+        except Exception:  # noqa: BLE001
+            await message.answer(final_text, parse_mode="HTML", reply_markup=keyboard)
 
 
 async def _poll_payfast_until_resolved(
+    status_msg: Message,
     *,
     telegram_id: str,
     ref: str | None,
     tid: str | None,
     checkout_tx_id: int | None,
+    loading_icon: str,
     fallback,
 ):
-    """Re-check Order No. / TID / checkout row until PayFast settles it or
-    the poll window runs out. Does not touch the Checking... bubble — the
-    webhook edits that same message into the confirmation as soon as
-    payment lands.
+    """Re-check Order No. / TID / checkout row until PayFast settles it.
+
+    The Checking... line uses the Loading icon preset and a live 1s / 2s / 3s
+    timer. The webhook still owns turning that bubble into the confirmation.
     """
     from api.payfast import lookup_payfast_reference_status
 
-    elapsed = 0
+    elapsed = 1
     outcome = fallback
+    since_lookup = 0
     while elapsed < _PAYFAST_POLL_TOTAL_SECONDS:
-        await asyncio.sleep(_PAYFAST_POLL_INTERVAL_SECONDS)
-        elapsed += _PAYFAST_POLL_INTERVAL_SECONDS
+        await asyncio.sleep(_PAYFAST_TIMER_SECONDS)
+        elapsed += _PAYFAST_TIMER_SECONDS
+        since_lookup += _PAYFAST_TIMER_SECONDS
+
+        async with payfast_checking_lock(telegram_id):
+            if has_payfast_checking_message(telegram_id):
+                try:
+                    await status_msg.edit_text(
+                        _payfast_checking_text(elapsed, loading_icon),
+                        parse_mode="HTML",
+                    )
+                except Exception:  # noqa: BLE001
+                    pass
+
+        if since_lookup < _PAYFAST_POLL_INTERVAL_SECONDS:
+            continue
+        since_lookup = 0
 
         db = SessionLocal()
         try:
