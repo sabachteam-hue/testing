@@ -3196,6 +3196,7 @@ async def update_settings(
     force_join_channel_url: str = Form(""),
     force_join_group: str = Form(""),
     force_join_group_url: str = Form(""),
+    mini_app_url: str = Form(""),
     db: Session = Depends(get_db),
 ):
     admin_required(request)
@@ -3273,6 +3274,19 @@ async def update_settings(
     else:
         config.force_join_group = None
     config.force_join_group_url = force_join_group_url.strip() or None
+
+    from utils.helpers import normalize_mini_app_url
+
+    raw_mini_app = mini_app_url.strip()
+    if raw_mini_app:
+        normalized_mini = normalize_mini_app_url(raw_mini_app)
+        if not normalized_mini:
+            return redirect(
+                f"/admin/settings?message={quote('Mini App URL must be https:// (localhost http allowed for testing)')}"
+            )
+        config.mini_app_url = normalized_mini
+    else:
+        config.mini_app_url = None
     db.add(config)
     log_admin_action(
         db,
@@ -3284,6 +3298,12 @@ async def update_settings(
         request=request,
     )
     db.commit()
+
+    bot = getattr(request.app.state, "bot", None)
+    if bot is not None:
+        from bot.bot_main import apply_mini_app_menu_button
+
+        background_tasks.add_task(apply_mini_app_menu_button, bot)
 
     # Background so Save returns immediately; broadcast can take a while.
     if maintenance_on and not was_maintenance:

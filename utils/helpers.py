@@ -290,6 +290,45 @@ def get_public_base_url() -> str | None:
     return base_url.rstrip("/")
 
 
+def normalize_mini_app_url(value: str | None) -> str | None:
+    """Return a usable Mini App / storefront URL, or None if empty/invalid."""
+    url = (value or "").strip().rstrip("/")
+    if not url:
+        return None
+    if url.startswith(("https://", "http://localhost", "http://127.0.0.1")):
+        return url
+    if url.startswith("http://"):
+        # Telegram Mini Apps require HTTPS in production; keep http only for localhost.
+        return None
+    if "." in url:
+        return f"https://{url}"
+    return None
+
+
+def get_mini_app_url(db: Session | None = None) -> str | None:
+    """HTTPS URL of the web Mini App. Admin Settings overrides MINI_APP_URL env."""
+    env_url = normalize_mini_app_url(os.getenv("MINI_APP_URL"))
+    config = None
+    close_db = False
+    if db is not None:
+        config = db.query(BotConfig).first()
+    else:
+        try:
+            from database.models import SessionLocal
+
+            db = SessionLocal()
+            close_db = True
+            config = db.query(BotConfig).first()
+        except Exception:  # noqa: BLE001
+            config = None
+    try:
+        db_url = normalize_mini_app_url(getattr(config, "mini_app_url", None) if config else None)
+    finally:
+        if close_db and db is not None:
+            db.close()
+    return db_url or env_url
+
+
 def env_bool(name: str, default: bool = False) -> bool:
     value = os.getenv(name)
     if value is None:

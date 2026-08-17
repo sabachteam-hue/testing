@@ -1,0 +1,287 @@
+"""Public read-only catalog for the Next.js storefront / Telegram Mini App.
+
+Matches aurex-shop-web `lib/api.ts`:
+  GET /api/web/categories
+  GET /api/web/products?category_id=&q=
+  GET /api/web/products/{sku}
+  GET /api/web/stats
+
+Same products/categories the Telegram bot and admin panel already use.
+No login, checkout, or payments here.
+"""
+
+from __future__ import annotations
+
+import html
+import os
+import re
+from datetime import datetime
+from urllib.parse import urlparse
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from sqlalchemy import func, or_
+from sqlalchemy.orm import Session, joinedload, selectinload
+
+from database.models import Category, Order, ProductSale, Service, User, get_db
+from utils.helpers import get_mini_app_url, get_public_base_url, parse_icon
+from utils.stock_display import effective_available_qty
+
+router = APIRouter(prefix="/api/web", tags=["web-catalog"])
+
+_HTML_TAG = re.compile(r"<[^>]+>")
+_TG_EMOJI = re.compile(r"</?tg-emoji[^>]*>", re.IGNORECASE)
+_SLUG_KEEP = re.compile(r"[^a-z0-9]+")
+_DEFAULT_TELEGRAM_ORIGINS = (
+    "https://web.telegram.org",
+    "https://k.telegram.org",
+)
+_DEV_ORIGINS = (
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+)
+
+
+def _plain_text(value: str | None) -> str:
+    text = _TG_EMOJI.sub("", value or "")
+    text = _HTML_TAG.sub("", text)
+    return html.unescape(" ".join(text.split())).strip()
+
+
+def _slugify(name: str | None, fallback: str) -> str:
+    slug = _SLUG_KEEP.sub("-", (name or "").lower()).strip("-")
+    return slug or fallback
+
+
+def _origin_of(url: str | None) -> str | None:
+    parsed = urlparse((url or "").strip())
+    if parsed.scheme in {"http", "https"} and parsed.netloc:
+        return f"{parsed.scheme}://{parsed.netloc}"
+    return None
+
+
+def cors_allow_origins() -> list[str] | str:
+    """Origins allowed to call /api/web from the Mini App / Vercel storefront.
+
+    Catalog is public GET-only. Empty CORS_ORIGINS (or *) allows any origin so a
+    separately hosted Mini App works without a Railway restart. Set CORS_ORIGINS
+    to a comma-separated list to lock it down.
+    """
+    raw = (os.getenv("CORS_ORIGINS") or "").strip()
+    if not raw or raw == "*":
+        return "*"
+    origins: list[str] = []
+    for part in raw.split(","):
+        origin = _origin_of(part) or part.strip().rstrip("/")
+        if origin:
+            origins.append(origin)
+    for extra in _DEFAULT_TELEGRAM_ORIGINS + _DEV_ORIGINS:
+        if extra not in origins:
+            origins.append(extra)
+    mini = _origin_of(get_mini_app_url())
+    if mini and mini not in origins:
+        origins.append(mini)
+    return origins
+
+
+def _public_base(request: Request | None = None) -> str:
+    base = get_public_base_url()
+    if base:
+        return base.rstrip("/")
+    if request is not None:
+        return str(request.base_url).rstrip("/")
+    return ""
+
+
+def absolute_media_url(path: str | None, request: Request | None = None) -> str | None:
+    value = (path or "").strip()
+    if not value:
+        return None
+    if value.startswith(("http://", "https://")):
+        return value
+    if not value.startswith("/"):
+        value = f"/{value}"
+    base = _public_base(request)
+    return f"{base}{value}" if base else value
+
+
+def _display_emoji(value: str | None, fallback: str) -> str:
+    _, display = parse_icon(value, fallback)
+    return display or fallback
+
+
+def _active_sale(service: Service, now: datetime | None = None) -> ProductSale | None:
+    now = now or datetime.utcnow()
+    for sale in getattr(service, "sales", None) or []:
+        if not sale.is_active:
+            continue
+        if sale.starts_at and sale.starts_at > now:
+            continue
+        if sale.ends_at and sale.ends_at <= now:
+            continue
+        return sale
+    return None
+
+
+def _warranty_percent(warranty: str | None) -> int | None:
+    if not warranty:
+        return None
+    match = re.search(r"(\d+)", warranty)
+    if not match:
+        return 70
+    amount = int(match.group(1))
+    lowered = warranty.lower()
+    if "year" in lowered or amount >= 12:
+        return 100
+    if amount >= 6:
+        return 85
+    if amount >= 3:
+        return 75
+    if amount >= 2:
+        return 70
+    return 50
+
+
+def _delivery_type(service: Service) -> str:
+    fulfillment = (getattr(service, "fulfillment_type", None) or "auto").lower()
+    return "manual" if fulfillment == "manual" else "instant"
+
+
+def _delivery_note(service: Service) -> str:
+    fulfillment = (getattr(service, "fulfillment_type", None) or "auto").lower()
+    if fulfillment == "manual":
+        return "Manual fulfillment — admin completes this order."
+    if fulfillment == "stock":
+        return "Account details delivered instantly after payment."
+    return "Instant delivery after payment."
+
+
+def _infer_platform(name: str, description: str) -> str:
+    text = f"{name} {description}".lower()
+    if any(token in text for token in ("android", "ios", "mobile app", "apk")):
+        return "mobile"
+    if any(token in text for token in ("windows", "macos", "desktop", "pc only")):
+        return "desktop"
+    if any(token in text for token in ("web", "browser", "chatgpt", "netflix", "spotify", "canva")):
+        return "web"
+    return "multi"
+
+
+def category_payload(category: Category) -> dict:
+    return {
+        "id": category.id,
+        "name": _plain_text(category.name) or category.name,
+        "emoji": _display_emoji(category.emoji, "📦"),
+        "slug": _slugify(_plain_text(category.name) or category.name, f"cat-{category.id}"),
+        "description": _plain_text(category.description) or None,
+        "sort_order": int(category.sort_order or 0),
+    }
+
+
+def product_payload(service: Service, request: Request | None = None) -> dict:
+    available = effective_available_qty(service)
+    in_stock = available > 0
+    sale = _active_sale(service)
+    sell_price = float(service.sell_price or 0)
+    original_price = None
+    if sale and sale.original_price is not None:
+        original = float(sale.original_price)
+        if original > sell_price:
+            original_price = original
+    warranty = _plain_text(service.warranty) or None
+    description = _plain_text(service.description)
+    name = _plain_text(service.name) or service.name
+    category = service.category
+    return {
+        "id": service.id,
+        "sku": service.sku,
+        "name": name,
+        "description": description or None,
+        "sell_price": sell_price,
+        "original_price": original_price,
+        "category_id": category.id if category else None,
+        "category": (_plain_text(category.name) or category.name) if category else None,
+        "emoji": _display_emoji(service.emoji, "🛍️"),
+        "image_url": absolute_media_url(service.image_path, request),
+        "min_qty": int(service.min_qty or 1),
+        "max_qty": int(service.max_qty or 1),
+        "stock": available,
+        "in_stock": in_stock,
+        "stock_label": "In stock" if in_stock else "Out of stock",
+        "platform": _infer_platform(name, description),
+        "note": _delivery_note(service),
+        "warranty_label": warranty,
+        "warranty_percent": _warranty_percent(warranty),
+        "delivery_type": _delivery_type(service),
+    }
+
+
+def _active_products_query(db: Session):
+    return (
+        db.query(Service)
+        .options(
+            joinedload(Service.category),
+            joinedload(Service.stock),
+            selectinload(Service.sales),
+        )
+        .filter(Service.is_active.is_(True), Service.is_deleted.is_(False))
+    )
+
+
+@router.get("/categories")
+def list_categories(db: Session = Depends(get_db)) -> list[dict]:
+    rows = (
+        db.query(Category)
+        .filter(Category.is_active.is_(True))
+        .order_by(Category.sort_order.asc(), Category.name.asc())
+        .all()
+    )
+    return [category_payload(row) for row in rows]
+
+
+@router.get("/products")
+def list_products(
+    request: Request,
+    db: Session = Depends(get_db),
+    category_id: int | None = Query(None),
+    q: str | None = Query(None),
+) -> list[dict]:
+    query = _active_products_query(db)
+    if category_id is not None:
+        query = query.filter(Service.category_id == category_id)
+    term = (q or "").strip()
+    if term:
+        like = f"%{term}%"
+        query = query.filter(
+            or_(
+                Service.name.ilike(like),
+                Service.sku.ilike(like),
+                Service.description.ilike(like),
+                Service.category.has(Category.name.ilike(like)),
+            )
+        )
+    rows = query.order_by(Service.sort_order.asc(), Service.name.asc()).all()
+    return [product_payload(row, request) for row in rows]
+
+
+@router.get("/products/{sku}")
+def get_product(sku: str, request: Request, db: Session = Depends(get_db)) -> dict:
+    service = (
+        _active_products_query(db)
+        .filter(Service.sku == sku)
+        .first()
+    )
+    if not service:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
+    return product_payload(service, request)
+
+
+@router.get("/stats")
+def shop_stats(db: Session = Depends(get_db)) -> dict:
+    customers = db.query(func.count(User.id)).scalar() or 0
+    orders_completed = (
+        db.query(func.count(Order.id)).filter(Order.status == "completed").scalar() or 0
+    )
+    return {
+        "customers": int(customers),
+        "orders_completed": int(orders_completed),
+    }
