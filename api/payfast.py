@@ -32,6 +32,7 @@ from utils.payment_security import (
     payfast_callback_matches_tx,
     payfast_lookup_rate_limited,
     payment_ref_already_used,
+    take_payfast_checking_message,
 )
 from utils.stock_manager import release_stock
 
@@ -493,7 +494,33 @@ async def _notify_payfast_user(
                 reply_markup = InlineKeyboardMarkup(
                     inline_keyboard=[[InlineKeyboardButton(text="🛍 Products", callback_data="open_products")]]
                 )
-            await bot.send_message(tx.user.telegram_id, user_message, parse_mode="HTML", reply_markup=reply_markup)
+            telegram_id = str(tx.user.telegram_id)
+            checking = take_payfast_checking_message(telegram_id)
+            reused = False
+            if checking:
+                chat_id, message_id = checking
+                try:
+                    await bot.edit_message_text(
+                        text=user_message,
+                        chat_id=chat_id,
+                        message_id=message_id,
+                        parse_mode="HTML",
+                        reply_markup=reply_markup,
+                    )
+                    reused = True
+                except Exception:  # noqa: BLE001
+                    logger.info(
+                        "[PAYFAST] Could not edit Checking... message for tx=%s; sending a new one",
+                        tx.id,
+                    )
+                    try:
+                        await bot.delete_message(chat_id=chat_id, message_id=message_id)
+                    except Exception:  # noqa: BLE001
+                        pass
+            if not reused:
+                await bot.send_message(
+                    telegram_id, user_message, parse_mode="HTML", reply_markup=reply_markup
+                )
             if order is not None and service is not None:
                 await maybe_send_delivery_file(
                     order=order,

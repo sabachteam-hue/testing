@@ -170,6 +170,22 @@ def claim_payfast_user_notification(db: Session, tx_id: int) -> bool:
     return result.rowcount > 0
 
 
+# In-flight "I Have Paid" Checking... bubble (chat_id, message_id), keyed by
+# telegram_id. The PayFast webhook takes this so it can edit that same
+# message into the confirmation (or delete it) the instant payment lands —
+# otherwise the poll loop would leave Checking... on screen until it wakes.
+_payfast_checking_messages: dict[str, tuple[int, int]] = {}
+
+
+def register_payfast_checking_message(telegram_id: str | int, chat_id: int, message_id: int) -> None:
+    _payfast_checking_messages[str(telegram_id)] = (int(chat_id), int(message_id))
+
+
+def take_payfast_checking_message(telegram_id: str | int) -> tuple[int, int] | None:
+    """Pop the Checking... bubble so only one side edits or deletes it."""
+    return _payfast_checking_messages.pop(str(telegram_id), None)
+
+
 # ---------------------------------------------------------------------------
 # Fallback lookup key: PayFast's own Transaction ID (shown on PayFast's page
 # only AFTER a payment completes), as an alternative to our own Order No.
