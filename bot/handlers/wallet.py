@@ -885,31 +885,18 @@ async def payfast_check_reference_received(message: Message, state: FSMContext) 
             fallback=outcome,
         )
 
-    # Single-notify guard: these outcome codes mean the payment was actually
-    # settled by PayFast's authenticated webhook (not just looked up here) —
-    # so the webhook either already sent its own confirmation message, or is
-    # about to. Claim the guard before showing our own text: if the webhook
-    # already claimed it first, don't print a second, duplicate confirmation
-    # here — just quietly clear the progress bubble instead.
+    # If this paste's Checking... bubble is still ours, always show the
+    # result (already used / failed / confirmed / not found). Never delete
+    # it silently — that looked like the bot ignored an already-used ID.
+    # Only skip when the webhook already turned THIS bubble into the result.
     if outcome.code in _WEBHOOK_NOTIFIED_CODES and outcome.tx_id is not None:
         from utils.payment_security import claim_payfast_user_notification
 
         db = SessionLocal()
         try:
-            we_won = claim_payfast_user_notification(db, outcome.tx_id)
+            claim_payfast_user_notification(db, outcome.tx_id)
         finally:
             db.close()
-        if not we_won:
-            # Webhook already turned Checking... into the confirmation (or
-            # deleted it). Only remove a leftover bubble if it is still ours.
-            async with payfast_checking_lock(telegram_id):
-                leftover = take_payfast_checking_message(telegram_id)
-                if leftover:
-                    try:
-                        await status_msg.delete()
-                    except Exception:  # noqa: BLE001
-                        pass
-            return
 
     async with payfast_checking_lock(telegram_id):
         leftover = take_payfast_checking_message(telegram_id)
@@ -920,7 +907,10 @@ async def payfast_check_reference_received(message: Message, state: FSMContext) 
             keyboard = None
         else:
             final_text = outcome.message
-            if outcome.order is not None:
+            if outcome.order is not None and outcome.code in {
+                "wallet_credited",
+                "already_delivered",
+            }:
                 keyboard = _payfast_post_order_keyboard(outcome.order.id)
             else:
                 keyboard = _PRODUCTS_KEYBOARD if outcome.code == "wallet_credited" else None
