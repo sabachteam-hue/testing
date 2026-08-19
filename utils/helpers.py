@@ -326,7 +326,31 @@ def get_mini_app_url(db: Session | None = None) -> str | None:
     finally:
         if close_db and db is not None:
             db.close()
-    return db_url or env_url
+    return resolve_telegram_mini_app_url(db_url or env_url)
+
+
+def hosted_mini_app_url() -> str | None:
+    """Same-origin Mini App that always reads live /api/web products."""
+    base = get_public_base_url()
+    if not base:
+        return None
+    return f"{base}/mini"
+
+
+def resolve_telegram_mini_app_url(
+    configured: str | None,
+    *,
+    public_base: str | None = None,
+) -> str | None:
+    """Prefer the live Railway Mini App when the Vercel storefront still has no API URL."""
+    hosted = None
+    base = public_base if public_base is not None else get_public_base_url()
+    if base:
+        hosted = f"{base.rstrip('/')}/mini"
+    configured = normalize_mini_app_url(configured)
+    if configured and "aurex-shop-web.vercel.app" in configured:
+        return hosted or configured
+    return configured or hosted
 
 
 def env_bool(name: str, default: bool = False) -> bool:

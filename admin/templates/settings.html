@@ -45,11 +45,13 @@
     </div>
     <div class="settings-fields">
       <label class="full">Mini App / storefront URL
-        <input name="mini_app_url" value="{{ config.mini_app_url if config and config.mini_app_url else '' }}" placeholder="https://your-shop.vercel.app">
+        <input name="mini_app_url" value="{{ config.mini_app_url if config and config.mini_app_url else '' }}" placeholder="https://web-production-80fac.up.railway.app/mini">
         <span class="field-hint">
-          Next.js web folder alag rehti hai. Wahan <code>NEXT_PUBLIC_API_BASE_URL</code> is Railway API par set karo
-          (jaise <code>https://web-production-80fac.up.railway.app</code>) taake live products yahan se aayein.
-          Save ke baad bot ke andar <strong>Shop</strong> Mini App button attach ho jata hai. HTTPS zaroori hai.
+          Telegram Mini App live products ke liye khali chhodo ya <code>/mini</code> use karo
+          (yeh isi Railway API se catalog leti hai). Vercel site
+          (<code>aurex-shop-web.vercel.app</code>) pe sample data tab tak rahega jab tak wahan
+          <code>NEXT_PUBLIC_API_BASE_URL</code> set nahi hota — bot Open Shop us case mein
+          automatically live <code>/mini</code> kholega.
         </span>
       </label>
     </div>

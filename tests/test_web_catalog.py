@@ -14,7 +14,7 @@ from api.web import (
     router,
 )
 from database.models import get_db
-from utils.helpers import normalize_mini_app_url
+from utils.helpers import normalize_mini_app_url, resolve_telegram_mini_app_url
 
 
 class _FakeStock:
@@ -196,6 +196,35 @@ class WebCatalogRouterTests(unittest.TestCase):
         response = self.client.get("/api/web/stats")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {"customers": 2, "orders_completed": 5})
+
+
+class MiniAppUrlTests(unittest.TestCase):
+    def test_vercel_sample_storefront_uses_hosted_mini(self):
+        self.assertEqual(
+            resolve_telegram_mini_app_url(
+                "https://aurex-shop-web.vercel.app",
+                public_base="https://web-production-80fac.up.railway.app",
+            ),
+            "https://web-production-80fac.up.railway.app/mini",
+        )
+
+    def test_custom_domain_is_kept(self):
+        self.assertEqual(
+            resolve_telegram_mini_app_url(
+                "https://shop.example.com",
+                public_base="https://web-production-80fac.up.railway.app",
+            ),
+            "https://shop.example.com",
+        )
+
+    def test_empty_falls_back_to_hosted(self):
+        self.assertEqual(
+            resolve_telegram_mini_app_url(
+                None,
+                public_base="https://web-production-80fac.up.railway.app",
+            ),
+            "https://web-production-80fac.up.railway.app/mini",
+        )
 
 
 if __name__ == "__main__":
