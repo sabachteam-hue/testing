@@ -36,6 +36,7 @@ const state = {
   cart: JSON.parse(localStorage.getItem("smf-mini-cart") || "[]"),
   currency: CURRENCIES[0],
   language: LANGUAGES[0],
+  pkrRate: 280,
 };
 
 const els = {
@@ -72,6 +73,24 @@ function setOpen(el, open) {
 
 function money(value) {
   return `$${Number(value || 0).toFixed(2)}`;
+}
+
+function pkrMoney(usd) {
+  const amount = Number(usd || 0) * Number(state.pkrRate || 280);
+  const formatted = amount.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+  return `≈ Rs. ${formatted} PKR`;
+}
+
+function setPkrRate(rate) {
+  const parsed = Number(rate);
+  state.pkrRate = Number.isFinite(parsed) && parsed > 0 ? parsed : 280;
+  const chip = document.getElementById("fx-rate");
+  if (chip) {
+    chip.textContent = `1 USD = ${state.pkrRate.toFixed(2)} PKR`;
+  }
 }
 
 function discountPercent(product) {
@@ -152,73 +171,64 @@ function renderCats() {
   });
 }
 
-function stockClass(label) {
-  if (label === "Out of stock") return "stock-out";
-  if (label === "Low stock") return "stock-low";
-  return "stock-ok";
-}
-
 function productCard(product, index) {
   const discount = discountPercent(product);
   const accent = ACCENTS[index % ACCENTS.length];
-  const warranty = product.warranty_percent ?? 70;
   const noteOpen = Boolean(state.notes[product.sku]);
-  const image = product.image_url
-    ? `<button type="button" class="product-card-image" data-detail="${escapeHtml(product.sku)}">
-        <img class="product-card-image-el" src="${escapeHtml(product.image_url)}" alt="${escapeHtml(product.name)}">
-      </button>`
-    : "";
   const sale = discount
     ? `<div class="card-badges"><span class="pill-badge sale">Sale −${discount}%</span></div>`
     : "";
-  const emoji = product.image_url
-    ? ""
+  const logo = product.image_url
+    ? `<img class="product-logo" src="${escapeHtml(product.image_url)}" alt="">`
     : `<div class="product-emoji" aria-hidden>${escapeHtml(product.emoji || "🛍️")}</div>`;
   const warrantyBlock = product.warranty_label
-    ? `<div class="warranty-row"><span aria-hidden>🛡️</span> ${escapeHtml(product.warranty_label)}</div>
-       <div class="warranty-bar"><div class="warranty-bar-fill" style="width:${warranty}%"></div></div>`
+    ? `<div class="warranty-row"><span aria-hidden>🛡️</span> ${escapeHtml(product.warranty_label)}</div>`
     : "";
   const noteBtn = product.note
     ? `<button type="button" class="view-note-btn" data-note="${escapeHtml(product.sku)}">
-        <span aria-hidden>📋</span> ${noteOpen ? "Hide note" : "View note"}
+        <span aria-hidden>📋</span> ${noteOpen ? "HIDE NOTE" : "VIEW NOTE"}
       </button>`
     : "";
   const noteBody = noteOpen && product.note
     ? `<p class="card-desc">${escapeHtml(product.note)}</p>`
     : "";
+  const desc = product.description
+    ? `<p class="card-desc">${escapeHtml(product.description)}</p>`
+    : "";
 
   return `<article class="product-card accent-${accent}">
     ${sale}
-    ${image}
     <div class="card-top-row">
-      <span class="card-info-btn" title="${escapeHtml(product.description || product.name)}" aria-label="About ${escapeHtml(product.name)}">i</span>
+      <span class="card-info-btn" title="${escapeHtml(product.description || product.name)}" data-detail="${escapeHtml(product.sku)}" aria-label="About ${escapeHtml(product.name)}">i</span>
       ${product.delivery_type === "manual" ? "" : '<span class="instant-badge"><span aria-hidden>⚡</span> Instant</span>'}
     </div>
     <div class="product-card-top">
-      ${emoji}
+      ${logo}
       <div>
         <h3><a href="#product-${encodeURIComponent(product.sku)}" data-detail="${escapeHtml(product.sku)}">${escapeHtml(product.name)}</a></h3>
-        <div class="product-meta">${escapeHtml(product.category || "General")} · <span class="${stockClass(product.stock_label)}">${escapeHtml(product.stock_label)}</span></div>
+        <div class="product-meta">${escapeHtml(product.category || "General")}</div>
       </div>
     </div>
-    ${product.description ? `<p class="card-desc">${escapeHtml(product.description)}</p>` : ""}
+    ${desc}
     ${warrantyBlock}
     ${noteBtn}
     ${noteBody}
     <div class="card-meta-row">
-      <div class="price-row" style="flex-direction:column;gap:0;align-items:flex-start">
+      <div class="price-block">
         <span class="price-only">Only</span>
         <span class="price-value">${money(product.sell_price)}</span>
         ${discount ? `<div class="price-original">${money(product.original_price)}</div>` : ""}
+        <span class="price-pkr">${pkrMoney(product.sell_price)}</span>
       </div>
-      ${product.stock != null ? `<span class="stock-count"><span class="stock-dot${product.in_stock ? " ok" : ""}"></span>${escapeHtml(product.stock)}</span>` : ""}
+      <div class="stock-block" title="${escapeHtml(product.stock_label)}">
+        <span class="stock-icon" aria-hidden>📦</span>
+        <span class="stock-label">Stock</span>
+        <span class="stock-number${product.in_stock ? "" : " out"}">${product.stock != null ? escapeHtml(product.stock) : "—"}</span>
+      </div>
     </div>
-    <div class="card-actions">
-      <button type="button" class="btn btn-ghost" data-detail="${escapeHtml(product.sku)}">Details</button>
-      <button type="button" class="btn btn-accent" data-add="${escapeHtml(product.sku)}" ${product.in_stock ? "" : "disabled"}>
-        <span aria-hidden>🛒</span> Add to Cart
-      </button>
-    </div>
+    <button type="button" class="btn btn-add-cart" data-add="${escapeHtml(product.sku)}" ${product.in_stock ? "" : "disabled"}>
+      <span aria-hidden>🛒</span> Add to Cart
+    </button>
   </article>`;
 }
 
@@ -281,6 +291,7 @@ function openDetail(sku) {
     <h2>${escapeHtml(product.emoji || "")} ${escapeHtml(product.name)}</h2>
     <p class="product-meta">${escapeHtml(product.category || "General")} · ${escapeHtml(product.stock_label)}</p>
     <p class="price-value">${money(product.sell_price)}${discount ? ` <span class="price-original">${money(product.original_price)}</span>` : ""}</p>
+    <p class="price-pkr">${pkrMoney(product.sell_price)}</p>
     <p class="muted">${escapeHtml(product.description || "")}</p>
     ${product.warranty_label ? `<p class="warranty-row"><span aria-hidden>🛡️</span> ${escapeHtml(product.warranty_label)}</p>` : ""}
     ${product.note ? `<p class="card-desc">${escapeHtml(product.note)}</p>` : ""}
@@ -421,10 +432,19 @@ function setMenuOpen(open) {
 
 async function load() {
   renderSkeleton();
-  const [catRes, prodRes] = await Promise.all([
+  const [catRes, prodRes, statsRes] = await Promise.all([
     fetch("/api/web/categories", { cache: "no-store" }),
     fetch("/api/web/products", { cache: "no-store" }),
+    fetch("/api/web/stats", { cache: "no-store" }),
   ]);
+  if (statsRes && statsRes.ok) {
+    try {
+      const stats = await statsRes.json();
+      setPkrRate(stats.usd_to_pkr_rate);
+    } catch (err) {
+      setPkrRate(280);
+    }
+  }
   if (!catRes.ok || !prodRes.ok) {
     els.source.textContent = "Catalog is updating. Open Shop All in the bot if this stays empty.";
     els.empty.textContent = "Could not load live products.";
@@ -446,6 +466,7 @@ setOpen(document.getElementById("chat-panel"), false);
 setOpen(document.getElementById("currency-panel"), false);
 setOpen(document.getElementById("language-panel"), false);
 saveCart();
+setPkrRate(280);
 bindMenus();
 document.addEventListener("click", () => {
   setOpen(document.getElementById("currency-panel"), false);
