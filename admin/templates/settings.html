@@ -45,11 +45,12 @@
     </div>
     <div class="settings-fields">
       <label class="full">Mini App / storefront URL
-        <input name="mini_app_url" value="{{ config.mini_app_url if config and config.mini_app_url else '' }}" placeholder="https://your-shop.vercel.app">
+        <input name="mini_app_url" value="{{ config.mini_app_url if config and config.mini_app_url else '' }}" placeholder="https://your-app.up.railway.app/app">
         <span class="field-hint">
-          Next.js web folder alag rehti hai. Wahan <code>NEXT_PUBLIC_API_BASE_URL</code> is Railway API par set karo
-          (jaise <code>https://web-production-80fac.up.railway.app</code>) taake live products yahan se aayein.
-          Save ke baad bot ke andar <strong>Shop</strong> Mini App button attach ho jata hai. HTTPS zaroori hai.
+          Built-in Mini App lives at <code>/app</code> on this same server (e.g.
+          <code>https://your-app.up.railway.app/app</code>). Leave blank to use that automatically,
+          or paste a custom HTTPS URL. Save ke baad bot ke andar <strong>Shop</strong> Mini App
+          button attach ho jata hai.
         </span>
       </label>
     </div>

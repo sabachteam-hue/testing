@@ -306,7 +306,11 @@ def normalize_mini_app_url(value: str | None) -> str | None:
 
 
 def get_mini_app_url(db: Session | None = None) -> str | None:
-    """HTTPS URL of the web Mini App. Admin Settings overrides MINI_APP_URL env."""
+    """HTTPS URL of the web Mini App.
+
+    Admin Settings overrides MINI_APP_URL env. If both are empty, the built-in
+    shop at {public base}/app is used.
+    """
     env_url = normalize_mini_app_url(os.getenv("MINI_APP_URL"))
     config = None
     close_db = False
@@ -326,7 +330,12 @@ def get_mini_app_url(db: Session | None = None) -> str | None:
     finally:
         if close_db and db is not None:
             db.close()
-    return db_url or env_url
+    if db_url or env_url:
+        return db_url or env_url
+    base = get_public_base_url()
+    if base:
+        return f"{base.rstrip('/')}/app"
+    return None
 
 
 def env_bool(name: str, default: bool = False) -> bool:
