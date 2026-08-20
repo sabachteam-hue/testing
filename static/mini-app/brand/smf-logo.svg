@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" fill="none" role="img" aria-label="SMF Shop">
+  <defs>
+    <linearGradient id="smfGrad" x1="18" y1="12" x2="102" y2="108" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#9D6CFF"/>
+      <stop offset="0.55" stop-color="#7C4DFF"/>
+      <stop offset="1" stop-color="#5B2FD6"/>
+    </linearGradient>
+    <filter id="softGlow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="3.5" result="b"/>
+      <feMerge>
+        <feMergeNode in="b"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <rect x="10" y="10" width="100" height="100" rx="28" fill="url(#smfGrad)" filter="url(#softGlow)"/>
+  <path d="M38 46c0-8 7-14 22-14 12 0 20 4 20 12 0 7-5 10-16 13l-10 3c-9 2-14 6-14 14 0 10 9 16 24 16 11 0 20-3 26-8l-6-10c-5 3-12 5-19 5-8 0-12-3-12-7 0-5 4-8 14-11l11-3c11-3 17-8 17-17 0-13-12-20-29-20-16 0-29 7-29 19v8h15v-8z" fill="#FFFFFF"/>
+  <circle cx="88" cy="34" r="6" fill="#FFFFFF" fill-opacity="0.9"/>
+</svg>

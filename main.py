@@ -135,7 +135,11 @@ async def telegram_webhook(request: Request):
 @app.api_route("/mini", methods=["GET", "HEAD"])
 @app.api_route("/mini/", methods=["GET", "HEAD"])
 def mini_shop():
-    return FileResponse("static/mini-app/index.html", media_type="text/html")
+    return FileResponse(
+        "static/mini-app/index.html",
+        media_type="text/html",
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 @app.get("/health")
