@@ -219,10 +219,12 @@
     });
     const pills = [
       `<button type="button" class="pill ${state.categoryId == null && state.filter === "all" ? "active" : ""}" data-cat="">All</button>`,
-      ...state.categories.map(
-        (cat) =>
-          `<button type="button" class="pill ${state.categoryId === cat.id ? "active" : ""}" data-cat="${cat.id}">${cat.emoji || ""} ${escapeHtml(cat.name)} ${counts[cat.id] || 0}</button>`
-      ),
+      ...state.categories
+        .filter((cat) => counts[cat.id])
+        .map(
+          (cat) =>
+            `<button type="button" class="pill ${state.categoryId === cat.id ? "active" : ""}" data-cat="${cat.id}">${cat.emoji || ""} ${escapeHtml(cat.name)}</button>`
+        ),
     ];
     els.pills.innerHTML = pills.join("");
   }
