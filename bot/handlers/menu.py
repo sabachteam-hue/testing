@@ -64,11 +64,21 @@ async def menu_command(message: Message) -> None:
     finally:
         db.close()
     show_admin = is_admin_telegram_id(message.from_user.id if message.from_user else None)
-    # Same as /start: restore slash Menu + bottom Quick keyboard.
-    # After maintenance, clients often only have inline /menu while admin kept Quick.
-    await restore_user_bot_commands(message.bot, message.chat.id)
     await answer_with_start_menu(message, welcome, commands, show_admin=show_admin)
     await send_quick_reply_menu(message, commands, show_admin=show_admin)
+    try:
+        await restore_user_bot_commands(message.bot, message.chat.id)
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        from aiogram.types import MenuButtonCommands
+
+        await message.bot.set_chat_menu_button(
+            chat_id=message.chat.id,
+            menu_button=MenuButtonCommands(),
+        )
+    except Exception:  # noqa: BLE001
+        pass
 
 
 @router.message(Command("catalog"))
