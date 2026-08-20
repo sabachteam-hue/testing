@@ -88,23 +88,19 @@ async def setup_webhook_bot(webhook_url: str) -> tuple[Bot, Dispatcher]:
 
 
 async def apply_mini_app_menu_button(bot: Bot) -> None:
-    """Attach (or clear) the Telegram Mini App menu button for this bot."""
-    from aiogram.types import MenuButtonCommands, MenuButtonWebApp, WebAppInfo
+    """Keep the left input-bar menu as slash commands (/start, /catalog, …).
 
-    from utils.helpers import get_mini_app_url
+    MenuButtonWebApp replaces that whole command list with a single Shop
+    button and also delayed /start (Telegram API call before the welcome).
+    Mini App stays on the inline / reply keyboards only.
+    """
+    from aiogram.types import MenuButtonCommands
 
-    url = get_mini_app_url()
     try:
-        if url:
-            await bot.set_chat_menu_button(
-                menu_button=MenuButtonWebApp(text="Shop", web_app=WebAppInfo(url=url))
-            )
-            logging.info("Telegram Mini App menu button set: %s", url)
-        else:
-            await bot.set_chat_menu_button(menu_button=MenuButtonCommands())
-            logging.info("Telegram Mini App URL empty — menu button reset to commands.")
+        await bot.set_chat_menu_button(menu_button=MenuButtonCommands())
+        logging.info("Telegram chat menu restored to bot commands.")
     except Exception:  # noqa: BLE001
-        logging.exception("Failed to set Telegram Mini App menu button")
+        logging.exception("Failed to restore Telegram command menu button")
 
 
 async def register_bot_commands(bot: Bot) -> None:

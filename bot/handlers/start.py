@@ -68,10 +68,6 @@ async def start_command(message: Message) -> None:
             await send_force_join_gate(message)
             return
 
-    # Re-bind Mini App to live /mini so Open Shop is not stuck on the Vercel mock catalog.
-    from bot.bot_main import apply_mini_app_menu_button
-
-    await apply_mini_app_menu_button(message.bot)
     await restore_user_bot_commands(message.bot, message.chat.id)
 
     # View Product deep-link (and shop/catalog aliases) → same UI as /products.
