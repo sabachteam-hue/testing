@@ -321,6 +321,9 @@ class User(Base):
     # Force-join: False until user taps ✅ I have joined and membership is verified.
     # Old users start False so they must confirm even if already in channel/group.
     force_join_ok: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Mini App / website signup (not Telegram). telegram_id is still set to web:{email}.
+    email: Mapped[str | None] = mapped_column(String(200), nullable=True, unique=True)
+    password_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
 
     referrer: Mapped["User | None"] = relationship(remote_side="User.id")
     orders: Mapped[list["Order"]] = relationship(back_populates="user")
@@ -778,6 +781,12 @@ def run_light_migrations() -> None:
         if "force_join_ok" not in existing_columns:
             with engine.begin() as connection:
                 connection.execute(text("ALTER TABLE users ADD COLUMN force_join_ok BOOLEAN DEFAULT 0"))
+        if "email" not in existing_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE users ADD COLUMN email VARCHAR(200)"))
+        if "password_hash" not in existing_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE users ADD COLUMN password_hash VARCHAR(128)"))
 
     if "bot_configs" in table_names:
         existing_columns = {col["name"] for col in inspector.get_columns("bot_configs")}
