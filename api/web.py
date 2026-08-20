@@ -22,7 +22,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, joinedload, selectinload
 
-from database.models import Category, Order, ProductSale, Service, User, get_db
+from database.models import BotConfig, Category, Order, ProductSale, Service, User, get_db
 from utils.helpers import get_mini_app_url, get_public_base_url, parse_icon
 from utils.stock_display import effective_available_qty
 
@@ -281,7 +281,10 @@ def shop_stats(db: Session = Depends(get_db)) -> dict:
     orders_completed = (
         db.query(func.count(Order.id)).filter(Order.status == "completed").scalar() or 0
     )
+    config = db.query(BotConfig).first()
+    rate = float(getattr(config, "usd_to_pkr_rate", None) or 280.0)
     return {
         "customers": int(customers),
         "orders_completed": int(orders_completed),
+        "usd_to_pkr_rate": rate,
     }

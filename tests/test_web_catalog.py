@@ -147,6 +147,8 @@ class _FakeDB:
 
     def query(self, model):
         name = getattr(model, "__name__", "")
+        if name == "BotConfig":
+            return _FakeQuery([SimpleNamespace(usd_to_pkr_rate=280.0)])
         if name == "Category":
             return _FakeQuery(self.categories)
         if name == "Service":
@@ -196,7 +198,10 @@ class WebCatalogRouterTests(unittest.TestCase):
     def test_stats_endpoint(self):
         response = self.client.get("/api/web/stats")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), {"customers": 2, "orders_completed": 5})
+        self.assertEqual(
+            response.json(),
+            {"customers": 2, "orders_completed": 5, "usd_to_pkr_rate": 280.0},
+        )
 
 
 class MiniAppUrlTests(unittest.TestCase):
@@ -254,6 +259,11 @@ class MiniAppDesignTests(unittest.TestCase):
         self.assertIn("[hidden]", css)
         self.assertIn('id="cart-overlay" hidden', html)
         self.assertTrue(Path("static/mini-app/brand/smf-logo.svg").exists())
+        self.assertIn(".price-pkr", css)
+        self.assertIn(".stock-label", css)
+        js = Path("static/mini-app/app.js").read_text(encoding="utf-8")
+        self.assertIn(">Stock<", js)
+        self.assertIn("price-pkr", js)
 
 
 if __name__ == "__main__":
