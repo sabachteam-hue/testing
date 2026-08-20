@@ -63,6 +63,13 @@ function escapeHtml(value) {
     .replace(/"/g, "&quot;");
 }
 
+function setOpen(el, open) {
+  if (!el) return;
+  el.hidden = !open;
+  el.classList.toggle("is-open", open);
+  el.classList.toggle("hidden", !open);
+}
+
 function money(value) {
   return `$${Number(value || 0).toFixed(2)}`;
 }
@@ -83,7 +90,7 @@ function saveCart() {
   localStorage.setItem("smf-mini-cart", JSON.stringify(state.cart));
   const count = state.cart.reduce((sum, item) => sum + item.qty, 0);
   els.cartCount.textContent = String(count);
-  els.cartCount.classList.toggle("hidden", count === 0);
+  setOpen(els.cartCount, count > 0);
 }
 
 function addToCart(product) {
@@ -217,8 +224,8 @@ function productCard(product, index) {
 
 function renderGrid() {
   const rows = filtered();
-  els.empty.classList.toggle("hidden", rows.length > 0);
-  if (!rows.length && state.products.length) {
+  setOpen(els.empty, rows.length === 0);
+  if (!rows.length) {
     els.grid.innerHTML = "";
     return;
   }
@@ -284,8 +291,8 @@ function openDetail(sku) {
       </button>
     </div>
   `;
-  els.detailOverlay.classList.remove("hidden");
-  const close = () => els.detailOverlay.classList.add("hidden");
+  setOpen(els.detailOverlay, true);
+  const close = () => setOpen(els.detailOverlay, false);
   document.getElementById("detail-close").onclick = close;
   document.getElementById("detail-close-2").onclick = close;
   document.getElementById("detail-add").onclick = () => {
@@ -340,10 +347,10 @@ function renderCart() {
       renderCart();
     };
   }
-  const close = () => els.cartOverlay.classList.add("hidden");
+  const close = () => setOpen(els.cartOverlay, false);
   document.getElementById("cart-close").onclick = close;
   document.getElementById("cart-close-2").onclick = close;
-  els.cartOverlay.classList.remove("hidden");
+  setOpen(els.cartOverlay, true);
 }
 
 function setQuery(value) {
@@ -378,13 +385,13 @@ function bindMenus() {
 
   document.getElementById("currency-btn").onclick = (event) => {
     event.stopPropagation();
-    currencyPanel.classList.toggle("hidden");
-    languagePanel.classList.add("hidden");
+    setOpen(currencyPanel, currencyPanel.hidden);
+    setOpen(languagePanel, false);
   };
   document.getElementById("language-btn").onclick = (event) => {
     event.stopPropagation();
-    languagePanel.classList.toggle("hidden");
-    currencyPanel.classList.add("hidden");
+    setOpen(languagePanel, languagePanel.hidden);
+    setOpen(currencyPanel, false);
   };
   currencyPanel.onclick = (event) => event.stopPropagation();
   languagePanel.onclick = (event) => event.stopPropagation();
@@ -392,7 +399,7 @@ function bindMenus() {
     btn.onclick = () => {
       state.currency = CURRENCIES.find((c) => c.code === btn.getAttribute("data-currency"));
       document.getElementById("currency-label").textContent = state.currency.label;
-      currencyPanel.classList.add("hidden");
+      setOpen(currencyPanel, false);
       bindMenus();
     };
   });
@@ -401,7 +408,7 @@ function bindMenus() {
       state.language = LANGUAGES.find((l) => l.code === btn.getAttribute("data-language"));
       document.getElementById("language-label").textContent = state.language.label;
       document.getElementById("language-flag").textContent = state.language.flag;
-      languagePanel.classList.add("hidden");
+      setOpen(languagePanel, false);
       bindMenus();
     };
   });
@@ -421,7 +428,7 @@ async function load() {
   if (!catRes.ok || !prodRes.ok) {
     els.source.textContent = "Catalog is updating. Open Shop All in the bot if this stays empty.";
     els.empty.textContent = "Could not load live products.";
-    els.empty.classList.remove("hidden");
+    setOpen(els.empty, true);
     els.grid.innerHTML = "";
     return;
   }
@@ -433,11 +440,16 @@ async function load() {
 }
 
 document.getElementById("year").textContent = String(new Date().getFullYear());
+setOpen(els.cartOverlay, false);
+setOpen(els.detailOverlay, false);
+setOpen(document.getElementById("chat-panel"), false);
+setOpen(document.getElementById("currency-panel"), false);
+setOpen(document.getElementById("language-panel"), false);
 saveCart();
 bindMenus();
 document.addEventListener("click", () => {
-  document.getElementById("currency-panel").classList.add("hidden");
-  document.getElementById("language-panel").classList.add("hidden");
+  setOpen(document.getElementById("currency-panel"), false);
+  setOpen(document.getElementById("language-panel"), false);
 });
 tickCountdown();
 setInterval(tickCountdown, 1000);
@@ -482,10 +494,10 @@ document.getElementById("mobile-cart").addEventListener("click", () => {
   renderCart();
 });
 els.cartOverlay.addEventListener("click", (event) => {
-  if (event.target === els.cartOverlay) els.cartOverlay.classList.add("hidden");
+  if (event.target === els.cartOverlay) setOpen(els.cartOverlay, false);
 });
 els.detailOverlay.addEventListener("click", (event) => {
-  if (event.target === els.detailOverlay) els.detailOverlay.classList.add("hidden");
+  if (event.target === els.detailOverlay) setOpen(els.detailOverlay, false);
 });
 
 document.getElementById("menu-toggle").onclick = () => setMenuOpen(true);
@@ -505,18 +517,20 @@ document.getElementById("theme-toggle").addEventListener("click", () => {
 const chatBtn = document.getElementById("chat-btn");
 const chatPanel = document.getElementById("chat-panel");
 function toggleChat() {
-  const open = chatPanel.classList.toggle("hidden") === false;
+  const open = Boolean(chatPanel.hidden);
+  setOpen(chatPanel, open);
   chatBtn.textContent = open ? "✕" : "💬";
   chatBtn.setAttribute("aria-label", open ? "Close assistant" : "Open assistant");
 }
 chatBtn.onclick = toggleChat;
 document.getElementById("chat-close").onclick = () => {
-  chatPanel.classList.add("hidden");
+  setOpen(chatPanel, false);
   chatBtn.textContent = "💬";
+  chatBtn.setAttribute("aria-label", "Open assistant");
 };
 
 load().catch(() => {
   els.empty.textContent = "Could not load live products.";
-  els.empty.classList.remove("hidden");
+  setOpen(els.empty, true);
   els.grid.innerHTML = "";
 });
