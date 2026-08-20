@@ -1,4 +1,4 @@
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton, WebAppInfo
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
 
 from utils.helpers import icon_button
 from utils.menu_commands import CommandView, get_command_map
@@ -59,10 +59,7 @@ def main_menu_keyboard(
     orders = _cmd(commands, "orders")
     api = _cmd(commands, "api")
     support = _cmd(commands, "support")
-    url = mini_app_url if mini_app_url is not None else _mini_app_url()
     rows: list[list[KeyboardButton]] = []
-    if url:
-        rows.append([KeyboardButton(text="🛍 Open Shop", web_app=WebAppInfo(url=url))])
     rows.extend(
         [
             [
@@ -195,8 +192,11 @@ def start_menu_keyboard(
 
     rows: list[list[InlineKeyboardButton]] = []
     if url:
+        # Use a normal https link, not web_app. Telegram rejects the whole
+        # /start message when the Mini App domain is not allowed in BotFather,
+        # which made /start and /menu go silent while /products still worked.
         rows.append(
-            [InlineKeyboardButton(text="🛍 Open Mini Shop", web_app=WebAppInfo(url=url))]
+            [InlineKeyboardButton(text="🛍 Open Mini Shop", url=url)]
         )
     rows.extend(
         [
@@ -567,22 +567,35 @@ async def send_quick_reply_menu(target, commands=None, *, show_admin: bool = Fal
     Call this after /start, /menu, force-join unlock, and maintenance-off broadcast.
     """
     commands = commands or get_command_map(None)
-    await target.answer(
-        "Quick menu ready below 👇",
-        reply_markup=main_menu_keyboard(commands, show_admin=show_admin),
-    )
+    try:
+        await target.answer(
+            "Quick menu ready below 👇",
+            reply_markup=main_menu_keyboard(commands, show_admin=show_admin),
+        )
+    except Exception:
+        await target.answer("Quick menu ready below 👇")
 
 
 async def answer_with_start_menu(target, welcome: str, commands, *, show_admin: bool = False) -> None:
-    """Send start inline menu — premium Commands icons first, plain fallback if rejected."""
+    """Send start inline menu — never fail silent if Telegram rejects markup."""
     text = f"🚀 {welcome}\n\nPlease choose a menu:"
+    attempts = (
+        {"premium": True},
+        {"premium": False},
+        {"premium": False, "mini_app_url": ""},
+    )
+    last_error: Exception | None = None
+    for kwargs in attempts:
+        try:
+            await target.answer(
+                text,
+                reply_markup=start_menu_keyboard(commands, show_admin=show_admin, **kwargs),
+            )
+            return
+        except Exception as exc:  # noqa: BLE001
+            last_error = exc
     try:
-        await target.answer(
-            text,
-            reply_markup=start_menu_keyboard(commands, show_admin=show_admin, premium=True),
-        )
-    except Exception:
-        await target.answer(
-            text,
-            reply_markup=start_menu_keyboard(commands, show_admin=show_admin, premium=False),
-        )
+        await target.answer(text)
+    except Exception:  # noqa: BLE001
+        if last_error:
+            raise last_error

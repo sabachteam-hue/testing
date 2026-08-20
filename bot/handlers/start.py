@@ -68,8 +68,6 @@ async def start_command(message: Message) -> None:
             await send_force_join_gate(message)
             return
 
-    await restore_user_bot_commands(message.bot, message.chat.id)
-
     # View Product deep-link (and shop/catalog aliases) → same UI as /products.
     if open_products:
         from bot.handlers.products import products_command
@@ -77,7 +75,20 @@ async def start_command(message: Message) -> None:
         await products_command(message)
         return
 
-    # Prefer Admin → Commands premium icons; if Telegram rejects the markup
-    # (bad/unowned custom emoji id), fall back to plain emoji so /start never goes silent.
+    # Welcome first so /start never stays silent if later Telegram API calls fail.
     await answer_with_start_menu(message, welcome, commands, show_admin=show_admin)
     await send_quick_reply_menu(message, commands, show_admin=show_admin)
+
+    try:
+        await restore_user_bot_commands(message.bot, message.chat.id)
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        from aiogram.types import MenuButtonCommands
+
+        await message.bot.set_chat_menu_button(
+            chat_id=message.chat.id,
+            menu_button=MenuButtonCommands(),
+        )
+    except Exception:  # noqa: BLE001
+        pass
