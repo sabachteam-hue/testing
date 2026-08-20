@@ -62,6 +62,30 @@ _SHOP_EYEBROW = "Live premium catalog"
 _SHOP_HEADLINE = "Premium plans, without the wait."
 _SHOP_TAGLINE = "AI tools, streaming, and SaaS accounts — live stock, Telegram prices."
 _FEATURED_LIMIT = 4
+_LANG_FLAG_ISO = {
+    "en": "gb",
+    "es": "es",
+    "ar": "sa",
+    "hi": "in",
+    "ru": "ru",
+    "vi": "vn",
+    "zh": "cn",
+    "fa": "ir",
+    "id": "id",
+    "ko": "kr",
+    "ur": "pk",
+    "fr": "fr",
+    "de": "de",
+    "tr": "tr",
+    "pt": "pt",
+}
+_CURRENCY_FLAG_ISO = {
+    "USD": "us",
+    "PKR": "pk",
+    "EUR": "eu",
+    "GBP": "gb",
+    "INR": "in",
+}
 
 
 def _plain_text(value: str | None) -> str:
@@ -275,15 +299,32 @@ def shop_payload(db: Session) -> dict:
             "code": lang.code,
             "name": lang.name,
             "flag": lang.flag or "🌐",
+            "flag_iso": _LANG_FLAG_ISO.get((lang.code or "").lower(), "xx"),
         }
         for lang in get_active_languages(db)
     ]
     if not languages:
-        languages = [{"code": "en", "name": "English", "flag": "🇬🇧"}]
+        languages = [{"code": "en", "name": "English", "flag": "🇬🇧", "flag_iso": "gb"}]
     whatsapp = _whatsapp_url(getattr(config, "support_whatsapp", None) if config else None)
     support_url = ((getattr(config, "support_url", None) if config else None) or "").strip() or None
     username = ((getattr(config, "support_username", None) if config else None) or "").strip() or None
     pkr_rate = float(getattr(config, "usd_to_pkr_rate", None) or 280.0) if config else 280.0
+    currencies = [
+        {
+            "code": "USD",
+            "symbol": "$",
+            "label": "USD ($)",
+            "flag": "🇺🇸",
+            "flag_iso": _CURRENCY_FLAG_ISO["USD"],
+        },
+        {
+            "code": "PKR",
+            "symbol": "Rs.",
+            "label": "PKR (Rs.)",
+            "flag": "🇵🇰",
+            "flag_iso": _CURRENCY_FLAG_ISO["PKR"],
+        },
+    ]
     return {
         "name": _SHOP_NAME,
         "eyebrow": _SHOP_EYEBROW,
@@ -292,11 +333,8 @@ def shop_payload(db: Session) -> dict:
         "whatsapp_url": whatsapp,
         "support_url": support_url,
         "support_username": username,
-        "currency": {"code": "USD", "symbol": "$", "label": "USD ($)", "flag": "🇺🇸"},
-        "currencies": [
-            {"code": "USD", "symbol": "$", "label": "USD ($)", "flag": "🇺🇸"},
-            {"code": "PKR", "symbol": "Rs.", "label": "PKR (Rs.)", "flag": "🇵🇰"},
-        ],
+        "currency": currencies[0],
+        "currencies": currencies,
         "pkr_rate": pkr_rate,
         "languages": languages,
     }
