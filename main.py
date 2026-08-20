@@ -132,8 +132,8 @@ async def telegram_webhook(request: Request):
         # while Telegram sees a 200 so it stops retrying.
         logger.exception("Unhandled error while processing Telegram update: %s", data)
     return PlainTextResponse("ok")
-@app.get("/mini")
-@app.get("/mini/")
+@app.api_route("/mini", methods=["GET", "HEAD"])
+@app.api_route("/mini/", methods=["GET", "HEAD"])
 def mini_shop():
     return FileResponse("static/mini-app/index.html", media_type="text/html")
 

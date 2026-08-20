@@ -329,12 +329,13 @@ def get_mini_app_url(db: Session | None = None) -> str | None:
     return resolve_telegram_mini_app_url(db_url or env_url)
 
 
+KNOWN_SHOP_ORIGIN = "https://web-production-80fac.up.railway.app"
+
+
 def hosted_mini_app_url() -> str | None:
     """Same-origin Mini App that always reads live /api/web products."""
-    base = get_public_base_url()
-    if not base:
-        return None
-    return f"{base}/mini"
+    base = get_public_base_url() or KNOWN_SHOP_ORIGIN
+    return f"{base.rstrip('/')}/mini"
 
 
 def resolve_telegram_mini_app_url(
@@ -342,15 +343,23 @@ def resolve_telegram_mini_app_url(
     *,
     public_base: str | None = None,
 ) -> str | None:
-    """Prefer the live Railway Mini App when the Vercel storefront still has no API URL."""
-    hosted = None
-    base = public_base if public_base is not None else get_public_base_url()
-    if base:
-        hosted = f"{base.rstrip('/')}/mini"
+    """Telegram Mini App URL — never the Vercel mock catalog.
+
+    aurex-shop-web.vercel.app still shows sample data until NEXT_PUBLIC_API_BASE_URL
+    is set. Open Shop must use this host's /mini, which reads live /api/web products.
+    A non-Vercel custom domain from Settings is kept.
+    """
+    if public_base is not None:
+        base = public_base.strip().rstrip("/") or None
+    else:
+        base = get_public_base_url()
+    if not base:
+        base = KNOWN_SHOP_ORIGIN
+    hosted = f"{base.rstrip('/')}/mini"
     configured = normalize_mini_app_url(configured)
-    if configured and "aurex-shop-web.vercel.app" in configured:
-        return hosted or configured
-    return configured or hosted
+    if configured and "vercel.app" not in configured.lower():
+        return configured
+    return hosted
 
 
 def env_bool(name: str, default: bool = False) -> bool:
