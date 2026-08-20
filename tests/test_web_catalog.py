@@ -226,6 +226,15 @@ class MiniAppUrlTests(unittest.TestCase):
             "https://web-production-80fac.up.railway.app/mini",
         )
 
+    def test_vercel_without_public_base_still_uses_live_host(self):
+        self.assertEqual(
+            resolve_telegram_mini_app_url(
+                "https://aurex-shop-web.vercel.app/",
+                public_base="",
+            ),
+            "https://web-production-80fac.up.railway.app/mini",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
