@@ -71,12 +71,9 @@ async def menu_command(message: Message) -> None:
     except Exception:  # noqa: BLE001
         pass
     try:
-        from aiogram.types import MenuButtonCommands
+        from bot.bot_main import apply_mini_app_menu_button
 
-        await message.bot.set_chat_menu_button(
-            chat_id=message.chat.id,
-            menu_button=MenuButtonCommands(),
-        )
+        await apply_mini_app_menu_button(message.bot, message.chat.id)
     except Exception:  # noqa: BLE001
         pass
 
