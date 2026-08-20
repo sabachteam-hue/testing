@@ -87,24 +87,34 @@ async def setup_webhook_bot(webhook_url: str) -> tuple[Bot, Dispatcher]:
     return bot, dispatcher
 
 
-async def apply_mini_app_menu_button(bot: Bot) -> None:
-    """Attach (or clear) the Telegram Mini App menu button for this bot."""
-    from aiogram.types import MenuButtonCommands, MenuButtonWebApp, WebAppInfo
+async def apply_mini_app_menu_button(bot: Bot, chat_id: int | None = None) -> None:
+    """Clear the leftover Shop Mini App button and restore slash commands.
 
-    from utils.helpers import get_mini_app_url
+    MenuButtonWebApp was set as the *default* menu (no chat_id). Resetting only
+    this chat is not enough — Telegram Desktop keeps showing Shop and opens the
+    old Vercel Mini App. Settings URL changes never reached that button.
+    """
+    from aiogram.types import MenuButtonCommands, MenuButtonDefault
 
-    url = get_mini_app_url()
-    try:
-        if url:
-            await bot.set_chat_menu_button(
-                menu_button=MenuButtonWebApp(text="Shop", web_app=WebAppInfo(url=url))
-            )
-            logging.info("Telegram Mini App menu button set: %s", url)
-        else:
-            await bot.set_chat_menu_button(menu_button=MenuButtonCommands())
-            logging.info("Telegram Mini App URL empty — menu button reset to commands.")
-    except Exception:  # noqa: BLE001
-        logging.exception("Failed to set Telegram Mini App menu button")
+    buttons = (MenuButtonDefault(), MenuButtonCommands())
+    targets: list[int | None] = [None]
+    if chat_id is not None:
+        targets.append(int(chat_id))
+
+    for target in targets:
+        for button in buttons:
+            try:
+                await asyncio.wait_for(
+                    bot.set_chat_menu_button(chat_id=target, menu_button=button),
+                    timeout=4,
+                )
+            except Exception:  # noqa: BLE001
+                logging.exception(
+                    "Failed to set chat menu button chat_id=%s type=%s",
+                    target,
+                    type(button).__name__,
+                )
+    logging.info("Telegram chat menu restored to commands (cleared Shop WebApp).")
 
 
 async def register_bot_commands(bot: Bot) -> None:

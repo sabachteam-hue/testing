@@ -308,8 +308,8 @@ def normalize_mini_app_url(value: str | None) -> str | None:
 def get_mini_app_url(db: Session | None = None) -> str | None:
     """HTTPS URL of the web Mini App.
 
-    Admin Settings overrides MINI_APP_URL env. If both are empty, the built-in
-    shop at {public base}/app is used.
+    Admin Settings overrides MINI_APP_URL env. Vercel sample storefronts are
+    rewritten to this host's live /mini catalog.
     """
     env_url = normalize_mini_app_url(os.getenv("MINI_APP_URL"))
     config = None
@@ -330,12 +330,40 @@ def get_mini_app_url(db: Session | None = None) -> str | None:
     finally:
         if close_db and db is not None:
             db.close()
-    if db_url or env_url:
-        return db_url or env_url
-    base = get_public_base_url()
-    if base:
-        return f"{base.rstrip('/')}/app"
-    return None
+    return resolve_telegram_mini_app_url(db_url or env_url)
+
+
+KNOWN_SHOP_ORIGIN = "https://web-production-80fac.up.railway.app"
+
+
+def hosted_mini_app_url() -> str | None:
+    """Same-origin Mini App that always reads live /api/web products."""
+    base = get_public_base_url() or KNOWN_SHOP_ORIGIN
+    return f"{base.rstrip('/')}/mini"
+
+
+def resolve_telegram_mini_app_url(
+    configured: str | None,
+    *,
+    public_base: str | None = None,
+) -> str | None:
+    """Telegram Mini App URL — never the Vercel mock catalog.
+
+    aurex-shop-web.vercel.app still shows sample data until NEXT_PUBLIC_API_BASE_URL
+    is set. Open Shop must use this host's /mini, which reads live /api/web products.
+    A non-Vercel custom domain from Settings is kept.
+    """
+    if public_base is not None:
+        base = public_base.strip().rstrip("/") or None
+    else:
+        base = get_public_base_url()
+    if not base:
+        base = KNOWN_SHOP_ORIGIN
+    hosted = f"{base.rstrip('/')}/mini"
+    configured = normalize_mini_app_url(configured)
+    if configured and "vercel.app" not in configured.lower():
+        return configured
+    return hosted
 
 
 def env_bool(name: str, default: bool = False) -> bool:

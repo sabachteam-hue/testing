@@ -402,7 +402,10 @@ def shop_stats(db: Session = Depends(get_db)) -> dict:
     orders_completed = (
         db.query(func.count(Order.id)).filter(Order.status == "completed").scalar() or 0
     )
+    config = db.query(BotConfig).first()
+    rate = float(getattr(config, "usd_to_pkr_rate", None) or 280.0)
     return {
         "customers": int(customers),
         "orders_completed": int(orders_completed),
+        "usd_to_pkr_rate": rate,
     }

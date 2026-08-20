@@ -9,15 +9,15 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <link rel="stylesheet" href="/app/assets/styles.css">
+  <link rel="stylesheet" href="/static/mini-app/styles.css">
 </head>
 <body>
   <div class="bg" aria-hidden="true"></div>
 
   <header class="topbar">
     <div class="topbar-row brand-row">
-      <a class="brand" href="/app" data-nav="home" id="brand-home">
-        <span class="brand-mark">S</span>
+      <a class="brand" href="/mini" data-nav="home" id="brand-home">
+        <img class="brand-mark" src="/static/mini-app/brand/smf-logo.svg" width="34" height="34" alt="">
         <span class="brand-name">SMF SHOP</span>
       </a>
       <nav class="nav-links" aria-label="Shop">
@@ -113,7 +113,7 @@
     </div>
   </div>
 
-  <div class="sheet" id="cart-sheet" hidden>
+  <div class="sheet overlay" id="cart-overlay" hidden>
     <div class="sheet-card">
       <button type="button" class="sheet-close" data-close="cart" aria-label="Close">×</button>
       <h2>Cart</h2>
@@ -129,6 +129,6 @@
     </div>
   </div>
 
-  <script src="/app/assets/app.js"></script>
+  <script src="/static/mini-app/app.js"></script>
 </body>
 </html>

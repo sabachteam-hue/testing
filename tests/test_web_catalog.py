@@ -1,6 +1,7 @@
 import os
 import unittest
 from datetime import datetime, timedelta
+from pathlib import Path
 from unittest.mock import patch
 
 from fastapi import FastAPI
@@ -14,7 +15,7 @@ from api.web import (
     shop_payload,
 )
 from database.models import get_db
-from utils.helpers import get_mini_app_url, normalize_mini_app_url
+from utils.helpers import get_mini_app_url, normalize_mini_app_url, resolve_telegram_mini_app_url
 
 
 class _FakeStock:
@@ -125,12 +126,12 @@ class WebCatalogPayloadTests(unittest.TestCase):
         with patch.dict(os.environ, {"CORS_ORIGINS": ""}, clear=False):
             self.assertEqual(cors_allow_origins(), "*")
 
-    def test_mini_app_url_falls_back_to_app_path(self):
+    def test_mini_app_url_falls_back_to_mini_path(self):
         db = _FakeDB([], [])
         db.config = None
         with patch.dict(os.environ, {"MINI_APP_URL": ""}, clear=False):
             with patch("utils.helpers.get_public_base_url", return_value="https://shop.example.com"):
-                self.assertEqual(get_mini_app_url(db), "https://shop.example.com/app")
+                self.assertEqual(get_mini_app_url(db), "https://shop.example.com/mini")
 
 
 class _FakeQuery:
@@ -246,7 +247,10 @@ class WebCatalogRouterTests(unittest.TestCase):
     def test_stats_endpoint(self):
         response = self.client.get("/api/web/stats")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), {"customers": 2, "orders_completed": 5})
+        self.assertEqual(
+            response.json(),
+            {"customers": 2, "orders_completed": 5, "usd_to_pkr_rate": 280.0},
+        )
 
     def test_shop_endpoint_hides_fx_ticker(self):
         response = self.client.get("/api/web/shop")
@@ -276,12 +280,49 @@ class WebCatalogRouterTests(unittest.TestCase):
         self.assertEqual(payload["pkr_rate"], 280.0)
 
 
-class MiniAppHomeTests(unittest.TestCase):
-    def test_home_markup_has_requested_chrome(self):
-        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        html_path = os.path.join(root, "webapp", "index.html")
-        with open(html_path, encoding="utf-8") as handle:
-            html = handle.read()
+class MiniAppUrlTests(unittest.TestCase):
+    def test_vercel_sample_storefront_uses_hosted_mini(self):
+        self.assertEqual(
+            resolve_telegram_mini_app_url(
+                "https://aurex-shop-web.vercel.app",
+                public_base="https://web-production-80fac.up.railway.app",
+            ),
+            "https://web-production-80fac.up.railway.app/mini",
+        )
+
+    def test_custom_domain_is_kept(self):
+        self.assertEqual(
+            resolve_telegram_mini_app_url(
+                "https://shop.example.com",
+                public_base="https://web-production-80fac.up.railway.app",
+            ),
+            "https://shop.example.com",
+        )
+
+    def test_empty_falls_back_to_hosted(self):
+        self.assertEqual(
+            resolve_telegram_mini_app_url(
+                None,
+                public_base="https://web-production-80fac.up.railway.app",
+            ),
+            "https://web-production-80fac.up.railway.app/mini",
+        )
+
+    def test_vercel_without_public_base_still_uses_live_host(self):
+        self.assertEqual(
+            resolve_telegram_mini_app_url(
+                "https://aurex-shop-web.vercel.app/",
+                public_base="",
+            ),
+            "https://web-production-80fac.up.railway.app/mini",
+        )
+
+
+class MiniAppDesignTests(unittest.TestCase):
+    def test_live_mini_app_includes_designed_catalog(self):
+        html = Path("static/mini-app/index.html").read_text(encoding="utf-8")
+        css = Path("static/mini-app/styles.css").read_text(encoding="utf-8")
+        js = Path("static/mini-app/app.js").read_text(encoding="utf-8")
         for needle in (
             "SMF SHOP",
             "Subscription",
@@ -296,9 +337,15 @@ class MiniAppHomeTests(unittest.TestCase):
             "btn-account",
             "currency-btn",
             "language-btn",
+            'id="cart-overlay" hidden',
         ):
             self.assertIn(needle, html)
         self.assertNotIn("1 USD =", html)
+        self.assertNotIn("Unlock Premium Access", html)
+        self.assertIn("[hidden]", css)
+        self.assertTrue(Path("static/mini-app/brand/smf-logo.svg").exists())
+        self.assertIn("/api/web/featured", js)
+        self.assertIn("/api/web/shop", js)
 
 
 if __name__ == "__main__":

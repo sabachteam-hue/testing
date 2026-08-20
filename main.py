@@ -28,13 +28,10 @@ from utils.background_tasks import (
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 WEBHOOK_PATH = "/telegram/webhook"
-ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
-WEBAPP_DIR = os.path.join(ROOT_DIR, "webapp")
 # Directories referenced by admin/routes.py and admin/templates must exist
 # before StaticFiles mounts them, otherwise FastAPI raises at startup.
 os.makedirs("static/uploads/announcements", exist_ok=True)
 os.makedirs("admin/static", exist_ok=True)
-os.makedirs(WEBAPP_DIR, exist_ok=True)
 def get_webhook_url() -> str | None:
     base_url = os.getenv("WEBHOOK_URL") or os.getenv("RAILWAY_PUBLIC_DOMAIN")
     if not base_url:
@@ -110,8 +107,6 @@ app.add_middleware(
 )
 app.mount("/admin/static", StaticFiles(directory="admin/static"), name="admin-static")
 app.mount("/static", StaticFiles(directory="static"), name="static")
-if os.path.isdir(WEBAPP_DIR):
-    app.mount("/app/assets", StaticFiles(directory=WEBAPP_DIR), name="webapp-assets")
 app.include_router(admin_router)
 app.include_router(api_v1_router)
 app.include_router(api_web_router)
@@ -137,26 +132,27 @@ async def telegram_webhook(request: Request):
         # while Telegram sees a 200 so it stops retrying.
         logger.exception("Unhandled error while processing Telegram update: %s", data)
     return PlainTextResponse("ok")
-@app.get("/health")
-def health():
-    return {"status": "ok"}
-
-
-def _mini_app_index() -> FileResponse:
-    return FileResponse(os.path.join(WEBAPP_DIR, "index.html"))
-
-
+@app.api_route("/mini", methods=["GET", "HEAD"])
+@app.api_route("/mini/", methods=["GET", "HEAD"])
 @app.get("/app", include_in_schema=False)
 @app.get("/app/", include_in_schema=False)
 @app.get("/shop", include_in_schema=False)
-def mini_app_home():
-    """Telegram Mini App / public shop home."""
-    return _mini_app_index()
+def mini_shop():
+    return FileResponse(
+        "static/mini-app/index.html",
+        media_type="text/html",
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
 
 
 @app.get("/")
 def root(request: Request):
     accept = (request.headers.get("accept") or "").lower()
     if "text/html" in accept:
-        return _mini_app_index()
-    return {"status": "ok", "service": "smfshop", "mini_app": "/app"}
+        return mini_shop()
+    return {"status": "ok", "service": "smfshop", "mini_app": "/mini"}

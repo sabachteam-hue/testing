@@ -46,7 +46,7 @@
     catalogTitle: document.getElementById("catalog-title"),
     productSheet: document.getElementById("product-sheet"),
     productBody: document.getElementById("product-sheet-body"),
-    cartSheet: document.getElementById("cart-sheet"),
+    cartSheet: document.getElementById("cart-overlay"),
     cartBody: document.getElementById("cart-body"),
     accountSheet: document.getElementById("account-sheet"),
     accountBody: document.getElementById("account-body"),

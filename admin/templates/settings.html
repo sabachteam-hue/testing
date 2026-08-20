@@ -45,12 +45,12 @@
     </div>
     <div class="settings-fields">
       <label class="full">Mini App / storefront URL
-        <input name="mini_app_url" value="{{ config.mini_app_url if config and config.mini_app_url else '' }}" placeholder="https://your-app.up.railway.app/app">
+        <input name="mini_app_url" value="{{ config.mini_app_url if config and config.mini_app_url else '' }}" placeholder="https://web-production-80fac.up.railway.app/mini">
         <span class="field-hint">
-          Built-in Mini App lives at <code>/app</code> on this same server (e.g.
-          <code>https://your-app.up.railway.app/app</code>). Leave blank to use that automatically,
-          or paste a custom HTTPS URL. Save ke baad bot ke andar <strong>Shop</strong> Mini App
-          button attach ho jata hai.
+          Live Mini App isi server par <code>/mini</code> hai (SMF SHOP home, Telegram prices).
+          Khali chhodo ya <code>/mini</code> paste karo. Vercel sample catalog
+          (<code>aurex-shop-web.vercel.app</code>) ko bot skip karke live <code>/mini</code> kholta hai.
+
         </span>
       </label>
     </div>
