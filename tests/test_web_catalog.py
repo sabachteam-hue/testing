@@ -1,6 +1,7 @@
 import os
 import unittest
 from datetime import datetime, timedelta
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -234,6 +235,22 @@ class MiniAppUrlTests(unittest.TestCase):
             ),
             "https://web-production-80fac.up.railway.app/mini",
         )
+
+
+class MiniAppDesignTests(unittest.TestCase):
+    def test_live_mini_app_includes_designed_catalog(self):
+        html = Path("static/mini-app/index.html").read_text(encoding="utf-8")
+        css = Path("static/mini-app/styles.css").read_text(encoding="utf-8")
+        self.assertIn("Premium Digital Products", html)
+        self.assertIn("FLASH DEALS", html)
+        self.assertIn("Tools", html)
+        self.assertIn("Use Cases", html)
+        self.assertIn("Gifts", html)
+        self.assertIn("In stock only", html)
+        self.assertIn(".flash-bar", css)
+        self.assertIn(".category-pill", css)
+        self.assertIn(".product-card", css)
+        self.assertTrue(Path("static/mini-app/brand/smf-logo.svg").exists())
 
 
 if __name__ == "__main__":
