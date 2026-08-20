@@ -1,557 +1,502 @@
-const tg = window.Telegram && window.Telegram.WebApp;
-if (tg) {
-  tg.ready();
-  tg.expand();
-  try { tg.setHeaderColor("#09051A"); } catch (err) { /* older clients */ }
-  try { tg.setBackgroundColor("#09051A"); } catch (err) { /* older clients */ }
-}
-
-const ACCENTS = ["violet", "teal", "green", "rose"];
-const CURRENCIES = [
-  { code: "USD", label: "USD ($)" },
-  { code: "PKR", label: "PKR (Rs.)" },
-  { code: "EUR", label: "EUR (€)" },
-  { code: "GBP", label: "GBP (£)" },
-  { code: "INR", label: "INR (₹)" },
-];
-const LANGUAGES = [
-  { code: "en", label: "English", flag: "🇬🇧" },
-  { code: "es", label: "Español", flag: "🇪🇸" },
-  { code: "ar", label: "العربية", flag: "🇸🇦" },
-  { code: "hi", label: "हिंदी", flag: "🇮🇳" },
-  { code: "ru", label: "Русский", flag: "🇷🇺" },
-  { code: "vi", label: "Tiếng Việt", flag: "🇻🇳" },
-  { code: "zh", label: "中文", flag: "🇨🇳" },
-];
-
-const state = {
-  products: [],
-  categories: [],
-  categoryId: null,
-  query: "",
-  priceRange: "all",
-  platform: "all",
-  inStockOnly: false,
-  notes: {},
-  cart: JSON.parse(localStorage.getItem("smf-mini-cart") || "[]"),
-  currency: CURRENCIES[0],
-  language: LANGUAGES[0],
-  pkrRate: 280,
-};
-
-const els = {
-  grid: document.getElementById("grid"),
-  cats: document.getElementById("cats"),
-  empty: document.getElementById("empty"),
-  search: document.getElementById("search"),
-  headerSearch: document.getElementById("header-search"),
-  cartCount: document.getElementById("cart-count"),
-  cartBtn: document.getElementById("cart-btn"),
-  cartOverlay: document.getElementById("cart-overlay"),
-  cartPanel: document.getElementById("cart-panel"),
-  detailOverlay: document.getElementById("detail-overlay"),
-  detailPanel: document.getElementById("detail-panel"),
-  source: document.getElementById("catalog-source"),
-  header: document.getElementById("site-header"),
-  mobileMenu: document.getElementById("mobile-menu"),
-};
-
-function escapeHtml(value) {
-  return String(value ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
-function setOpen(el, open) {
-  if (!el) return;
-  el.hidden = !open;
-  el.classList.toggle("is-open", open);
-  el.classList.toggle("hidden", !open);
-}
-
-function money(value) {
-  return `$${Number(value || 0).toFixed(2)}`;
-}
-
-function pkrMoney(usd) {
-  const amount = Number(usd || 0) * Number(state.pkrRate || 280);
-  const formatted = amount.toLocaleString("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-  return `≈ Rs. ${formatted} PKR`;
-}
-
-function setPkrRate(rate) {
-  const parsed = Number(rate);
-  state.pkrRate = Number.isFinite(parsed) && parsed > 0 ? parsed : 280;
-  const chip = document.getElementById("fx-rate");
-  if (chip) {
-    chip.textContent = `1 USD = ${state.pkrRate.toFixed(2)} PKR`;
-  }
-}
-
-function discountPercent(product) {
-  if (!product.original_price || product.original_price <= product.sell_price) return null;
-  return Math.round((1 - product.sell_price / product.original_price) * 100);
-}
-
-function inPriceRange(price, range) {
-  if (range === "under5") return price < 5;
-  if (range === "5to15") return price >= 5 && price <= 15;
-  if (range === "over15") return price > 15;
-  return true;
-}
-
-function saveCart() {
-  localStorage.setItem("smf-mini-cart", JSON.stringify(state.cart));
-  const count = state.cart.reduce((sum, item) => sum + item.qty, 0);
-  els.cartCount.textContent = String(count);
-  setOpen(els.cartCount, count > 0);
-}
-
-function addToCart(product) {
-  if (!product.in_stock) return;
-  const existing = state.cart.find((item) => item.sku === product.sku);
-  if (existing) existing.qty += 1;
-  else state.cart.push({ sku: product.sku, name: product.name, price: product.sell_price, qty: 1 });
-  saveCart();
-}
-
-function setQty(sku, delta) {
-  const item = state.cart.find((row) => row.sku === sku);
-  if (!item) return;
-  item.qty += delta;
-  if (item.qty <= 0) state.cart = state.cart.filter((row) => row.sku !== sku);
-  saveCart();
-  renderCart();
-}
-
-function filtered() {
-  const q = state.query.trim().toLowerCase();
-  return state.products.filter((product) => {
-    if (state.categoryId != null && product.category_id !== state.categoryId) return false;
-    if (state.inStockOnly && !product.in_stock) return false;
-    if (!inPriceRange(Number(product.sell_price || 0), state.priceRange)) return false;
-    if (state.platform !== "all" && product.platform && product.platform !== state.platform) return false;
-    if (q) {
-      const hay = `${product.name || ""} ${product.sku || ""} ${product.description || ""} ${product.category || ""}`.toLowerCase();
-      if (!hay.includes(q)) return false;
-    }
-    return true;
-  });
-}
-
-function countFor(id) {
-  if (id == null) return state.products.length;
-  return state.products.filter((product) => product.category_id === id).length;
-}
-
-function renderCats() {
-  const all = [{ id: null, name: "All", emoji: "✨" }, ...state.categories];
-  els.cats.innerHTML = all
-    .map((cat) => {
-      const active = cat.id === state.categoryId ? " active" : "";
-      return `<button type="button" class="category-pill${active}" data-id="${cat.id ?? ""}" role="listitem">
-        <span aria-hidden>${escapeHtml(cat.emoji || "")}</span>
-        <span>${escapeHtml(cat.name)}</span>
-        <span class="category-pill-count">${countFor(cat.id)}</span>
-      </button>`;
-    })
-    .join("");
-  els.cats.querySelectorAll(".category-pill").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const raw = btn.getAttribute("data-id");
-      state.categoryId = raw ? Number(raw) : null;
-      renderCats();
-      renderGrid();
-    });
-  });
-}
-
-function productCard(product, index) {
-  const discount = discountPercent(product);
-  const accent = ACCENTS[index % ACCENTS.length];
-  const noteOpen = Boolean(state.notes[product.sku]);
-  const sale = discount
-    ? `<div class="card-badges"><span class="pill-badge sale">Sale −${discount}%</span></div>`
-    : "";
-  const logo = product.image_url
-    ? `<img class="product-logo" src="${escapeHtml(product.image_url)}" alt="">`
-    : `<div class="product-emoji" aria-hidden>${escapeHtml(product.emoji || "🛍️")}</div>`;
-  const warrantyBlock = product.warranty_label
-    ? `<div class="warranty-row"><span aria-hidden>🛡️</span> ${escapeHtml(product.warranty_label)}</div>`
-    : "";
-  const noteBtn = product.note
-    ? `<button type="button" class="view-note-btn" data-note="${escapeHtml(product.sku)}">
-        <span aria-hidden>📋</span> ${noteOpen ? "HIDE NOTE" : "VIEW NOTE"}
-      </button>`
-    : "";
-  const noteBody = noteOpen && product.note
-    ? `<p class="card-desc">${escapeHtml(product.note)}</p>`
-    : "";
-  const desc = product.description
-    ? `<p class="card-desc">${escapeHtml(product.description)}</p>`
-    : "";
-
-  return `<article class="product-card accent-${accent}">
-    ${sale}
-    <div class="card-top-row">
-      <span class="card-info-btn" title="${escapeHtml(product.description || product.name)}" data-detail="${escapeHtml(product.sku)}" aria-label="About ${escapeHtml(product.name)}">i</span>
-      ${product.delivery_type === "manual" ? "" : '<span class="instant-badge"><span aria-hidden>⚡</span> Instant</span>'}
-    </div>
-    <div class="product-card-top">
-      ${logo}
-      <div>
-        <h3><a href="#product-${encodeURIComponent(product.sku)}" data-detail="${escapeHtml(product.sku)}">${escapeHtml(product.name)}</a></h3>
-        <div class="product-meta">${escapeHtml(product.category || "General")}</div>
-      </div>
-    </div>
-    ${desc}
-    ${warrantyBlock}
-    ${noteBtn}
-    ${noteBody}
-    <div class="card-meta-row">
-      <div class="price-block">
-        <span class="price-only">Only</span>
-        <span class="price-value">${money(product.sell_price)}</span>
-        ${discount ? `<div class="price-original">${money(product.original_price)}</div>` : ""}
-        <span class="price-pkr">${pkrMoney(product.sell_price)}</span>
-      </div>
-      <div class="stock-block" title="${escapeHtml(product.stock_label)}">
-        <span class="stock-icon" aria-hidden>📦</span>
-        <span class="stock-label">Stock</span>
-        <span class="stock-number${product.in_stock ? "" : " out"}">${product.stock != null ? escapeHtml(product.stock) : "—"}</span>
-      </div>
-    </div>
-    <button type="button" class="btn btn-add-cart" data-add="${escapeHtml(product.sku)}" ${product.in_stock ? "" : "disabled"}>
-      <span aria-hidden>🛒</span> Add to Cart
-    </button>
-  </article>`;
-}
-
-function renderGrid() {
-  const rows = filtered();
-  setOpen(els.empty, rows.length === 0);
-  if (!rows.length) {
-    els.grid.innerHTML = "";
-    return;
-  }
-  els.grid.innerHTML = rows.map((product, index) => productCard(product, index)).join("");
-  els.grid.querySelectorAll("[data-add]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const product = state.products.find((row) => row.sku === btn.getAttribute("data-add"));
-      if (product) addToCart(product);
-    });
-  });
-  els.grid.querySelectorAll("[data-detail]").forEach((btn) => {
-    btn.addEventListener("click", (event) => {
-      event.preventDefault();
-      openDetail(btn.getAttribute("data-detail"));
-    });
-  });
-  els.grid.querySelectorAll("[data-note]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const sku = btn.getAttribute("data-note");
-      state.notes[sku] = !state.notes[sku];
-      renderGrid();
-    });
-  });
-}
-
-function renderSkeleton() {
-  els.grid.innerHTML = Array.from({ length: 3 })
-    .map(
-      () => `<article class="product-card skeleton-card">
-        <div class="skeleton-block skeleton-image"></div>
-        <div class="product-card-top">
-          <div class="skeleton-block skeleton-emoji"></div>
-          <div style="flex:1">
-            <div class="skeleton-block skeleton-line" style="width:70%"></div>
-            <div class="skeleton-block skeleton-line" style="width:40%"></div>
-          </div>
-        </div>
-        <div class="card-actions">
-          <div class="skeleton-block skeleton-btn"></div>
-          <div class="skeleton-block skeleton-btn"></div>
-        </div>
-      </article>`,
-    )
-    .join("");
-}
-
-function openDetail(sku) {
-  const product = state.products.find((row) => row.sku === sku);
-  if (!product) return;
-  const discount = discountPercent(product);
-  els.detailPanel.innerHTML = `
-    <button type="button" class="icon-btn overlay-close" id="detail-close" aria-label="Close">✕</button>
-    <h2>${escapeHtml(product.emoji || "")} ${escapeHtml(product.name)}</h2>
-    <p class="product-meta">${escapeHtml(product.category || "General")} · ${escapeHtml(product.stock_label)}</p>
-    <p class="price-value">${money(product.sell_price)}${discount ? ` <span class="price-original">${money(product.original_price)}</span>` : ""}</p>
-    <p class="price-pkr">${pkrMoney(product.sell_price)}</p>
-    <p class="muted">${escapeHtml(product.description || "")}</p>
-    ${product.warranty_label ? `<p class="warranty-row"><span aria-hidden>🛡️</span> ${escapeHtml(product.warranty_label)}</p>` : ""}
-    ${product.note ? `<p class="card-desc">${escapeHtml(product.note)}</p>` : ""}
-    <div class="card-actions">
-      <button type="button" class="btn btn-ghost" id="detail-close-2">Close</button>
-      <button type="button" class="btn btn-accent" id="detail-add" ${product.in_stock ? "" : "disabled"}>
-        <span aria-hidden>🛒</span> Add to Cart
-      </button>
-    </div>
-  `;
-  setOpen(els.detailOverlay, true);
-  const close = () => setOpen(els.detailOverlay, false);
-  document.getElementById("detail-close").onclick = close;
-  document.getElementById("detail-close-2").onclick = close;
-  document.getElementById("detail-add").onclick = () => {
-    addToCart(product);
-    close();
-  };
-}
-
-function renderCart() {
-  if (!state.cart.length) {
-    els.cartPanel.innerHTML = `
-      <button type="button" class="icon-btn overlay-close" id="cart-close" aria-label="Close">✕</button>
-      <h2>Your cart</h2>
-      <p class="muted">Cart is empty. Add a product, then complete the order in SMF SHOP with Shop All.</p>
-      <button type="button" class="btn btn-primary" id="cart-close-2">Continue shopping</button>
-    `;
-  } else {
-    const total = state.cart.reduce((sum, item) => sum + item.price * item.qty, 0);
-    const lines = state.cart
-      .map(
-        (item) => `<div class="cart-line">
-          <div>
-            <strong>${escapeHtml(item.name)}</strong>
-            <div class="muted">${money(item.price)} each</div>
-            <div class="qty-row">
-              <button type="button" data-qty="${escapeHtml(item.sku)}" data-delta="-1">−</button>
-              <span>${item.qty}</span>
-              <button type="button" data-qty="${escapeHtml(item.sku)}" data-delta="1">+</button>
-            </div>
-          </div>
-          <strong>${money(item.price * item.qty)}</strong>
-        </div>`,
-      )
-      .join("");
-    els.cartPanel.innerHTML = `
-      <button type="button" class="icon-btn overlay-close" id="cart-close" aria-label="Close">✕</button>
-      <h2>Your cart</h2>
-      ${lines}
-      <p class="price">Total ${money(total)}</p>
-      <p class="muted">Checkout SMF SHOP bot ke Shop All se complete hota hai — yahan live catalog hai.</p>
-      <div class="card-actions">
-        <button type="button" class="btn btn-ghost" id="cart-clear">Clear</button>
-        <button type="button" class="btn btn-primary" id="cart-close-2">Close</button>
-      </div>
-    `;
-    els.cartPanel.querySelectorAll("[data-qty]").forEach((btn) => {
-      btn.addEventListener("click", () => setQty(btn.getAttribute("data-qty"), Number(btn.getAttribute("data-delta"))));
-    });
-    document.getElementById("cart-clear").onclick = () => {
-      state.cart = [];
-      saveCart();
-      renderCart();
-    };
-  }
-  const close = () => setOpen(els.cartOverlay, false);
-  document.getElementById("cart-close").onclick = close;
-  document.getElementById("cart-close-2").onclick = close;
-  setOpen(els.cartOverlay, true);
-}
-
-function setQuery(value) {
-  state.query = value;
-  els.search.value = value;
-  if (els.headerSearch) els.headerSearch.value = value;
-  renderGrid();
-}
-
-function tickCountdown() {
-  const now = new Date();
-  const midnight = new Date(now);
-  midnight.setHours(24, 0, 0, 0);
-  const total = Math.max(0, Math.floor((midnight.getTime() - now.getTime()) / 1000));
-  const h = String(Math.floor(total / 3600)).padStart(2, "0");
-  const m = String(Math.floor((total % 3600) / 60)).padStart(2, "0");
-  const s = String(total % 60).padStart(2, "0");
-  document.getElementById("cd-h").textContent = h;
-  document.getElementById("cd-m").textContent = m;
-  document.getElementById("cd-s").textContent = s;
-}
-
-function bindMenus() {
-  const currencyPanel = document.getElementById("currency-panel");
-  const languagePanel = document.getElementById("language-panel");
-  currencyPanel.innerHTML = CURRENCIES.map(
-    (c) => `<button type="button" class="dropdown-item${c.code === state.currency.code ? " active" : ""}" data-currency="${c.code}">${escapeHtml(c.label)}</button>`,
-  ).join("");
-  languagePanel.innerHTML = LANGUAGES.map(
-    (l) => `<button type="button" class="dropdown-item${l.code === state.language.code ? " active" : ""}" data-language="${l.code}"><span aria-hidden>${l.flag}</span> ${escapeHtml(l.label)}</button>`,
-  ).join("");
-
-  document.getElementById("currency-btn").onclick = (event) => {
-    event.stopPropagation();
-    setOpen(currencyPanel, currencyPanel.hidden);
-    setOpen(languagePanel, false);
-  };
-  document.getElementById("language-btn").onclick = (event) => {
-    event.stopPropagation();
-    setOpen(languagePanel, languagePanel.hidden);
-    setOpen(currencyPanel, false);
-  };
-  currencyPanel.onclick = (event) => event.stopPropagation();
-  languagePanel.onclick = (event) => event.stopPropagation();
-  currencyPanel.querySelectorAll("[data-currency]").forEach((btn) => {
-    btn.onclick = () => {
-      state.currency = CURRENCIES.find((c) => c.code === btn.getAttribute("data-currency"));
-      document.getElementById("currency-label").textContent = state.currency.label;
-      setOpen(currencyPanel, false);
-      bindMenus();
-    };
-  });
-  languagePanel.querySelectorAll("[data-language]").forEach((btn) => {
-    btn.onclick = () => {
-      state.language = LANGUAGES.find((l) => l.code === btn.getAttribute("data-language"));
-      document.getElementById("language-label").textContent = state.language.label;
-      document.getElementById("language-flag").textContent = state.language.flag;
-      setOpen(languagePanel, false);
-      bindMenus();
-    };
-  });
-}
-
-function setMenuOpen(open) {
-  els.mobileMenu.classList.toggle("open", open);
-  els.mobileMenu.setAttribute("aria-hidden", open ? "false" : "true");
-}
-
-async function load() {
-  renderSkeleton();
-  const [catRes, prodRes, statsRes] = await Promise.all([
-    fetch("/api/web/categories", { cache: "no-store" }),
-    fetch("/api/web/products", { cache: "no-store" }),
-    fetch("/api/web/stats", { cache: "no-store" }),
-  ]);
-  if (statsRes && statsRes.ok) {
+(() => {
+  const tg = window.Telegram && window.Telegram.WebApp;
+  if (tg) {
+    tg.ready();
+    tg.expand();
     try {
-      const stats = await statsRes.json();
-      setPkrRate(stats.usd_to_pkr_rate);
-    } catch (err) {
-      setPkrRate(280);
+      tg.setHeaderColor("#09070f");
+      tg.setBackgroundColor("#09070f");
+    } catch (_err) {
+      /* older clients */
     }
   }
-  if (!catRes.ok || !prodRes.ok) {
-    els.source.textContent = "Catalog is updating. Open Shop All in the bot if this stays empty.";
-    els.empty.textContent = "Could not load live products.";
-    setOpen(els.empty, true);
-    els.grid.innerHTML = "";
-    return;
+
+  const state = {
+    shop: null,
+    products: [],
+    featured: { live: [], hot: [], best_seller: [] },
+    categories: [],
+    currency: localStorage.getItem("smf_currency") || "USD",
+    language: localStorage.getItem("smf_language") || "en",
+    filter: "all",
+    query: "",
+    categoryId: null,
+    cart: JSON.parse(localStorage.getItem("smf_cart") || "[]"),
+  };
+
+  const els = {
+    eyebrow: document.getElementById("shop-eyebrow"),
+    headline: document.getElementById("shop-headline"),
+    tagline: document.getElementById("shop-tagline"),
+    whatsapp: document.getElementById("btn-whatsapp"),
+    search: document.getElementById("search-input"),
+    currencyBtn: document.getElementById("currency-btn"),
+    currencyMenu: document.querySelector("#currency-dd .menu"),
+    languageBtn: document.getElementById("language-btn"),
+    languageMenu: document.querySelector("#language-dd .menu"),
+    cartCount: document.getElementById("cart-count"),
+    live: document.getElementById("rail-live"),
+    hot: document.getElementById("rail-hot"),
+    best: document.getElementById("rail-best"),
+    liveCount: document.getElementById("live-count"),
+    hotCount: document.getElementById("hot-count"),
+    bestCount: document.getElementById("best-count"),
+    pills: document.getElementById("category-pills"),
+    grid: document.getElementById("product-grid"),
+    catalogTitle: document.getElementById("catalog-title"),
+    productSheet: document.getElementById("product-sheet"),
+    productBody: document.getElementById("product-sheet-body"),
+    cartSheet: document.getElementById("cart-overlay"),
+    cartBody: document.getElementById("cart-body"),
+    accountSheet: document.getElementById("account-sheet"),
+    accountBody: document.getElementById("account-body"),
+  };
+
+  const copy = {
+    en: {
+      subscription: "Subscription",
+      freebies: "Freebies",
+      signIn: "Sign in",
+      explore: "Explore Products",
+      whatsapp: "WhatsApp order",
+      catalog: "Explore products",
+      catalogSub: "Same catalog and prices as the Telegram shop.",
+      empty: "Nothing here yet.",
+      live: "Live",
+      hot: "Hot",
+      best: "Best Seller",
+    },
+  };
+
+  function t(key) {
+    const pack = copy[state.language] || copy.en;
+    return pack[key] || copy.en[key] || key;
   }
-  state.categories = await catRes.json();
-  state.products = await prodRes.json();
-  els.source.textContent = "Live products from SMF Shop";
-  renderCats();
-  renderGrid();
-}
 
-document.getElementById("year").textContent = String(new Date().getFullYear());
-setOpen(els.cartOverlay, false);
-setOpen(els.detailOverlay, false);
-setOpen(document.getElementById("chat-panel"), false);
-setOpen(document.getElementById("currency-panel"), false);
-setOpen(document.getElementById("language-panel"), false);
-saveCart();
-setPkrRate(280);
-bindMenus();
-document.addEventListener("click", () => {
-  setOpen(document.getElementById("currency-panel"), false);
-  setOpen(document.getElementById("language-panel"), false);
-});
-tickCountdown();
-setInterval(tickCountdown, 1000);
+  function tgUser() {
+    return (tg && tg.initDataUnsafe && tg.initDataUnsafe.user) || null;
+  }
 
-window.addEventListener("scroll", () => {
-  els.header.classList.toggle("scrolled", window.scrollY > 8);
-}, { passive: true });
+  async function getJSON(path) {
+    const res = await fetch(path, { headers: { Accept: "application/json" } });
+    if (!res.ok) throw new Error(`${path} failed`);
+    return res.json();
+  }
 
-els.search.addEventListener("input", () => setQuery(els.search.value));
-els.headerSearch.addEventListener("input", () => setQuery(els.headerSearch.value));
-document.getElementById("header-search-form").addEventListener("submit", (event) => {
-  event.preventDefault();
-  setQuery(els.headerSearch.value);
-  document.getElementById("catalog").scrollIntoView({ behavior: "smooth" });
-});
+  function formatPrice(amount) {
+    const value = Number(amount || 0);
+    if (state.currency === "PKR") {
+      const rate = Number(state.shop && state.shop.pkr_rate) || 280;
+      const pkr = value * rate;
+      return `Rs. ${pkr.toLocaleString("en-PK", { maximumFractionDigits: 0 })}`;
+    }
+    return `$${value.toFixed(2)}`;
+  }
 
-document.getElementById("pricing-filter").addEventListener("change", (event) => {
-  state.priceRange = event.target.value;
-  renderGrid();
-});
-document.getElementById("platform-filter").addEventListener("change", (event) => {
-  state.platform = event.target.value;
-  renderGrid();
-});
-document.getElementById("stock-only").addEventListener("click", (event) => {
-  state.inStockOnly = !state.inStockOnly;
-  event.currentTarget.classList.toggle("active", state.inStockOnly);
-  event.currentTarget.setAttribute("aria-pressed", state.inStockOnly ? "true" : "false");
-  renderGrid();
-});
+  function saveCart() {
+    localStorage.setItem("smf_cart", JSON.stringify(state.cart));
+    renderCartCount();
+  }
 
-document.getElementById("cats-left").onclick = () => els.cats.scrollBy({ left: -220, behavior: "smooth" });
-document.getElementById("cats-right").onclick = () => els.cats.scrollBy({ left: 220, behavior: "smooth" });
+  function addToCart(product) {
+    const existing = state.cart.find((row) => row.sku === product.sku);
+    if (existing) existing.qty += 1;
+    else state.cart.push({ sku: product.sku, name: product.name, emoji: product.emoji, sell_price: product.sell_price, qty: 1 });
+    saveCart();
+  }
 
-els.cartBtn.addEventListener("click", renderCart);
-document.getElementById("footer-cart").addEventListener("click", (event) => {
-  event.preventDefault();
-  renderCart();
-});
-document.getElementById("mobile-cart").addEventListener("click", () => {
-  setMenuOpen(false);
-  renderCart();
-});
-els.cartOverlay.addEventListener("click", (event) => {
-  if (event.target === els.cartOverlay) setOpen(els.cartOverlay, false);
-});
-els.detailOverlay.addEventListener("click", (event) => {
-  if (event.target === els.detailOverlay) setOpen(els.detailOverlay, false);
-});
+  function waHref(product) {
+    const base = (state.shop && state.shop.whatsapp_url) || "";
+    if (!base) return state.shop && state.shop.support_url ? state.shop.support_url : "#";
+    const text = product
+      ? `Hi SMF SHOP, I want to order ${product.name} (${product.sku}) for ${formatPrice(product.sell_price)}`
+      : "Hi SMF SHOP, I want to place an order from the Mini App.";
+    return `${base}?text=${encodeURIComponent(text)}`;
+  }
 
-document.getElementById("menu-toggle").onclick = () => setMenuOpen(true);
-document.getElementById("menu-close").onclick = () => setMenuOpen(false);
-els.mobileMenu.addEventListener("click", (event) => {
-  if (event.target === els.mobileMenu) setMenuOpen(false);
-});
-els.mobileMenu.querySelectorAll("[data-close-menu]").forEach((link) => {
-  link.addEventListener("click", () => setMenuOpen(false));
-});
+  function closeMenus() {
+    document.querySelectorAll(".menu").forEach((menu) => {
+      menu.hidden = true;
+    });
+    document.querySelectorAll(".chip").forEach((btn) => btn.setAttribute("aria-expanded", "false"));
+  }
 
-document.getElementById("theme-toggle").addEventListener("click", () => {
-  const light = document.documentElement.classList.toggle("theme-light");
-  document.getElementById("theme-toggle").textContent = light ? "☀️" : "🌙";
-});
+  function renderMenus() {
+    const currencies = (state.shop && state.shop.currencies) || [
+      { code: "USD", label: "USD ($)" },
+    ];
+    els.currencyMenu.innerHTML = currencies
+      .map((item) => `<button type="button" data-currency="${item.code}">${item.label}</button>`)
+      .join("");
+    const current = currencies.find((item) => item.code === state.currency) || currencies[0];
+    els.currencyBtn.textContent = current.label;
 
-const chatBtn = document.getElementById("chat-btn");
-const chatPanel = document.getElementById("chat-panel");
-function toggleChat() {
-  const open = Boolean(chatPanel.hidden);
-  setOpen(chatPanel, open);
-  chatBtn.textContent = open ? "✕" : "💬";
-  chatBtn.setAttribute("aria-label", open ? "Close assistant" : "Open assistant");
-}
-chatBtn.onclick = toggleChat;
-document.getElementById("chat-close").onclick = () => {
-  setOpen(chatPanel, false);
-  chatBtn.textContent = "💬";
-  chatBtn.setAttribute("aria-label", "Open assistant");
-};
+    const languages = (state.shop && state.shop.languages) || [{ code: "en", name: "English", flag: "🇬🇧" }];
+    els.languageMenu.innerHTML = languages
+      .map((item) => `<button type="button" data-language="${item.code}">${item.flag} ${item.name}</button>`)
+      .join("");
+    const lang = languages.find((item) => item.code === state.language) || languages[0];
+    state.language = lang.code;
+    els.languageBtn.textContent = `${lang.flag} ${lang.name}`;
+  }
 
-load().catch(() => {
-  els.empty.textContent = "Could not load live products.";
-  setOpen(els.empty, true);
-  els.grid.innerHTML = "";
-});
+  function renderChrome() {
+    if (!state.shop) return;
+    els.eyebrow.textContent = state.shop.eyebrow;
+    els.headline.textContent = state.shop.headline;
+    els.tagline.textContent = state.shop.tagline;
+    document.getElementById("nav-subscription").textContent = t("subscription");
+    document.getElementById("nav-freebies").textContent = t("freebies");
+    document.getElementById("btn-signin").textContent = t("signIn");
+    document.getElementById("btn-explore").textContent = t("explore");
+    els.whatsapp.textContent = t("whatsapp");
+    els.whatsapp.href = waHref();
+    if (!state.shop.whatsapp_url && !state.shop.support_url) {
+      els.whatsapp.style.display = "none";
+    }
+    els.catalogTitle.textContent = t("catalog");
+    document.getElementById("catalog-sub").textContent = t("catalogSub");
+    renderMenus();
+    renderCartCount();
+  }
+
+  function renderCartCount() {
+    const count = state.cart.reduce((sum, row) => sum + row.qty, 0);
+    els.cartCount.hidden = count === 0;
+    els.cartCount.textContent = String(count);
+  }
+
+  function itemButton(product, tag) {
+    const icon = product.image_url
+      ? `<img src="${product.image_url}" alt="">`
+      : (product.emoji || "🛍️");
+    return `
+      <button type="button" class="item" data-sku="${product.sku}">
+        <span class="item-icon">${icon}</span>
+        <span>
+          <span class="item-name">${escapeHtml(product.name)}</span>
+          <span class="item-meta">${escapeHtml(product.category || "General")}</span>
+        </span>
+        <span style="text-align:right">
+          <span class="item-price">${formatPrice(product.sell_price)}</span>
+          ${tag ? `<div><span class="tag ${tag}">${tag}</span></div>` : ""}
+        </span>
+      </button>
+    `;
+  }
+
+  function renderRail(el, countEl, rows, tag, emptyText) {
+    countEl.textContent = String(rows.length);
+    if (!rows.length) {
+      el.innerHTML = `<p class="empty">${emptyText}</p>`;
+      return;
+    }
+    el.innerHTML = rows.map((row) => itemButton(row, tag)).join("");
+  }
+
+  function renderFeatured() {
+    renderRail(els.live, els.liveCount, state.featured.live || [], "live", "No live stock yet.");
+    renderRail(els.hot, els.hotCount, state.featured.hot || [], "hot", "No hot deals right now.");
+    renderRail(els.best, els.bestCount, state.featured.best_seller || [], "best", "Best sellers will appear here.");
+  }
+
+  function visibleProducts() {
+    const q = state.query.trim().toLowerCase();
+    return state.products.filter((product) => {
+      if (state.filter === "subscription" && product.is_free) return false;
+      if (state.filter === "freebies" && !product.is_free) return false;
+      if (state.categoryId && product.category_id !== state.categoryId) return false;
+      if (!q) return true;
+      const hay = `${product.name} ${product.sku} ${product.category || ""} ${product.description || ""}`.toLowerCase();
+      return hay.includes(q);
+    });
+  }
+
+  function renderPills() {
+    const counts = {};
+    state.products.forEach((product) => {
+      counts[product.category_id] = (counts[product.category_id] || 0) + 1;
+    });
+    const pills = [
+      `<button type="button" class="pill ${state.categoryId == null && state.filter === "all" ? "active" : ""}" data-cat="">All</button>`,
+      ...state.categories
+        .filter((cat) => counts[cat.id])
+        .map(
+          (cat) =>
+            `<button type="button" class="pill ${state.categoryId === cat.id ? "active" : ""}" data-cat="${cat.id}">${cat.emoji || ""} ${escapeHtml(cat.name)}</button>`
+        ),
+    ];
+    els.pills.innerHTML = pills.join("");
+  }
+
+  function renderGrid() {
+    const rows = visibleProducts();
+    if (!rows.length) {
+      els.grid.innerHTML = `<p class="empty">${t("empty")}</p>`;
+      return;
+    }
+    els.grid.innerHTML = rows
+      .map((product) => {
+        const tag = product.is_free
+          ? `<span class="tag live">Free</span>`
+          : product.in_stock
+            ? `<span class="tag live">Live</span>`
+            : `<span class="tag hot">Out</span>`;
+        const old = product.original_price
+          ? `<span class="old">${formatPrice(product.original_price)}</span>`
+          : "";
+        const icon = product.image_url
+          ? `<span class="item-icon"><img src="${product.image_url}" alt=""></span>`
+          : `<span class="item-icon">${product.emoji || "🛍️"}</span>`;
+        return `
+          <button type="button" class="card" data-sku="${product.sku}">
+            <div class="card-top">${icon}${tag}</div>
+            <h3>${escapeHtml(product.name)}</h3>
+            <div class="item-meta">${escapeHtml(product.category || "General")} · ${escapeHtml(product.stock_label)}</div>
+            <div class="price-row"><span class="price">${formatPrice(product.sell_price)}</span>${old}</div>
+          </button>
+        `;
+      })
+      .join("");
+  }
+
+  function productBySku(sku) {
+    return (
+      state.products.find((row) => row.sku === sku) ||
+      [...(state.featured.live || []), ...(state.featured.hot || []), ...(state.featured.best_seller || [])].find(
+        (row) => row.sku === sku
+      )
+    );
+  }
+
+  function openSheet(el) {
+    el.hidden = false;
+  }
+
+  function closeSheet(el) {
+    el.hidden = true;
+  }
+
+  function renderProductSheet(product) {
+    const old = product.original_price ? `<span class="old">${formatPrice(product.original_price)}</span>` : "";
+    els.productBody.innerHTML = `
+      <div class="item-icon" style="width:56px;height:56px;font-size:26px">${
+        product.image_url ? `<img src="${product.image_url}" alt="">` : product.emoji || "🛍️"
+      }</div>
+      <h2>${escapeHtml(product.name)}</h2>
+      <p class="muted">${escapeHtml(product.category || "General")} · ${escapeHtml(product.stock_label)}</p>
+      <div class="price-row"><span class="price">${formatPrice(product.sell_price)}</span>${old}</div>
+      <p>${escapeHtml(product.description || product.note || "")}</p>
+      <div class="hero-actions">
+        <button type="button" class="btn btn-primary" id="sheet-add">Add to cart</button>
+        <a class="btn btn-whatsapp" target="_blank" rel="noopener" href="${waHref(product)}">WhatsApp order</a>
+      </div>
+    `;
+    document.getElementById("sheet-add").onclick = () => {
+      addToCart(product);
+      closeSheet(els.productSheet);
+    };
+    openSheet(els.productSheet);
+  }
+
+  function renderCartSheet() {
+    if (!state.cart.length) {
+      els.cartBody.innerHTML = `<p class="empty">Your cart is empty.</p>`;
+      openSheet(els.cartSheet);
+      return;
+    }
+    const total = state.cart.reduce((sum, row) => sum + row.sell_price * row.qty, 0);
+    els.cartBody.innerHTML = `
+      ${state.cart
+        .map(
+          (row) => `
+        <div class="cart-row">
+          <div>
+            <strong>${escapeHtml(row.name)}</strong>
+            <div class="muted">${formatPrice(row.sell_price)}</div>
+          </div>
+          <div>
+            <button type="button" class="qty-btn" data-sku="${row.sku}" data-delta="-1">−</button>
+            ${row.qty}
+            <button type="button" class="qty-btn" data-sku="${row.sku}" data-delta="1">+</button>
+          </div>
+        </div>
+      `
+        )
+        .join("")}
+      <p><strong>Total ${formatPrice(total)}</strong></p>
+      <div class="hero-actions">
+        <a class="btn btn-whatsapp" target="_blank" rel="noopener" href="${waHref()}">WhatsApp order</a>
+      </div>
+    `;
+    openSheet(els.cartSheet);
+  }
+
+  function renderAccount(mode) {
+    const user = tgUser();
+    if (user) {
+      els.accountBody.innerHTML = `
+        <p><strong>${escapeHtml(user.first_name || "Member")} ${escapeHtml(user.last_name || "")}</strong></p>
+        <p class="muted">@${escapeHtml(user.username || "telegram")} · signed in via Telegram</p>
+      `;
+    } else if (mode === "signin") {
+      els.accountBody.innerHTML = `
+        <p>Open <strong>SMF SHOP</strong> from the Telegram bot to sign in automatically.</p>
+        <p class="muted">No extra password — your Telegram account is the login.</p>
+      `;
+    } else {
+      els.accountBody.innerHTML = `
+        <p>You are browsing as a guest.</p>
+        <p class="muted">Sign in from Telegram to sync your account.</p>
+        <div class="hero-actions"><button type="button" class="btn btn-primary" id="sheet-signin">Sign in</button></div>
+      `;
+      const btn = document.getElementById("sheet-signin");
+      if (btn) btn.onclick = () => renderAccount("signin");
+    }
+    openSheet(els.accountSheet);
+  }
+
+  function escapeHtml(value) {
+    return String(value || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function setFilter(filter) {
+    state.filter = filter;
+    state.categoryId = null;
+    document.querySelectorAll(".nav-link[data-filter]").forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.filter === filter);
+    });
+    renderPills();
+    renderGrid();
+    document.getElementById("catalog").scrollIntoView({ behavior: "smooth" });
+  }
+
+  document.addEventListener("click", (event) => {
+    const nav = event.target.closest("[data-filter]");
+    if (nav) setFilter(nav.dataset.filter);
+
+    const currencyPick = event.target.closest("[data-currency]");
+    if (currencyPick) {
+      state.currency = currencyPick.dataset.currency;
+      localStorage.setItem("smf_currency", state.currency);
+      closeMenus();
+      renderChrome();
+      renderFeatured();
+      renderGrid();
+      return;
+    }
+
+    const languagePick = event.target.closest("[data-language]");
+    if (languagePick) {
+      state.language = languagePick.dataset.language;
+      localStorage.setItem("smf_language", state.language);
+      closeMenus();
+      renderChrome();
+      return;
+    }
+
+    if (event.target.closest("#currency-btn")) {
+      const open = els.currencyMenu.hidden;
+      closeMenus();
+      els.currencyMenu.hidden = !open;
+      els.currencyBtn.setAttribute("aria-expanded", String(open));
+      return;
+    }
+    if (event.target.closest("#language-btn")) {
+      const open = els.languageMenu.hidden;
+      closeMenus();
+      els.languageMenu.hidden = !open;
+      els.languageBtn.setAttribute("aria-expanded", String(open));
+      return;
+    }
+
+    const skuBtn = event.target.closest("[data-sku]:not(.qty-btn)");
+    if (skuBtn && skuBtn.dataset.sku && !event.target.closest(".qty-btn")) {
+      const product = productBySku(skuBtn.dataset.sku);
+      if (product) renderProductSheet(product);
+    }
+
+    const qty = event.target.closest(".qty-btn");
+    if (qty) {
+      const row = state.cart.find((item) => item.sku === qty.dataset.sku);
+      if (row) {
+        row.qty += Number(qty.dataset.delta);
+        if (row.qty <= 0) state.cart = state.cart.filter((item) => item.sku !== row.sku);
+        saveCart();
+        renderCartSheet();
+      }
+    }
+
+    const cat = event.target.closest("[data-cat]");
+    if (cat) {
+      state.filter = "all";
+      state.categoryId = cat.dataset.cat ? Number(cat.dataset.cat) : null;
+      document.querySelectorAll(".nav-link[data-filter]").forEach((btn) => btn.classList.remove("active"));
+      renderPills();
+      renderGrid();
+    }
+
+    if (event.target.closest("[data-close]")) {
+      closeSheet(event.target.closest(".sheet"));
+    }
+
+    if (
+      !event.target.closest(".dropdown") &&
+      !event.target.closest("#currency-btn") &&
+      !event.target.closest("#language-btn")
+    ) {
+      closeMenus();
+    }
+  });
+
+  document.getElementById("btn-cart").onclick = () => renderCartSheet();
+  document.getElementById("btn-account").onclick = () => renderAccount("account");
+  document.getElementById("btn-signin").onclick = () => renderAccount("signin");
+  document.getElementById("btn-support").onclick = () => {
+    const href = waHref() !== "#" ? waHref() : state.shop && state.shop.support_url;
+    if (href && href !== "#") window.open(href, "_blank", "noopener");
+  };
+  els.search.addEventListener("input", () => {
+    state.query = els.search.value;
+    renderGrid();
+  });
+  document.getElementById("btn-explore").addEventListener("click", (event) => {
+    event.preventDefault();
+    document.getElementById("catalog").scrollIntoView({ behavior: "smooth" });
+  });
+  document.getElementById("brand-home").addEventListener("click", (event) => {
+    event.preventDefault();
+    state.filter = "all";
+    state.categoryId = null;
+    state.query = "";
+    els.search.value = "";
+    document.querySelectorAll(".nav-link[data-filter]").forEach((btn) => btn.classList.remove("active"));
+    renderPills();
+    renderGrid();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  });
+
+  Promise.all([
+    getJSON("/api/web/shop"),
+    getJSON("/api/web/products"),
+    getJSON("/api/web/featured"),
+    getJSON("/api/web/categories"),
+  ])
+    .then(([shop, products, featured, categories]) => {
+      state.shop = shop;
+      state.products = products;
+      state.featured = featured;
+      state.categories = categories;
+      renderChrome();
+      renderFeatured();
+      renderPills();
+      renderGrid();
+    })
+    .catch((err) => {
+      els.grid.innerHTML = `<p class="empty">Could not load shop (${escapeHtml(err.message)}).</p>`;
+    });
+})();

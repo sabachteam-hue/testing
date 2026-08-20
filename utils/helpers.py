@@ -306,7 +306,11 @@ def normalize_mini_app_url(value: str | None) -> str | None:
 
 
 def get_mini_app_url(db: Session | None = None) -> str | None:
-    """HTTPS URL of the web Mini App. Admin Settings overrides MINI_APP_URL env."""
+    """HTTPS URL of the web Mini App.
+
+    Admin Settings overrides MINI_APP_URL env. Vercel sample storefronts are
+    rewritten to this host's live /mini catalog.
+    """
     env_url = normalize_mini_app_url(os.getenv("MINI_APP_URL"))
     config = None
     close_db = False

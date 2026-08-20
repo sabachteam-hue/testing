@@ -1,13 +1,14 @@
-"""Public read-only catalog for the Next.js storefront / Telegram Mini App.
+"""Public read-only catalog for the Telegram Mini App / storefront.
 
-Matches aurex-shop-web `lib/api.ts`:
+  GET /api/web/shop
+  GET /api/web/featured
   GET /api/web/categories
   GET /api/web/products?category_id=&q=
   GET /api/web/products/{sku}
   GET /api/web/stats
 
 Same products/categories the Telegram bot and admin panel already use.
-No login, checkout, or payments here.
+Prices are the admin sell_price shown in Telegram. No login or checkout here.
 """
 
 from __future__ import annotations
@@ -22,7 +23,16 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, joinedload, selectinload
 
-from database.models import BotConfig, Category, Order, ProductSale, Service, User, get_db
+from database.models import (
+    BotConfig,
+    Category,
+    Order,
+    ProductSale,
+    Service,
+    User,
+    get_active_languages,
+    get_db,
+)
 from utils.helpers import get_mini_app_url, get_public_base_url, parse_icon
 from utils.stock_display import effective_available_qty
 
@@ -39,6 +49,11 @@ _DEV_ORIGINS = (
     "http://localhost:3000",
     "http://127.0.0.1:3000",
 )
+_SHOP_NAME = "SMF SHOP"
+_SHOP_EYEBROW = "Live premium catalog"
+_SHOP_HEADLINE = "Premium plans, without the wait."
+_SHOP_TAGLINE = "AI tools, streaming, and SaaS accounts — live stock, Telegram prices."
+_FEATURED_LIMIT = 4
 
 
 def _plain_text(value: str | None) -> str:
@@ -155,6 +170,11 @@ def _delivery_note(service: Service) -> str:
     return "Instant delivery after payment."
 
 
+def _whatsapp_url(raw: str | None) -> str | None:
+    digits = re.sub(r"\D+", "", raw or "")
+    return f"https://wa.me/{digits}" if digits else None
+
+
 def _infer_platform(name: str, description: str) -> str:
     text = f"{name} {description}".lower()
     if any(token in text for token in ("android", "ios", "mobile app", "apk")):
@@ -191,6 +211,15 @@ def product_payload(service: Service, request: Request | None = None) -> dict:
     description = _plain_text(service.description)
     name = _plain_text(service.name) or service.name
     category = service.category
+    is_free = sell_price <= 0
+    badges: list[str] = []
+    if in_stock:
+        badges.append("live")
+    if original_price is not None:
+        badges.append("hot")
+    sale_ends_at = None
+    if sale and sale.ends_at:
+        sale_ends_at = sale.ends_at.isoformat() + "Z"
     return {
         "id": service.id,
         "sku": service.sku,
@@ -198,6 +227,7 @@ def product_payload(service: Service, request: Request | None = None) -> dict:
         "description": description or None,
         "sell_price": sell_price,
         "original_price": original_price,
+        "is_free": is_free,
         "category_id": category.id if category else None,
         "category": (_plain_text(category.name) or category.name) if category else None,
         "emoji": _display_emoji(service.emoji, "🛍️"),
@@ -212,6 +242,8 @@ def product_payload(service: Service, request: Request | None = None) -> dict:
         "warranty_label": warranty,
         "warranty_percent": _warranty_percent(warranty),
         "delivery_type": _delivery_type(service),
+        "badges": badges,
+        "sale_ends_at": sale_ends_at,
     }
 
 
@@ -225,6 +257,84 @@ def _active_products_query(db: Session):
         )
         .filter(Service.is_active.is_(True), Service.is_deleted.is_(False))
     )
+
+
+def shop_payload(db: Session) -> dict:
+    """Mini App chrome: brand, languages, WhatsApp. No live FX ticker."""
+    config = db.query(BotConfig).first()
+    languages = [
+        {
+            "code": lang.code,
+            "name": lang.name,
+            "flag": lang.flag or "🌐",
+        }
+        for lang in get_active_languages(db)
+    ]
+    if not languages:
+        languages = [{"code": "en", "name": "English", "flag": "🇬🇧"}]
+    whatsapp = _whatsapp_url(getattr(config, "support_whatsapp", None) if config else None)
+    support_url = ((getattr(config, "support_url", None) if config else None) or "").strip() or None
+    username = ((getattr(config, "support_username", None) if config else None) or "").strip() or None
+    pkr_rate = float(getattr(config, "usd_to_pkr_rate", None) or 280.0) if config else 280.0
+    return {
+        "name": _SHOP_NAME,
+        "eyebrow": _SHOP_EYEBROW,
+        "headline": _SHOP_HEADLINE,
+        "tagline": _SHOP_TAGLINE,
+        "whatsapp_url": whatsapp,
+        "support_url": support_url,
+        "support_username": username,
+        "currency": {"code": "USD", "symbol": "$", "label": "USD ($)"},
+        "currencies": [
+            {"code": "USD", "symbol": "$", "label": "USD ($)"},
+            {"code": "PKR", "symbol": "Rs.", "label": "PKR (Rs.)"},
+        ],
+        "pkr_rate": pkr_rate,
+        "languages": languages,
+    }
+
+
+def _best_seller_ids(db: Session, limit: int = _FEATURED_LIMIT) -> list[int]:
+    rows = (
+        db.query(Order.service_id, func.count(Order.id))
+        .filter(Order.status == "completed")
+        .group_by(Order.service_id)
+        .order_by(func.count(Order.id).desc())
+        .limit(limit)
+        .all()
+    )
+    ids: list[int] = []
+    for row in rows:
+        sid = row[0] if isinstance(row, (tuple, list)) else getattr(row, "service_id", None)
+        if sid:
+            ids.append(int(sid))
+    return ids
+
+
+def build_featured(
+    services: list,
+    db: Session,
+    request: Request | None = None,
+    limit: int = _FEATURED_LIMIT,
+) -> dict:
+    """Three separate Mini App carts: Live, Hot, Best Seller."""
+    products = [product_payload(service, request) for service in services]
+    live = [item for item in products if item["in_stock"]][:limit]
+    hot = [item for item in products if "hot" in (item.get("badges") or [])][:limit]
+    by_id = {item["id"]: item for item in products}
+    best = [by_id[sid] for sid in _best_seller_ids(db, limit) if sid in by_id]
+    if not best:
+        best = products[:limit]
+    for item in best:
+        badges = list(item.get("badges") or [])
+        if "best_seller" not in badges:
+            badges.append("best_seller")
+            item["badges"] = badges
+    return {
+        "live": live,
+        "hot": hot,
+        "best_seller": best[:limit],
+    }
 
 
 @router.get("/categories")
@@ -273,6 +383,17 @@ def get_product(sku: str, request: Request, db: Session = Depends(get_db)) -> di
     if not service:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
     return product_payload(service, request)
+
+
+@router.get("/shop")
+def shop_info(db: Session = Depends(get_db)) -> dict:
+    return shop_payload(db)
+
+
+@router.get("/featured")
+def featured_products(request: Request, db: Session = Depends(get_db)) -> dict:
+    rows = _active_products_query(db).order_by(Service.sort_order.asc(), Service.name.asc()).all()
+    return build_featured(rows, db, request)
 
 
 @router.get("/stats")

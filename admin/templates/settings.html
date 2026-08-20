@@ -47,11 +47,10 @@
       <label class="full">Mini App / storefront URL
         <input name="mini_app_url" value="{{ config.mini_app_url if config and config.mini_app_url else '' }}" placeholder="https://web-production-80fac.up.railway.app/mini">
         <span class="field-hint">
-          Telegram Mini App live products ke liye khali chhodo ya <code>/mini</code> use karo
-          (yeh isi Railway API se catalog leti hai). Vercel site
-          (<code>aurex-shop-web.vercel.app</code>) pe sample data tab tak rahega jab tak wahan
-          <code>NEXT_PUBLIC_API_BASE_URL</code> set nahi hota — bot Open Shop us case mein
-          automatically live <code>/mini</code> kholega.
+          Live Mini App isi server par <code>/mini</code> hai (SMF SHOP home, Telegram prices).
+          Khali chhodo ya <code>/mini</code> paste karo. Vercel sample catalog
+          (<code>aurex-shop-web.vercel.app</code>) ko bot skip karke live <code>/mini</code> kholta hai.
+
         </span>
       </label>
     </div>

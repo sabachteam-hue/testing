@@ -2,7 +2,6 @@ import os
 import unittest
 from datetime import datetime, timedelta
 from pathlib import Path
-from types import SimpleNamespace
 from unittest.mock import patch
 
 from fastapi import FastAPI
@@ -13,9 +12,10 @@ from api.web import (
     cors_allow_origins,
     product_payload,
     router,
+    shop_payload,
 )
 from database.models import get_db
-from utils.helpers import normalize_mini_app_url, resolve_telegram_mini_app_url
+from utils.helpers import get_mini_app_url, normalize_mini_app_url, resolve_telegram_mini_app_url
 
 
 class _FakeStock:
@@ -89,10 +89,21 @@ class WebCatalogPayloadTests(unittest.TestCase):
         self.assertEqual(payload["warranty_label"], "2 months replacement")
         self.assertEqual(payload["warranty_percent"], 70)
         self.assertEqual(payload["platform"], "web")
+        self.assertTrue(payload["is_free"] is False)
+        self.assertIn("live", payload["badges"])
+        self.assertIn("hot", payload["badges"])
         self.assertEqual(
             payload["image_url"],
             "https://shop.example.com/admin/static/uploads/services/svc.png",
         )
+
+    def test_free_product_badge(self):
+        service = _FakeService()
+        service.sell_price = 0
+        service.sales = []
+        payload = product_payload(service)
+        self.assertTrue(payload["is_free"])
+        self.assertNotIn("hot", payload["badges"])
 
     def test_out_of_stock_label(self):
         payload = product_payload(_FakeService(stock=0))
@@ -115,6 +126,13 @@ class WebCatalogPayloadTests(unittest.TestCase):
         with patch.dict(os.environ, {"CORS_ORIGINS": ""}, clear=False):
             self.assertEqual(cors_allow_origins(), "*")
 
+    def test_mini_app_url_falls_back_to_mini_path(self):
+        db = _FakeDB([], [])
+        db.config = None
+        with patch.dict(os.environ, {"MINI_APP_URL": ""}, clear=False):
+            with patch("utils.helpers.get_public_base_url", return_value="https://shop.example.com"):
+                self.assertEqual(get_mini_app_url(db), "https://shop.example.com/mini")
+
 
 class _FakeQuery:
     def __init__(self, rows):
@@ -129,6 +147,12 @@ class _FakeQuery:
     def order_by(self, *args, **kwargs):
         return self
 
+    def group_by(self, *args, **kwargs):
+        return self
+
+    def limit(self, *args, **kwargs):
+        return self
+
     def all(self):
         return self._rows
 
@@ -139,20 +163,45 @@ class _FakeQuery:
         return self._rows[0] if self._rows else 0
 
 
+class _FakeLanguage:
+    def __init__(self):
+        self.code = "en"
+        self.name = "English"
+        self.flag = "🇬🇧"
+        self.is_active = True
+        self.sort_order = 1
+
+
+class _FakeConfig:
+    support_whatsapp = "923001234567"
+    support_url = "https://t.me/smfshop"
+    support_username = "smfshop"
+    usd_to_pkr_rate = 280.0
+    mini_app_url = None
+
+
 class _FakeDB:
     def __init__(self, services, categories):
         self.services = services
         self.categories = categories
+        self.languages = [_FakeLanguage()]
+        self.config = _FakeConfig()
+        self.order_rows = []
         self._count_values = [2, 5]
 
-    def query(self, model):
-        name = getattr(model, "__name__", "")
-        if name == "BotConfig":
-            return _FakeQuery([SimpleNamespace(usd_to_pkr_rate=280.0)])
+    def query(self, *entities):
+        first = entities[0] if entities else None
+        name = getattr(first, "__name__", "") or getattr(getattr(first, "class_", None), "__name__", "")
         if name == "Category":
             return _FakeQuery(self.categories)
         if name == "Service":
             return _FakeQuery(self.services)
+        if name == "BotConfig":
+            return _FakeQuery([self.config] if self.config else [])
+        if name == "Language":
+            return _FakeQuery(self.languages)
+        if name == "Order":
+            return _FakeQuery(self.order_rows)
         value = self._count_values.pop(0) if self._count_values else 0
         return _FakeQuery([value])
 
@@ -203,6 +252,33 @@ class WebCatalogRouterTests(unittest.TestCase):
             {"customers": 2, "orders_completed": 5, "usd_to_pkr_rate": 280.0},
         )
 
+    def test_shop_endpoint_hides_fx_ticker(self):
+        response = self.client.get("/api/web/shop")
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["name"], "SMF SHOP")
+        self.assertEqual(body["whatsapp_url"], "https://wa.me/923001234567")
+        self.assertEqual(body["currency"]["code"], "USD")
+        self.assertNotIn("1 USD", str(body))
+        self.assertTrue(body["headline"])
+        self.assertNotIn("Unlock Premium Access", body["headline"])
+
+    def test_featured_splits_live_hot_best_seller(self):
+        response = self.client.get("/api/web/featured")
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertIn("live", body)
+        self.assertIn("hot", body)
+        self.assertIn("best_seller", body)
+        self.assertEqual(body["live"][0]["sku"], "CHATGPT-PLUS")
+        self.assertEqual(body["hot"][0]["sku"], "CHATGPT-PLUS")
+        self.assertEqual(body["best_seller"][0]["sell_price"], 4.5)
+
+    def test_shop_payload_uses_admin_whatsapp(self):
+        payload = shop_payload(self.db)
+        self.assertEqual(payload["languages"][0]["code"], "en")
+        self.assertEqual(payload["pkr_rate"], 280.0)
+
 
 class MiniAppUrlTests(unittest.TestCase):
     def test_vercel_sample_storefront_uses_hosted_mini(self):
@@ -246,24 +322,30 @@ class MiniAppDesignTests(unittest.TestCase):
     def test_live_mini_app_includes_designed_catalog(self):
         html = Path("static/mini-app/index.html").read_text(encoding="utf-8")
         css = Path("static/mini-app/styles.css").read_text(encoding="utf-8")
-        self.assertIn("Premium Digital Products", html)
-        self.assertIn("FLASH DEALS", html)
-        self.assertIn("Tools", html)
-        self.assertIn("Use Cases", html)
-        self.assertIn("Gifts", html)
-        self.assertIn("In stock only", html)
-        self.assertIn(".flash-bar", css)
-        self.assertIn(".category-pill", css)
-        self.assertIn(".product-card", css)
-        self.assertIn(".hidden", css)
-        self.assertIn("[hidden]", css)
-        self.assertIn('id="cart-overlay" hidden', html)
-        self.assertTrue(Path("static/mini-app/brand/smf-logo.svg").exists())
-        self.assertIn(".price-pkr", css)
-        self.assertIn(".stock-label", css)
         js = Path("static/mini-app/app.js").read_text(encoding="utf-8")
-        self.assertIn(">Stock<", js)
-        self.assertIn("price-pkr", js)
+        for needle in (
+            "SMF SHOP",
+            "Subscription",
+            "Freebies",
+            "Sign in",
+            "Explore Products",
+            "WhatsApp order",
+            "Live",
+            "Hot",
+            "Best Seller",
+            "btn-cart",
+            "btn-account",
+            "currency-btn",
+            "language-btn",
+            'id="cart-overlay" hidden',
+        ):
+            self.assertIn(needle, html)
+        self.assertNotIn("1 USD =", html)
+        self.assertNotIn("Unlock Premium Access", html)
+        self.assertIn("[hidden]", css)
+        self.assertTrue(Path("static/mini-app/brand/smf-logo.svg").exists())
+        self.assertIn("/api/web/featured", js)
+        self.assertIn("/api/web/shop", js)
 
 
 if __name__ == "__main__":

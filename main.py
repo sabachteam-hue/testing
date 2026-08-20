@@ -134,6 +134,9 @@ async def telegram_webhook(request: Request):
     return PlainTextResponse("ok")
 @app.api_route("/mini", methods=["GET", "HEAD"])
 @app.api_route("/mini/", methods=["GET", "HEAD"])
+@app.get("/app", include_in_schema=False)
+@app.get("/app/", include_in_schema=False)
+@app.get("/shop", include_in_schema=False)
 def mini_shop():
     return FileResponse(
         "static/mini-app/index.html",
@@ -145,6 +148,11 @@ def mini_shop():
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
 @app.get("/")
-def root():
-    return {"status": "ok", "service": "smfshop"}
+def root(request: Request):
+    accept = (request.headers.get("accept") or "").lower()
+    if "text/html" in accept:
+        return mini_shop()
+    return {"status": "ok", "service": "smfshop", "mini_app": "/mini"}
