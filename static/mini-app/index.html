@@ -9,18 +9,19 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <link rel="stylesheet" href="/static/mini-app/styles.css?v=site3">
+  <link rel="stylesheet" href="/static/mini-app/styles.css?v=site4">
 </head>
 <body>
   <div class="bg" aria-hidden="true"></div>
 
   <header class="topbar">
     <div class="topbar-row brand-row">
-      <a class="brand" href="#/" id="brand-home">
+      <a class="brand" href="/mini" id="brand-home">
         <img class="brand-mark" src="/static/mini-app/brand/smf-logo.svg" width="40" height="40" alt="">
         <span class="brand-name">SMF SHOP</span>
       </a>
       <nav class="nav-links" aria-label="Shop">
+        <a class="nav-link" href="/mini" id="nav-home">Home</a>
         <a class="nav-link" href="#/subscription" id="nav-subscription">Subscription</a>
         <a class="nav-link" href="#/freebies" id="nav-freebies">Freebies</a>
         <a class="nav-link nav-signin" href="#/signup" id="btn-signin">Sign up</a>
@@ -33,11 +34,15 @@
       </label>
       <div class="tool-cluster">
         <div class="dropdown" id="currency-dd">
-          <button type="button" class="chip" id="currency-btn" aria-haspopup="listbox" aria-expanded="false">🇺🇸 USD ($)</button>
+          <button type="button" class="chip" id="currency-btn" aria-haspopup="listbox" aria-expanded="false">
+            <img class="flag-img" src="/static/mini-app/flags/us.svg" alt="" width="20" height="14"> USD ($)
+          </button>
           <div class="menu" role="listbox" hidden></div>
         </div>
         <div class="dropdown" id="language-dd">
-          <button type="button" class="chip" id="language-btn" aria-haspopup="listbox" aria-expanded="false">🇬🇧 English</button>
+          <button type="button" class="chip" id="language-btn" aria-haspopup="listbox" aria-expanded="false">
+            <img class="flag-img" src="/static/mini-app/flags/gb.svg" alt="" width="20" height="14"> English
+          </button>
           <div class="menu" role="listbox" hidden></div>
         </div>
         <button type="button" class="icon-btn" id="btn-cart" aria-label="Cart">
@@ -60,7 +65,7 @@
           <p class="lede" id="shop-tagline">AI tools, streaming, and SaaS accounts — live stock, Telegram prices.</p>
           <div class="hero-actions">
             <a class="btn btn-primary" href="#catalog" id="btn-explore">Explore Products</a>
-            <a class="btn btn-whatsapp" id="btn-whatsapp" href="#" target="_blank" rel="noopener">WhatsApp order</a>
+            <a class="btn btn-whatsapp" id="btn-whatsapp" href="#" target="_blank" rel="noopener">Order on WhatsApp</a>
           </div>
         </div>
         <aside class="featured" aria-label="Featured products">
@@ -97,7 +102,7 @@
             <h2 id="catalog-title">Explore products</h2>
             <p class="muted" id="catalog-sub">Same catalog and prices as the Telegram shop.</p>
           </div>
-          <a class="btn btn-whatsapp" id="btn-whatsapp-catalog" href="#" target="_blank" rel="noopener">WhatsApp order</a>
+          <a class="btn btn-whatsapp" id="btn-whatsapp-catalog" href="#" target="_blank" rel="noopener">Order on WhatsApp</a>
         </div>
         <div class="pills" id="category-pills"></div>
         <div class="grid" id="product-grid"></div>
@@ -150,7 +155,7 @@
         <p class="form-error" id="checkout-error" hidden></p>
         <div class="hero-actions">
           <button type="submit" class="btn btn-primary">Place order</button>
-          <a class="btn btn-whatsapp" id="btn-whatsapp-checkout" href="#" target="_blank" rel="noopener">WhatsApp order</a>
+          <a class="btn btn-whatsapp" id="btn-whatsapp-checkout" href="#" target="_blank" rel="noopener">Order on WhatsApp</a>
         </div>
       </form>
     </section>
@@ -181,6 +186,6 @@
     </div>
   </div>
 
-  <script src="/static/mini-app/app.js?v=site3"></script>
+  <script src="/static/mini-app/app.js?v=site4"></script>
 </body>
 </html>

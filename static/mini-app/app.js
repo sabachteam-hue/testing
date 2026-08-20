@@ -11,6 +11,26 @@
     }
   }
 
+  const ACCENTS = ["violet", "teal", "green", "rose"];
+  const FLAG_ISO = {
+    USD: "us",
+    PKR: "pk",
+    EUR: "eu",
+    GBP: "gb",
+    INR: "in",
+    en: "gb",
+    es: "es",
+    ar: "sa",
+    hi: "in",
+    ru: "ru",
+    vi: "vn",
+    zh: "cn",
+    fa: "ir",
+    id: "id",
+    ko: "kr",
+    ur: "pk",
+  };
+
   const state = {
     shop: null,
     products: [],
@@ -21,6 +41,7 @@
     language: localStorage.getItem("smf_language") || "en",
     query: "",
     categoryId: null,
+    notes: {},
     cart: JSON.parse(localStorage.getItem("smf_cart") || "[]"),
     user: JSON.parse(localStorage.getItem("smf_user") || "null"),
     route: "/",
@@ -98,6 +119,21 @@
     return `$${value.toFixed(2)}`;
   }
 
+  function usdPrice(amount) {
+    return `$${Number(amount || 0).toFixed(2)}`;
+  }
+
+  function pkrPrice(amount) {
+    const rate = Number(state.shop && state.shop.pkr_rate) || 280;
+    const pkr = Number(amount || 0) * rate;
+    return `≈ Rs. ${pkr.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} PKR`;
+  }
+
+  function discountPercent(product) {
+    if (!product.original_price || product.original_price <= product.sell_price) return null;
+    return Math.round((1 - product.sell_price / product.original_price) * 100);
+  }
+
   function saveCart() {
     localStorage.setItem("smf_cart", JSON.stringify(state.cart));
     renderCartCount();
@@ -154,29 +190,34 @@
     document.querySelectorAll(".chip").forEach((btn) => btn.setAttribute("aria-expanded", "false"));
   }
 
-  function flagLabel(item) {
-    const flag = item.flag || "";
-    return `${flag ? `<span class="flag">${flag}</span>` : ""}${item.label || item.name || item.code}`;
+  function flagIso(item) {
+    return (item && (item.flag_iso || FLAG_ISO[item.code])) || "xx";
+  }
+
+  function flagMarkup(item) {
+    const iso = flagIso(item);
+    const label = escapeHtml(item.label || item.name || item.code || "");
+    return `<img class="flag-img" src="/static/mini-app/flags/${iso}.svg" alt="" width="20" height="14" onerror="this.onerror=null;this.src='/static/mini-app/flags/xx.svg'"> ${label}`;
   }
 
   function renderMenus() {
     const currencies = (state.shop && state.shop.currencies) || [
-      { code: "USD", label: "USD ($)", flag: "🇺🇸" },
-      { code: "PKR", label: "PKR (Rs.)", flag: "🇵🇰" },
+      { code: "USD", label: "USD ($)", flag_iso: "us" },
+      { code: "PKR", label: "PKR (Rs.)", flag_iso: "pk" },
     ];
     els.currencyMenu.innerHTML = currencies
-      .map((item) => `<button type="button" data-currency="${item.code}">${flagLabel(item)}</button>`)
+      .map((item) => `<button type="button" data-currency="${item.code}">${flagMarkup(item)}</button>`)
       .join("");
     const current = currencies.find((item) => item.code === state.currency) || currencies[0];
-    els.currencyBtn.innerHTML = flagLabel(current);
+    els.currencyBtn.innerHTML = flagMarkup(current);
 
-    const languages = (state.shop && state.shop.languages) || [{ code: "en", name: "English", flag: "🇬🇧" }];
+    const languages = (state.shop && state.shop.languages) || [{ code: "en", name: "English", flag_iso: "gb" }];
     els.languageMenu.innerHTML = languages
-      .map((item) => `<button type="button" data-language="${item.code}">${item.flag || ""} ${item.name}</button>`)
+      .map((item) => `<button type="button" data-language="${item.code}">${flagMarkup(item)}</button>`)
       .join("");
     const lang = languages.find((item) => item.code === state.language) || languages[0];
     state.language = lang.code;
-    els.languageBtn.innerHTML = `<span class="flag">${lang.flag || ""}</span>${lang.name}`;
+    els.languageBtn.innerHTML = flagMarkup(lang);
   }
 
   function renderChrome() {
@@ -187,7 +228,8 @@
       [els.whatsapp, els.whatsappCatalog, els.whatsappCheckout].forEach((node) => {
         if (!node) return;
         node.href = waHref();
-        node.style.display = state.shop.whatsapp_url || state.shop.support_url ? "" : "none";
+        node.hidden = false;
+        node.style.display = "";
       });
     }
     const signed = Boolean(state.user && state.user.email);
@@ -197,7 +239,11 @@
     document.getElementById("btn-account").href = "#/signup";
     document.querySelectorAll(".nav-link").forEach((link) => {
       const href = link.getAttribute("href") || "";
-      link.classList.toggle("active", href === `#${state.route}` || (state.route === "/" && href === "#/"));
+      const isHome = link.id === "nav-home" || href === "/mini" || href === "#/";
+      link.classList.toggle(
+        "active",
+        (isHome && state.route === "/") || href === `#${state.route}`
+      );
     });
     renderMenus();
     renderCartCount();
@@ -264,23 +310,57 @@
   function productCards(rows) {
     if (!rows.length) return `<p class="empty">Nothing here yet.</p>`;
     return rows
-      .map((product) => {
-        const tag = product.is_free
-          ? `<span class="tag live">Free</span>`
-          : product.in_stock
-            ? `<span class="tag live">Live</span>`
-            : `<span class="tag hot">Out</span>`;
-        const old = product.original_price ? `<span class="old">${formatPrice(product.original_price)}</span>` : "";
-        const icon = product.image_url
-          ? `<span class="item-icon"><img src="${product.image_url}" alt=""></span>`
-          : `<span class="item-icon">${product.emoji || "🛍️"}</span>`;
+      .map((product, index) => {
+        const accent = ACCENTS[index % ACCENTS.length];
+        const discount = discountPercent(product);
+        const noteOpen = Boolean(state.notes[product.sku]);
+        const sale = discount ? `<div class="card-badges"><span class="tag hot">Sale −${discount}%</span></div>` : "";
+        const logo = product.image_url
+          ? `<img class="product-logo" src="${escapeHtml(product.image_url)}" alt="">`
+          : `<div class="product-emoji" aria-hidden>${escapeHtml(product.emoji || "🛍️")}</div>`;
+        const warrantyBlock = product.warranty_label
+          ? `<div class="warranty-row"><span aria-hidden>🛡️</span> ${escapeHtml(product.warranty_label)}</div>`
+          : "";
+        const noteBtn = product.note
+          ? `<button type="button" class="view-note-btn" data-note="${escapeHtml(product.sku)}"><span aria-hidden>📋</span> ${noteOpen ? "HIDE NOTE" : "VIEW NOTE"}</button>`
+          : "";
+        const noteBody = noteOpen && product.note ? `<p class="card-desc">${escapeHtml(product.note)}</p>` : "";
+        const desc = product.description ? `<p class="card-desc">${escapeHtml(product.description)}</p>` : "";
         return `
-          <button type="button" class="card" data-sku="${product.sku}">
-            <div class="card-top">${icon}${tag}</div>
-            <h3>${escapeHtml(product.name)}</h3>
-            <div class="item-meta">${escapeHtml(product.category || "General")} · ${escapeHtml(product.stock_label)}</div>
-            <div class="price-row"><span class="price">${formatPrice(product.sell_price)}</span>${old}</div>
-          </button>
+          <article class="product-card accent-${accent}">
+            ${sale}
+            <div class="card-top-row">
+              <button type="button" class="card-info-btn" data-detail="${escapeHtml(product.sku)}" aria-label="About ${escapeHtml(product.name)}">i</button>
+              ${product.delivery_type === "manual" ? "" : '<span class="instant-badge"><span aria-hidden>⚡</span> Instant</span>'}
+            </div>
+            <div class="product-card-top">
+              ${logo}
+              <div>
+                <h3><a href="#product-${encodeURIComponent(product.sku)}" data-detail="${escapeHtml(product.sku)}">${escapeHtml(product.name)}</a></h3>
+                <div class="item-meta">${escapeHtml(product.category || "General")}</div>
+              </div>
+            </div>
+            ${desc}
+            ${warrantyBlock}
+            ${noteBtn}
+            ${noteBody}
+            <div class="card-meta-row">
+              <div class="price-block">
+                <span class="price-only">Only</span>
+                <span class="price-value">${usdPrice(product.sell_price)}</span>
+                ${discount ? `<div class="old">${usdPrice(product.original_price)}</div>` : ""}
+                <span class="price-pkr">${pkrPrice(product.sell_price)}</span>
+              </div>
+              <div class="stock-block" title="${escapeHtml(product.stock_label)}">
+                <span class="stock-icon" aria-hidden>📦</span>
+                <span class="stock-label">Stock</span>
+                <span class="stock-number${product.in_stock ? "" : " out"}">${product.stock != null ? escapeHtml(product.stock) : "—"}</span>
+              </div>
+            </div>
+            <button type="button" class="btn btn-add-cart" data-add="${escapeHtml(product.sku)}" ${product.in_stock ? "" : "disabled"}>
+              <span aria-hidden>🛒</span> Add to Cart
+            </button>
+          </article>
         `;
       })
       .join("");
@@ -335,7 +415,7 @@
       <p>${escapeHtml(product.description || product.note || "")}</p>
       <div class="hero-actions">
         <button type="button" class="btn btn-primary" id="sheet-add">Add to cart</button>
-        <a class="btn btn-whatsapp" target="_blank" rel="noopener" href="${waHref(product)}">WhatsApp order</a>
+        <a class="btn btn-whatsapp" target="_blank" rel="noopener" href="${waHref(product)}">Order on WhatsApp</a>
         <a class="btn btn-primary" href="#/checkout" id="sheet-checkout">Direct checkout</a>
       </div>
     `;
@@ -378,7 +458,7 @@
       <p><strong>Total ${formatPrice(cartTotal())}</strong></p>
       <div class="hero-actions">
         <a class="btn btn-primary" href="#/checkout" id="cart-checkout">Direct checkout</a>
-        <a class="btn btn-whatsapp" target="_blank" rel="noopener" href="${waHref()}">WhatsApp order</a>
+        <a class="btn btn-whatsapp" target="_blank" rel="noopener" href="${waHref()}">Order on WhatsApp</a>
       </div>
     `;
     document.getElementById("cart-checkout").onclick = () => closeSheet(els.cartSheet);
@@ -475,7 +555,7 @@
       ${pay.address ? `<p>Send to: <code>${escapeHtml(pay.address)}</code></p>` : ""}
       ${pay.instructions ? `<p class="muted">${escapeHtml(pay.instructions)}</p>` : ""}
       <div class="hero-actions">
-        <a class="btn btn-whatsapp" target="_blank" rel="noopener" href="${waHref()}">WhatsApp order</a>
+        <a class="btn btn-whatsapp" target="_blank" rel="noopener" href="${waHref()}">Order on WhatsApp</a>
         <a class="btn btn-primary" href="#/">Back to shop</a>
       </div>
     `;
@@ -566,6 +646,31 @@
         else saveCart();
         renderCartSheet();
       }
+      return;
+    }
+
+    const addBtn = event.target.closest("[data-add]");
+    if (addBtn) {
+      const product = productBySku(addBtn.dataset.add);
+      if (product) addToCart(product);
+      return;
+    }
+
+    const noteBtn = event.target.closest("[data-note]");
+    if (noteBtn) {
+      const sku = noteBtn.dataset.note;
+      state.notes[sku] = !state.notes[sku];
+      if (state.route === "/subscription") renderCollection("subscription");
+      else if (state.route === "/freebies") renderCollection("freebies");
+      else renderGrid();
+      return;
+    }
+
+    const detailBtn = event.target.closest("[data-detail]");
+    if (detailBtn) {
+      event.preventDefault();
+      const product = productBySku(detailBtn.dataset.detail);
+      if (product) renderProductSheet(product);
       return;
     }
 

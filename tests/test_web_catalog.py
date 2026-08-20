@@ -316,6 +316,9 @@ class WebCatalogRouterTests(unittest.TestCase):
         self.assertEqual(payload["languages"][0]["code"], "en")
         self.assertEqual(payload["pkr_rate"], 280.0)
         self.assertEqual(payload["currencies"][0]["flag"], "🇺🇸")
+        self.assertEqual(payload["currencies"][0]["flag_iso"], "us")
+        self.assertEqual(payload["currencies"][1]["flag_iso"], "pk")
+        self.assertEqual(payload["languages"][0]["flag_iso"], "gb")
         self.assertEqual(payload["currencies"][1]["flag"], "🇵🇰")
 
     def test_payment_methods_endpoint(self):
@@ -397,11 +400,12 @@ class MiniAppDesignTests(unittest.TestCase):
         js = Path("static/mini-app/app.js").read_text(encoding="utf-8")
         for needle in (
             "SMF SHOP",
+            "Home",
             "Subscription",
             "Freebies",
             "Sign up",
             "Explore Products",
-            "WhatsApp order",
+            "Order on WhatsApp",
             "Live",
             "Hot",
             "Best Seller",
@@ -414,22 +418,31 @@ class MiniAppDesignTests(unittest.TestCase):
             "#/freebies",
             "Place order",
             "Direct checkout",
-            "🇺🇸",
-            "🇬🇧",
+            "flag-img",
+            "/static/mini-app/flags/us.svg",
+            "/static/mini-app/flags/gb.svg",
         ):
             self.assertIn(needle, html)
         self.assertNotIn("1 USD =", html)
         self.assertNotIn("Unlock Premium Access", html)
         self.assertNotIn("from the Telegram bot to sign in automatically", html)
         self.assertIn("[hidden]", css)
+        self.assertIn(".product-card", css)
+        self.assertIn(".btn-add-cart", css)
         self.assertTrue(Path("static/mini-app/brand/smf-logo.svg").exists())
+        self.assertTrue(Path("static/mini-app/flags/pk.svg").exists())
+        self.assertTrue(Path("static/mini-app/flags/us.svg").exists())
+        self.assertTrue(Path("static/mini-app/flags/gb.svg").exists())
         self.assertIn("/api/web/featured", js)
         self.assertIn("/api/web/shop", js)
         self.assertIn("/api/web/checkout", js)
         self.assertIn("data-remove", js)
         self.assertIn("#/checkout", js)
         self.assertIn("Direct checkout", js)
-        self.assertIn("🇵🇰", js)
+        self.assertIn("Add to Cart", js)
+        self.assertIn("VIEW NOTE", js)
+        self.assertIn("product-card", js)
+        self.assertIn("flag-img", js)
 
 
 if __name__ == "__main__":
