@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from aiogram.types import Update
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 from admin.routes import router as admin_router
@@ -132,6 +132,12 @@ async def telegram_webhook(request: Request):
         # while Telegram sees a 200 so it stops retrying.
         logger.exception("Unhandled error while processing Telegram update: %s", data)
     return PlainTextResponse("ok")
+@app.get("/mini")
+@app.get("/mini/")
+def mini_shop():
+    return FileResponse("static/mini-app/index.html", media_type="text/html")
+
+
 @app.get("/health")
 def health():
     return {"status": "ok"}
