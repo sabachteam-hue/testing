@@ -87,20 +87,34 @@ async def setup_webhook_bot(webhook_url: str) -> tuple[Bot, Dispatcher]:
     return bot, dispatcher
 
 
-async def apply_mini_app_menu_button(bot: Bot) -> None:
-    """Keep the left input-bar menu as slash commands (/start, /catalog, …).
+async def apply_mini_app_menu_button(bot: Bot, chat_id: int | None = None) -> None:
+    """Clear the leftover Shop Mini App button and restore slash commands.
 
-    MenuButtonWebApp replaces that whole command list with a single Shop
-    button and also delayed /start (Telegram API call before the welcome).
-    Mini App stays on the inline / reply keyboards only.
+    MenuButtonWebApp was set as the *default* menu (no chat_id). Resetting only
+    this chat is not enough — Telegram Desktop keeps showing Shop and opens the
+    old Vercel Mini App. Settings URL changes never reached that button.
     """
-    from aiogram.types import MenuButtonCommands
+    from aiogram.types import MenuButtonCommands, MenuButtonDefault
 
-    try:
-        await bot.set_chat_menu_button(menu_button=MenuButtonCommands())
-        logging.info("Telegram chat menu restored to bot commands.")
-    except Exception:  # noqa: BLE001
-        logging.exception("Failed to restore Telegram command menu button")
+    buttons = (MenuButtonDefault(), MenuButtonCommands())
+    targets: list[int | None] = [None]
+    if chat_id is not None:
+        targets.append(int(chat_id))
+
+    for target in targets:
+        for button in buttons:
+            try:
+                await asyncio.wait_for(
+                    bot.set_chat_menu_button(chat_id=target, menu_button=button),
+                    timeout=4,
+                )
+            except Exception:  # noqa: BLE001
+                logging.exception(
+                    "Failed to set chat menu button chat_id=%s type=%s",
+                    target,
+                    type(button).__name__,
+                )
+    logging.info("Telegram chat menu restored to commands (cleared Shop WebApp).")
 
 
 async def register_bot_commands(bot: Bot) -> None:
