@@ -7,7 +7,7 @@
   <title>SMF Shop</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;600;700&family=Syne:wght@700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/mini-app/styles.css?v=design2">
+  <link rel="stylesheet" href="/static/mini-app/styles.css?v=design3">
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
@@ -20,14 +20,14 @@
             <span aria-hidden>💵</span> <span id="currency-label">USD ($)</span>
             <span class="chevron" aria-hidden>▾</span>
           </button>
-          <div class="dropdown-panel hidden" id="currency-panel" role="listbox"></div>
+          <div class="dropdown-panel" id="currency-panel" role="listbox" hidden></div>
         </div>
         <div class="dropdown" id="language-menu">
           <button type="button" class="dropdown-trigger" id="language-btn" aria-haspopup="listbox">
             <span id="language-flag" aria-hidden>🇬🇧</span> <span id="language-label">English</span>
             <span class="chevron" aria-hidden>▾</span>
           </button>
-          <div class="dropdown-panel hidden" id="language-panel" role="listbox"></div>
+          <div class="dropdown-panel" id="language-panel" role="listbox" hidden></div>
         </div>
         <button type="button" class="icon-btn theme-toggle" id="theme-toggle" aria-label="Switch theme">🌙</button>
         <span class="pill-badge trusted-badge"><span aria-hidden>🛡️</span> Trusted</span>
@@ -53,7 +53,7 @@
       <div class="header-actions">
         <button type="button" class="icon-btn cart-btn" id="cart-btn" aria-label="Cart">
           🛒
-          <span class="badge hidden" id="cart-count">0</span>
+          <span class="badge" id="cart-count" hidden>0</span>
         </button>
         <button type="button" class="icon-btn menu-toggle" id="menu-toggle" aria-label="Open menu">☰</button>
       </div>
@@ -130,7 +130,7 @@
         </div>
 
         <div class="product-grid" id="grid"></div>
-        <p class="empty hidden" id="empty">No products match this filter.</p>
+        <p class="empty" id="empty" hidden>No products match this filter.</p>
       </section>
 
       <div class="trust-badges" role="list" aria-label="Why shop with us">
@@ -217,14 +217,14 @@
     </footer>
   </div>
 
-  <div class="overlay hidden" id="cart-overlay">
+  <div class="overlay" id="cart-overlay" hidden>
     <div class="overlay-panel" id="cart-panel"></div>
   </div>
-  <div class="overlay hidden" id="detail-overlay">
+  <div class="overlay" id="detail-overlay" hidden>
     <div class="overlay-panel center" id="detail-panel"></div>
   </div>
 
-  <div class="chat-widget-panel hidden" id="chat-panel" role="dialog" aria-label="SMF Shop assistant">
+  <div class="chat-widget-panel" id="chat-panel" role="dialog" aria-label="SMF Shop assistant" hidden>
     <div class="chat-widget-header">
       <span>🤖 SMF Assistant</span>
       <button type="button" id="chat-close" aria-label="Close chat">✕</button>
@@ -235,6 +235,6 @@
   </div>
   <button type="button" class="chat-widget-btn" id="chat-btn" aria-label="Open assistant">💬</button>
 
-  <script src="/static/mini-app/app.js?v=design2"></script>
+  <script src="/static/mini-app/app.js?v=design3"></script>
 </body>
 </html>

@@ -1194,8 +1194,12 @@ img {
   box-shadow: var(--shadow);
   padding: 6px;
   z-index: 60;
-  display: grid;
+  display: none;
   gap: 2px;
+}
+
+.dropdown-panel.is-open {
+  display: grid;
 }
 
 .dropdown-item {
@@ -1826,6 +1830,7 @@ img {
 }
 
 .chat-widget-panel {
+  display: none;
   position: fixed;
   right: 18px;
   bottom: calc(84px + var(--safe-bottom));
@@ -1836,6 +1841,10 @@ img {
   border: 1px solid var(--border-strong);
   box-shadow: var(--shadow);
   overflow: hidden;
+}
+
+.chat-widget-panel.is-open {
+  display: block;
 }
 
 .chat-widget-header {
@@ -1883,6 +1892,11 @@ html.theme-light {
 }
 
 /* —— Mini App extras (overlays, stock chip, sale badge) —— */
+.hidden,
+[hidden] {
+  display: none !important;
+}
+
 .nav-desktop a.gift { color: #fb7185; }
 
 .filter-dropdown-row .stock-chip {
@@ -1896,10 +1910,17 @@ html.theme-light {
 }
 
 .overlay {
+  display: none;
   position: fixed;
   inset: 0;
   z-index: 70;
   background: rgba(5, 2, 16, 0.65);
+  pointer-events: none;
+}
+
+.overlay.is-open {
+  display: block;
+  pointer-events: auto;
 }
 
 .overlay-panel {

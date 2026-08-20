@@ -250,6 +250,9 @@ class MiniAppDesignTests(unittest.TestCase):
         self.assertIn(".flash-bar", css)
         self.assertIn(".category-pill", css)
         self.assertIn(".product-card", css)
+        self.assertIn(".hidden", css)
+        self.assertIn("[hidden]", css)
+        self.assertIn('id="cart-overlay" hidden', html)
         self.assertTrue(Path("static/mini-app/brand/smf-logo.svg").exists())
 
 
