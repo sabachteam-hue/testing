@@ -9,21 +9,21 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <link rel="stylesheet" href="/static/mini-app/styles.css">
+  <link rel="stylesheet" href="/static/mini-app/styles.css?v=site3">
 </head>
 <body>
   <div class="bg" aria-hidden="true"></div>
 
   <header class="topbar">
     <div class="topbar-row brand-row">
-      <a class="brand" href="/mini" data-nav="home" id="brand-home">
-        <img class="brand-mark" src="/static/mini-app/brand/smf-logo.svg" width="34" height="34" alt="">
+      <a class="brand" href="#/" id="brand-home">
+        <img class="brand-mark" src="/static/mini-app/brand/smf-logo.svg" width="40" height="40" alt="">
         <span class="brand-name">SMF SHOP</span>
       </a>
       <nav class="nav-links" aria-label="Shop">
-        <button type="button" class="nav-link" data-filter="subscription" id="nav-subscription">Subscription</button>
-        <button type="button" class="nav-link" data-filter="freebies" id="nav-freebies">Freebies</button>
-        <button type="button" class="nav-link nav-signin" id="btn-signin">Sign in</button>
+        <a class="nav-link" href="#/subscription" id="nav-subscription">Subscription</a>
+        <a class="nav-link" href="#/freebies" id="nav-freebies">Freebies</a>
+        <a class="nav-link nav-signin" href="#/signup" id="btn-signin">Sign up</a>
       </nav>
     </div>
     <div class="topbar-row tools-row">
@@ -33,7 +33,7 @@
       </label>
       <div class="tool-cluster">
         <div class="dropdown" id="currency-dd">
-          <button type="button" class="chip" id="currency-btn" aria-haspopup="listbox" aria-expanded="false">USD ($)</button>
+          <button type="button" class="chip" id="currency-btn" aria-haspopup="listbox" aria-expanded="false">🇺🇸 USD ($)</button>
           <div class="menu" role="listbox" hidden></div>
         </div>
         <div class="dropdown" id="language-dd">
@@ -44,61 +44,121 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 7h15l-1.4 8.2a2 2 0 0 1-2 1.8H9.2a2 2 0 0 1-2-1.7L5.2 4H3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="9" cy="20" r="1.2" fill="currentColor"/><circle cx="18" cy="20" r="1.2" fill="currentColor"/></svg>
           <span class="badge" id="cart-count" hidden>0</span>
         </button>
-        <button type="button" class="icon-btn avatar-btn" id="btn-account" aria-label="Account">
+        <a class="icon-btn avatar-btn" id="btn-account" href="#/signup" aria-label="Account">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm0 2c-4.2 0-8 2.1-8 5v1h16v-1c0-2.9-3.8-5-8-5Z" fill="currentColor"/></svg>
-        </button>
+        </a>
       </div>
     </div>
   </header>
 
   <main class="page">
-    <section class="hero">
-      <div class="hero-copy">
-        <p class="eyebrow" id="shop-eyebrow">Live premium catalog</p>
-        <h1 id="shop-headline">Premium plans, without the wait.</h1>
-        <p class="lede" id="shop-tagline">AI tools, streaming, and SaaS accounts — live stock, Telegram prices.</p>
-        <div class="hero-actions">
-          <a class="btn btn-primary" href="#catalog" id="btn-explore">Explore Products</a>
-          <a class="btn btn-whatsapp" id="btn-whatsapp" href="#" target="_blank" rel="noopener">WhatsApp order</a>
+    <section id="view-home">
+      <div class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow" id="shop-eyebrow">Live premium catalog</p>
+          <h1 id="shop-headline">Premium plans, without the wait.</h1>
+          <p class="lede" id="shop-tagline">AI tools, streaming, and SaaS accounts — live stock, Telegram prices.</p>
+          <div class="hero-actions">
+            <a class="btn btn-primary" href="#catalog" id="btn-explore">Explore Products</a>
+            <a class="btn btn-whatsapp" id="btn-whatsapp" href="#" target="_blank" rel="noopener">WhatsApp order</a>
+          </div>
         </div>
+        <aside class="featured" aria-label="Featured products">
+          <article class="rail" data-rail="live">
+            <header class="rail-head">
+              <span class="rail-dot live"></span>
+              <h2>Live</h2>
+              <span class="rail-count" id="live-count">0</span>
+            </header>
+            <div class="rail-list" id="rail-live"></div>
+          </article>
+          <article class="rail" data-rail="hot">
+            <header class="rail-head">
+              <span class="rail-dot hot"></span>
+              <h2>Hot</h2>
+              <span class="rail-count" id="hot-count">0</span>
+            </header>
+            <div class="rail-list" id="rail-hot"></div>
+          </article>
+          <article class="rail" data-rail="best_seller">
+            <header class="rail-head">
+              <span class="rail-dot best"></span>
+              <h2>Best Seller</h2>
+              <span class="rail-count" id="best-count">0</span>
+            </header>
+            <div class="rail-list" id="rail-best"></div>
+          </article>
+        </aside>
       </div>
-      <aside class="featured" aria-label="Featured products">
-        <article class="rail" data-rail="live">
-          <header class="rail-head">
-            <span class="rail-dot live"></span>
-            <h2>Live</h2>
-            <span class="rail-count" id="live-count">0</span>
-          </header>
-          <div class="rail-list" id="rail-live"></div>
-        </article>
-        <article class="rail" data-rail="hot">
-          <header class="rail-head">
-            <span class="rail-dot hot"></span>
-            <h2>Hot</h2>
-            <span class="rail-count" id="hot-count">0</span>
-          </header>
-          <div class="rail-list" id="rail-hot"></div>
-        </article>
-        <article class="rail" data-rail="best_seller">
-          <header class="rail-head">
-            <span class="rail-dot best"></span>
-            <h2>Best Seller</h2>
-            <span class="rail-count" id="best-count">0</span>
-          </header>
-          <div class="rail-list" id="rail-best"></div>
-        </article>
-      </aside>
+
+      <section class="catalog" id="catalog">
+        <div class="catalog-head">
+          <div>
+            <h2 id="catalog-title">Explore products</h2>
+            <p class="muted" id="catalog-sub">Same catalog and prices as the Telegram shop.</p>
+          </div>
+          <a class="btn btn-whatsapp" id="btn-whatsapp-catalog" href="#" target="_blank" rel="noopener">WhatsApp order</a>
+        </div>
+        <div class="pills" id="category-pills"></div>
+        <div class="grid" id="product-grid"></div>
+      </section>
     </section>
 
-    <section class="catalog" id="catalog">
-      <div class="catalog-head">
-        <div>
-          <h2 id="catalog-title">Explore products</h2>
-          <p class="muted" id="catalog-sub">Same catalog and prices as the Telegram shop.</p>
-        </div>
+    <section id="view-collection" hidden>
+      <p class="eyebrow" id="collection-eyebrow">Catalog</p>
+      <h1 id="collection-title">Subscription</h1>
+      <p class="lede" id="collection-sub">Paid plans and premium accounts.</p>
+      <div class="grid" id="collection-grid"></div>
+    </section>
+
+    <section id="view-auth" hidden>
+      <div class="auth-card">
+        <p class="eyebrow">Account</p>
+        <h1 id="auth-title">Create your SMF SHOP account</h1>
+        <p class="lede">Sign up with email — no Telegram login.</p>
+        <form id="signup-form" class="form">
+          <label>Full name<input name="name" autocomplete="name" placeholder="Your name" required></label>
+          <label>Email<input name="email" type="email" autocomplete="email" placeholder="you@email.com" required></label>
+          <label>Password<input name="password" type="password" autocomplete="new-password" minlength="6" required></label>
+          <label>Confirm password<input name="confirm" type="password" autocomplete="new-password" minlength="6" required></label>
+          <p class="form-error" id="signup-error" hidden></p>
+          <button type="submit" class="btn btn-primary">Sign up</button>
+        </form>
+        <p class="muted auth-switch">Already have an account? <button type="button" class="linkish" id="show-login">Log in</button></p>
+        <button type="button" class="btn btn-whatsapp" id="btn-logout" hidden>Log out</button>
+        <form id="login-form" class="form" hidden>
+          <label>Email<input name="email" type="email" autocomplete="email" required></label>
+          <label>Password<input name="password" type="password" autocomplete="current-password" required></label>
+          <p class="form-error" id="login-error" hidden></p>
+          <button type="submit" class="btn btn-primary">Log in</button>
+        </form>
       </div>
-      <div class="pills" id="category-pills"></div>
-      <div class="grid" id="product-grid"></div>
+    </section>
+
+    <section id="view-checkout" hidden>
+      <p class="eyebrow">Checkout</p>
+      <h1>Direct checkout</h1>
+      <p class="lede">Choose a payment method. Same products and prices as Telegram.</p>
+      <div id="checkout-items"></div>
+      <form id="checkout-form" class="form">
+        <label>Full name<input name="name" id="checkout-name" autocomplete="name" required></label>
+        <label>Email<input name="email" id="checkout-email" type="email" autocomplete="email" required></label>
+        <fieldset>
+          <legend>Payment method</legend>
+          <div id="payment-methods" class="pay-list"></div>
+        </fieldset>
+        <p class="form-error" id="checkout-error" hidden></p>
+        <div class="hero-actions">
+          <button type="submit" class="btn btn-primary">Place order</button>
+          <a class="btn btn-whatsapp" id="btn-whatsapp-checkout" href="#" target="_blank" rel="noopener">WhatsApp order</a>
+        </div>
+      </form>
+    </section>
+
+    <section id="view-order" hidden>
+      <p class="eyebrow">Order placed</p>
+      <h1 id="order-title">Thank you</h1>
+      <div id="order-body"></div>
     </section>
   </main>
 
@@ -121,14 +181,6 @@
     </div>
   </div>
 
-  <div class="sheet" id="account-sheet" hidden>
-    <div class="sheet-card">
-      <button type="button" class="sheet-close" data-close="account" aria-label="Close">×</button>
-      <h2 id="account-title">Account</h2>
-      <div id="account-body"></div>
-    </div>
-  </div>
-
-  <script src="/static/mini-app/app.js"></script>
+  <script src="/static/mini-app/app.js?v=site3"></script>
 </body>
 </html>

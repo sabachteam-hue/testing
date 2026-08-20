@@ -180,6 +180,21 @@ class _FakeConfig:
     mini_app_url = None
 
 
+class _FakePaymentMethod:
+    def __init__(self):
+        self.id = 1
+        self.name = "PayFast"
+        self.code = "PAYFAST"
+        self.method_type = "auto"
+        self.network = None
+        self.address = None
+        self.icon = "💳"
+        self.image_path = None
+        self.instructions = "Pay with PayFast"
+        self.is_active = True
+        self.sort_order = 1
+
+
 class _FakeDB:
     def __init__(self, services, categories):
         self.services = services
@@ -187,7 +202,25 @@ class _FakeDB:
         self.languages = [_FakeLanguage()]
         self.config = _FakeConfig()
         self.order_rows = []
+        self.users = []
+        self.methods = [_FakePaymentMethod()]
         self._count_values = [2, 5]
+
+    def add(self, obj):
+        self.users.append(obj)
+
+    def commit(self):
+        return None
+
+    def flush(self):
+        return None
+
+    def refresh(self, obj):
+        if getattr(obj, "id", None) is None:
+            obj.id = 1
+
+    def rollback(self):
+        return None
 
     def query(self, *entities):
         first = entities[0] if entities else None
@@ -202,6 +235,10 @@ class _FakeDB:
             return _FakeQuery(self.languages)
         if name == "Order":
             return _FakeQuery(self.order_rows)
+        if name == "User":
+            return _FakeQuery(self.users)
+        if name == "PaymentMethod":
+            return _FakeQuery(self.methods)
         value = self._count_values.pop(0) if self._count_values else 0
         return _FakeQuery([value])
 
@@ -278,6 +315,41 @@ class WebCatalogRouterTests(unittest.TestCase):
         payload = shop_payload(self.db)
         self.assertEqual(payload["languages"][0]["code"], "en")
         self.assertEqual(payload["pkr_rate"], 280.0)
+        self.assertEqual(payload["currencies"][0]["flag"], "🇺🇸")
+        self.assertEqual(payload["currencies"][1]["flag"], "🇵🇰")
+
+    def test_payment_methods_endpoint(self):
+        response = self.client.get("/api/web/payment-methods")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()[0]["code"], "PAYFAST")
+
+    @patch("api.web.reserve_stock")
+    def test_checkout_creates_pending_order(self, _reserve):
+        response = self.client.post(
+            "/api/web/checkout",
+            json={
+                "email": "buyer@example.com",
+                "name": "Buyer",
+                "payment_method": "PAYFAST",
+                "items": [{"sku": "CHATGPT-PLUS", "qty": 1}],
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertTrue(body["ok"])
+        self.assertTrue(body["order_code"].startswith("SMM-"))
+        self.assertEqual(body["payment_method"]["code"], "PAYFAST")
+
+    def test_signup_creates_email_account(self):
+        response = self.client.post(
+            "/api/web/signup",
+            json={"name": "Ayesha", "email": "ayesha@example.com", "password": "secret1"},
+        )
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertTrue(body["ok"])
+        self.assertEqual(body["user"]["email"], "ayesha@example.com")
+        self.assertEqual(body["user"]["name"], "Ayesha")
 
 
 class MiniAppUrlTests(unittest.TestCase):
@@ -327,25 +399,37 @@ class MiniAppDesignTests(unittest.TestCase):
             "SMF SHOP",
             "Subscription",
             "Freebies",
-            "Sign in",
+            "Sign up",
             "Explore Products",
             "WhatsApp order",
             "Live",
             "Hot",
             "Best Seller",
             "btn-cart",
-            "btn-account",
             "currency-btn",
             "language-btn",
             'id="cart-overlay" hidden',
+            'id="signup-form"',
+            "#/subscription",
+            "#/freebies",
+            "Place order",
+            "Direct checkout",
+            "🇺🇸",
+            "🇬🇧",
         ):
             self.assertIn(needle, html)
         self.assertNotIn("1 USD =", html)
         self.assertNotIn("Unlock Premium Access", html)
+        self.assertNotIn("from the Telegram bot to sign in automatically", html)
         self.assertIn("[hidden]", css)
         self.assertTrue(Path("static/mini-app/brand/smf-logo.svg").exists())
         self.assertIn("/api/web/featured", js)
         self.assertIn("/api/web/shop", js)
+        self.assertIn("/api/web/checkout", js)
+        self.assertIn("data-remove", js)
+        self.assertIn("#/checkout", js)
+        self.assertIn("Direct checkout", js)
+        self.assertIn("🇵🇰", js)
 
 
 if __name__ == "__main__":

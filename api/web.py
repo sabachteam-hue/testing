@@ -1,14 +1,18 @@
-"""Public read-only catalog for the Telegram Mini App / storefront.
+"""Public catalog + Mini App checkout for the Telegram shop / website.
 
-  GET /api/web/shop
-  GET /api/web/featured
-  GET /api/web/categories
-  GET /api/web/products?category_id=&q=
-  GET /api/web/products/{sku}
-  GET /api/web/stats
+  GET  /api/web/shop
+  GET  /api/web/featured
+  GET  /api/web/categories
+  GET  /api/web/products?category_id=&q=
+  GET  /api/web/products/{sku}
+  GET  /api/web/stats
+  GET  /api/web/payment-methods
+  POST /api/web/signup
+  POST /api/web/login
+  POST /api/web/checkout
+  GET  /api/web/orders/{code}
 
-Same products/categories the Telegram bot and admin panel already use.
-Prices are the admin sell_price shown in Telegram. No login or checkout here.
+Prices are the admin sell_price shown in Telegram.
 """
 
 from __future__ import annotations
@@ -20,6 +24,7 @@ from datetime import datetime
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from pydantic import BaseModel, Field
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, joinedload, selectinload
 
@@ -27,14 +32,17 @@ from database.models import (
     BotConfig,
     Category,
     Order,
+    PaymentMethod,
     ProductSale,
     Service,
     User,
     get_active_languages,
+    get_active_payment_methods,
     get_db,
 )
-from utils.helpers import get_mini_app_url, get_public_base_url, parse_icon
+from utils.helpers import generate_order_code, get_mini_app_url, get_public_base_url, hash_secret, parse_icon
 from utils.stock_display import effective_available_qty
+from utils.stock_manager import InsufficientStockError, reserve_stock
 
 router = APIRouter(prefix="/api/web", tags=["web-catalog"])
 
@@ -284,10 +292,10 @@ def shop_payload(db: Session) -> dict:
         "whatsapp_url": whatsapp,
         "support_url": support_url,
         "support_username": username,
-        "currency": {"code": "USD", "symbol": "$", "label": "USD ($)"},
+        "currency": {"code": "USD", "symbol": "$", "label": "USD ($)", "flag": "🇺🇸"},
         "currencies": [
-            {"code": "USD", "symbol": "$", "label": "USD ($)"},
-            {"code": "PKR", "symbol": "Rs.", "label": "PKR (Rs.)"},
+            {"code": "USD", "symbol": "$", "label": "USD ($)", "flag": "🇺🇸"},
+            {"code": "PKR", "symbol": "Rs.", "label": "PKR (Rs.)", "flag": "🇵🇰"},
         ],
         "pkr_rate": pkr_rate,
         "languages": languages,
@@ -408,4 +416,204 @@ def shop_stats(db: Session = Depends(get_db)) -> dict:
         "customers": int(customers),
         "orders_completed": int(orders_completed),
         "usd_to_pkr_rate": rate,
+    }
+
+
+def payment_method_payload(method: PaymentMethod, request: Request | None = None) -> dict:
+    return {
+        "id": method.id,
+        "name": method.name,
+        "code": method.code,
+        "method_type": method.method_type,
+        "network": method.network,
+        "address": method.address,
+        "icon": _display_emoji(method.icon, "💳"),
+        "image_url": absolute_media_url(method.image_path, request),
+        "instructions": _plain_text(method.instructions) or None,
+    }
+
+
+def _web_telegram_id(email: str) -> str:
+    return f"web:{email.strip().lower()}"
+
+
+def _public_user(user: User) -> dict:
+    return {
+        "id": user.id,
+        "name": user.full_name or "",
+        "email": user.email or "",
+    }
+
+
+class SignupBody(BaseModel):
+    name: str = ""
+    email: str
+    password: str
+
+
+class LoginBody(BaseModel):
+    email: str
+    password: str
+
+
+class CheckoutItem(BaseModel):
+    sku: str
+    qty: int = Field(1, ge=1, le=100)
+
+
+class CheckoutBody(BaseModel):
+    email: str
+    name: str = ""
+    password: str | None = None
+    payment_method: str
+    items: list[CheckoutItem]
+
+
+def _get_or_create_web_user(db: Session, email: str, name: str = "", password: str | None = None) -> User:
+    clean_email = (email or "").strip().lower()
+    if not clean_email or "@" not in clean_email:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="A valid email is required")
+    user = db.query(User).filter(User.email == clean_email).first()
+    if user is None:
+        user = db.query(User).filter(User.telegram_id == _web_telegram_id(clean_email)).first()
+    if user is None:
+        user = User(
+            telegram_id=_web_telegram_id(clean_email),
+            username=clean_email.split("@")[0][:80],
+            full_name=(name or "").strip() or clean_email.split("@")[0],
+            email=clean_email,
+            password_hash=hash_secret(password) if password else None,
+            force_join_ok=True,
+        )
+        db.add(user)
+        db.flush()
+        return user
+    if name and not user.full_name:
+        user.full_name = name.strip()
+    if password and not user.password_hash:
+        user.password_hash = hash_secret(password)
+    if not user.email:
+        user.email = clean_email
+    return user
+
+
+@router.get("/payment-methods")
+def list_payment_methods(request: Request, db: Session = Depends(get_db)) -> list[dict]:
+    return [payment_method_payload(row, request) for row in get_active_payment_methods(db)]
+
+
+@router.post("/signup")
+def web_signup(body: SignupBody, db: Session = Depends(get_db)) -> dict:
+    email = body.email.strip().lower()
+    password = (body.password or "").strip()
+    if len(password) < 6:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Password must be at least 6 characters")
+    existing = db.query(User).filter(User.email == email).first()
+    if existing and existing.password_hash:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="An account with this email already exists")
+    user = _get_or_create_web_user(db, email, body.name, password)
+    user.password_hash = hash_secret(password)
+    db.commit()
+    db.refresh(user)
+    return {"ok": True, "user": _public_user(user)}
+
+
+@router.post("/login")
+def web_login(body: LoginBody, db: Session = Depends(get_db)) -> dict:
+    email = body.email.strip().lower()
+    user = db.query(User).filter(User.email == email).first()
+    if not user or not user.password_hash or user.password_hash != hash_secret(body.password):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Email or password is incorrect")
+    if user.is_banned:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This account is banned")
+    return {"ok": True, "user": _public_user(user)}
+
+
+@router.post("/checkout")
+def web_checkout(body: CheckoutBody, db: Session = Depends(get_db)) -> dict:
+    if not body.items:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cart is empty")
+    method = (
+        db.query(PaymentMethod)
+        .filter(PaymentMethod.is_active.is_(True), PaymentMethod.code == body.payment_method)
+        .first()
+    )
+    if not method:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Choose a valid payment method")
+    user = _get_or_create_web_user(db, body.email, body.name, body.password)
+    created: list[dict] = []
+    try:
+        for item in body.items:
+            service = (
+                _active_products_query(db)
+                .filter(Service.sku == item.sku)
+                .first()
+            )
+            if not service:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Product not found: {item.sku}")
+            unit = float(service.sell_price or 0)
+            total = unit * item.qty
+            reserve_stock(db, service.id, item.qty)
+            order = Order(
+                order_code=generate_order_code(db),
+                user_id=user.id,
+                service_id=service.id,
+                link="web_mini_app_order",
+                quantity=item.qty,
+                amount_usdt=total,
+                status="pending",
+                order_type="manual",
+                payment_method=method.code,
+                customer_email=user.email,
+                note=f"Web Mini App checkout via {method.name}",
+            )
+            db.add(order)
+            db.flush()
+            created.append(
+                {
+                    "order_code": order.order_code,
+                    "sku": service.sku,
+                    "name": _plain_text(service.name) or service.name,
+                    "qty": item.qty,
+                    "amount": total,
+                    "status": order.status,
+                }
+            )
+    except InsufficientStockError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    db.commit()
+    return {
+        "ok": True,
+        "order_code": created[0]["order_code"],
+        "orders": created,
+        "total": sum(row["amount"] for row in created),
+        "payment_method": payment_method_payload(method),
+        "user": _public_user(user),
+    }
+
+
+@router.get("/orders/{code}")
+def get_web_order(code: str, db: Session = Depends(get_db)) -> dict:
+    order = db.query(Order).filter(Order.order_code == code).first()
+    if not order:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
+    service = order.service
+    method = (
+        db.query(PaymentMethod).filter(PaymentMethod.code == (order.payment_method or "")).first()
+        if order.payment_method
+        else None
+    )
+    return {
+        "order_code": order.order_code,
+        "status": order.status,
+        "qty": order.quantity,
+        "amount": float(order.amount_usdt or 0),
+        "payment_method": order.payment_method,
+        "product": (_plain_text(service.name) if service else None) or None,
+        "sku": service.sku if service else None,
+        "instructions": _plain_text(method.instructions) if method else None,
+        "pay_to": method.address if method else None,
+        "method_name": method.name if method else order.payment_method,
+        "network": method.network if method else None,
     }

@@ -102,7 +102,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"] if _cors_origins == "*" else _cors_origins,
     allow_credentials=False,
-    allow_methods=["GET", "OPTIONS"],
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
 app.mount("/admin/static", StaticFiles(directory="admin/static"), name="admin-static")
