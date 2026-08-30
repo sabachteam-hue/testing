@@ -253,29 +253,6 @@
     const count = state.cart.reduce((sum, row) => sum + row.qty, 0);
     els.cartCount.hidden = count === 0;
     els.cartCount.textContent = String(count);
-
-    // Badge bounce animation
-    if (count > 0 && document.getElementById("btn-cart")) {
-      const cartBtn = document.getElementById("btn-cart");
-      cartBtn.classList.remove("badge-bounce-anim");
-      void cartBtn.offsetWidth; // trigger reflow
-      cartBtn.classList.add("badge-bounce-anim");
-      setTimeout(() => cartBtn.classList.remove("badge-bounce-anim"), 300);
-    }
-  }
-
-  function showToast(message) {
-    const container = document.getElementById("toast-container");
-    if (!container) return;
-    const toast = document.createElement("div");
-    toast.className = "toast";
-    toast.textContent = message;
-    container.appendChild(toast);
-
-    setTimeout(() => {
-      toast.classList.add("toast-out");
-      setTimeout(() => toast.remove(), 250);
-    }, 2500);
   }
 
   function escapeHtml(value) {
