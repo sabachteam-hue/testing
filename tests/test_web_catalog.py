@@ -440,7 +440,7 @@ class MiniAppDesignTests(unittest.TestCase):
         self.assertIn("#/checkout", js)
         self.assertIn("Direct checkout", js)
         self.assertIn("Add to Cart", js)
-        self.assertIn("VIEW NOTE", js)
+        self.assertIn("VIEW DESCRIPTION", js)
         self.assertIn("product-card", js)
         self.assertIn("flag-img", js)
 

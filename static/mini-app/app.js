@@ -321,16 +321,36 @@
         const warrantyBlock = product.warranty_label
           ? `<div class="warranty-row"><span aria-hidden>🛡️</span> ${escapeHtml(product.warranty_label)}</div>`
           : "";
-        const noteBtn = product.note
-          ? `<button type="button" class="view-note-btn" data-note="${escapeHtml(product.sku)}"><span aria-hidden>📋</span> ${noteOpen ? "HIDE NOTE" : "VIEW NOTE"}</button>`
+        const noteBtn = (product.description || product.note)
+          ? `<button type="button" class="view-note-btn" data-detail="${escapeHtml(product.sku)}"><span aria-hidden>📋</span> VIEW DESCRIPTION</button>`
           : "";
-        const noteBody = noteOpen && product.note ? `<p class="card-desc">${escapeHtml(product.note)}</p>` : "";
-        const desc = product.description ? `<p class="card-desc">${escapeHtml(product.description)}</p>` : "";
+
+        const popoverFields = [];
+        popoverFields.push('<div class="popover-row"><span class="popover-label">Price</span><span class="popover-val">' + usdPrice(product.sell_price) + '</span></div>');
+        if (product.min_qty || product.max_qty) {
+          const min = product.min_qty || 1;
+          const max = product.max_qty || 1;
+          const qLimit = (min === max && min === 1) ? "1" : (min + " to " + max);
+          popoverFields.push('<div class="popover-row"><span class="popover-label">Quantity</span><span class="popover-val">' + qLimit + '</span></div>');
+        }
+        if (product.delivery_type) {
+          popoverFields.push('<div class="popover-row"><span class="popover-label">Delivery</span><span class="popover-val">' + escapeHtml(product.delivery_type) + '</span></div>');
+        }
+        if (product.warranty_label) {
+          popoverFields.push('<div class="popover-row"><span class="popover-label">Warranty</span><span class="popover-val">' + escapeHtml(product.warranty_label) + '</span></div>');
+        }
+        popoverFields.push('<div class="popover-row"><span class="popover-label">Availability</span><span class="popover-val">' + escapeHtml(product.stock_label) + (product.stock != null ? ' (' + product.stock + ')' : '') + '</span></div>');
+
+        const popoverHtml = '<div class="quick-details-popover" id="popover-' + escapeHtml(product.sku) + '" hidden><div class="popover-title">Product Details</div><div class="popover-table">' + popoverFields.join('') + '</div></div>';
+
         return `
           <article class="product-card accent-${accent}">
             ${sale}
             <div class="card-top-row">
-              <button type="button" class="card-info-btn" data-detail="${escapeHtml(product.sku)}" aria-label="About ${escapeHtml(product.name)}">i</button>
+              <div style="position: relative; display: inline-block;">
+                <button type="button" class="card-info-btn" data-info="${escapeHtml(product.sku)}" aria-label="About ${escapeHtml(product.name)}">i</button>
+                ${popoverHtml}
+              </div>
               ${product.delivery_type === "manual" ? "" : '<span class="instant-badge"><span aria-hidden>⚡</span> Instant</span>'}
             </div>
             <div class="product-card-top">
@@ -340,10 +360,8 @@
                 <div class="item-meta">${escapeHtml(product.category || "General")}</div>
               </div>
             </div>
-            ${desc}
             ${warrantyBlock}
             ${noteBtn}
-            ${noteBody}
             <div class="card-meta-row">
               <div class="price-block">
                 <span class="price-only">Only</span>
@@ -404,29 +422,14 @@
   }
 
   function renderProductSheet(product) {
-    const old = product.original_price ? `<span class="old">${formatPrice(product.original_price)}</span>` : "";
     els.productBody.innerHTML = `
-      <div class="item-icon" style="width:56px;height:56px;font-size:26px">${
-        product.image_url ? `<img src="${product.image_url}" alt="">` : product.emoji || "🛍️"
+      <div class="item-icon" style="width:100%;height:140px;font-size:40px;object-fit:cover;border-radius:12px;display:grid;place-items:center;background:#1c1730;overflow:hidden;margin-bottom:16px;">${
+        product.image_url ? `<img src="${escapeHtml(product.image_url)}" style="width:100%;height:100%;object-fit:cover;" alt="">` : product.emoji || "🛍️"
       }</div>
-      <h2>${escapeHtml(product.name)}</h2>
-      <p class="muted">${escapeHtml(product.category || "General")} · ${escapeHtml(product.stock_label)}</p>
-      <div class="price-row"><span class="price">${formatPrice(product.sell_price)}</span>${old}</div>
-      <p>${escapeHtml(product.description || product.note || "")}</p>
-      <div class="hero-actions">
-        <button type="button" class="btn btn-primary" id="sheet-add">Add to cart</button>
-        <a class="btn btn-whatsapp" target="_blank" rel="noopener" href="${waHref(product)}">Order on WhatsApp</a>
-        <a class="btn btn-primary" href="#/checkout" id="sheet-checkout">Direct checkout</a>
-      </div>
+      <h2 style="margin-top:16px;">${escapeHtml(product.name)}</h2>
+      <h3 style="margin-top:20px;font-size:14px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;">BEFORE YOU ORDER</h3>
+      <div class="product-description-text" style="white-space: pre-wrap; margin-top:8px; line-height: 1.5;">${escapeHtml(product.description || product.note || "")}</div>
     `;
-    document.getElementById("sheet-add").onclick = () => {
-      addToCart(product);
-      closeSheet(els.productSheet);
-    };
-    document.getElementById("sheet-checkout").onclick = () => {
-      addToCart(product);
-      closeSheet(els.productSheet);
-    };
     openSheet(els.productSheet);
   }
 
@@ -652,17 +655,10 @@
     const addBtn = event.target.closest("[data-add]");
     if (addBtn) {
       const product = productBySku(addBtn.dataset.add);
-      if (product) addToCart(product);
-      return;
-    }
-
-    const noteBtn = event.target.closest("[data-note]");
-    if (noteBtn) {
-      const sku = noteBtn.dataset.note;
-      state.notes[sku] = !state.notes[sku];
-      if (state.route === "/subscription") renderCollection("subscription");
-      else if (state.route === "/freebies") renderCollection("freebies");
-      else renderGrid();
+      if (product) {
+        addToCart(product);
+        renderCartSheet();
+      }
       return;
     }
 
@@ -689,10 +685,35 @@
       return;
     }
 
+    const infoBtn = event.target.closest("[data-info]");
+    if (infoBtn) {
+      const popoverId = 'popover-' + infoBtn.dataset.info;
+      const targetPopover = document.getElementById(popoverId);
+      document.querySelectorAll('.quick-details-popover').forEach(p => {
+        if (p !== targetPopover) p.hidden = true;
+      });
+      if (targetPopover) {
+        targetPopover.hidden = !targetPopover.hidden;
+      }
+      return;
+    }
+
+    if (!event.target.closest("[data-info]") && !event.target.closest(".quick-details-popover")) {
+      document.querySelectorAll('.quick-details-popover').forEach(p => {
+        p.hidden = true;
+      });
+    }
+
     if (event.target.closest("[data-close]")) {
       closeSheet(event.target.closest(".sheet"));
     }
     if (!event.target.closest(".dropdown")) closeMenus();
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      document.querySelectorAll('.quick-details-popover').forEach(p => p.hidden = true);
+    }
   });
 
   document.getElementById("btn-cart").onclick = () => renderCartSheet();
