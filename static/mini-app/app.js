@@ -370,7 +370,7 @@
           <article class="product-card accent-${accent}">
             ${sale}
             <div class="card-top-row">
-              <div style="position: relative; display: inline-block;">
+              <div class="popover-container" style="position: relative; display: inline-block;" data-popover-hover="true">
                 <button type="button" class="card-info-btn" data-info="${escapeHtml(product.sku)}" aria-label="About ${escapeHtml(product.name)}">i</button>
                 ${popoverHtml}
               </div>
@@ -445,13 +445,16 @@
   }
 
   function renderProductSheet(product) {
+    const descText = product.description || product.note || "";
+    const displayDesc = descText ? `<div class="product-description-text" style="white-space: pre-wrap; margin-top:8px; line-height: 1.5;">${escapeHtml(descText)}</div>` : `<p class="muted" style="margin-top:8px;">No description available for this product.</p>`;
+
     els.productBody.innerHTML = `
       <div class="item-icon" style="width:100%;height:140px;font-size:40px;object-fit:cover;border-radius:12px;display:grid;place-items:center;background:#1c1730;overflow:hidden;margin-bottom:16px;">${
         product.image_url ? `<img src="${escapeHtml(product.image_url)}" style="width:100%;height:100%;object-fit:cover;" alt="">` : product.emoji || "🛍️"
       }</div>
       <h2 style="margin-top:16px;">${escapeHtml(product.name)}</h2>
       <h3 style="margin-top:20px;font-size:14px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;">BEFORE YOU ORDER</h3>
-      <div class="product-description-text" style="white-space: pre-wrap; margin-top:8px; line-height: 1.5;">${escapeHtml(product.description || product.note || "")}</div>
+      ${displayDesc}
     `;
     openSheet(els.productSheet);
   }
@@ -710,8 +713,9 @@
 
     const infoBtn = event.target.closest("[data-info]");
     if (infoBtn) {
-      const popoverId = 'popover-' + infoBtn.dataset.info;
-      const targetPopover = document.getElementById(popoverId);
+      // Find the specific popover next to THIS button to avoid duplicate ID issues
+      const targetPopover = infoBtn.parentElement.querySelector(".quick-details-popover");
+
       document.querySelectorAll('.quick-details-popover').forEach(p => {
         if (p !== targetPopover) p.hidden = true;
       });
