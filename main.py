@@ -25,6 +25,7 @@ from utils.background_tasks import (
     sync_provider_stock_job,
     verify_transactions_job,
 )
+from utils.canva_automation import canva_invite_job
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 WEBHOOK_PATH = "/telegram/webhook"
@@ -84,6 +85,7 @@ async def lifespan(app: FastAPI):
         asyncio.create_task(process_referral_payouts_job()),
         asyncio.create_task(expire_unpaid_checkouts_job()),
         asyncio.create_task(expire_active_sales_job()),
+        asyncio.create_task(canva_invite_job()),
     ]
 
     yield

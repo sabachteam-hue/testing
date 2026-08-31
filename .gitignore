@@ -11,3 +11,7 @@ venv/
 dist/
 build/
 *.egg-info/
+
+# Canva authenticated browser state (secret)
+canva-session.json
+/data/canva/

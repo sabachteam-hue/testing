@@ -18,3 +18,5 @@ Pillow
 openpyxl
 pypdf
 python-docx
+
+playwright==1.55.0
