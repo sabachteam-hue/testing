@@ -971,6 +971,15 @@ async def fulfill_provider_order(db, order: Order, service: Service) -> str:
     if fulfillment_type == "stock":
         return fulfill_stock_order(db, order, service)
 
+    if fulfillment_type == "canva":
+        if not (order.customer_email or "").strip():
+            order.status = "manual_pending"
+            order.note = "Canva automation requires customer email."
+            return "\n⚠️ Canva email is missing; admin review required."
+        order.status = "manual_pending"
+        order.note = "Paid — queued for automatic Canva Education email invitation."
+        return "\n\n⏳ Payment confirmed. Your Canva Education invitation will be sent automatically to your order email."
+
     provider = service.provider
     if fulfillment_type == "manual" or not provider or provider.type != "api" or not service.provider_service_id:
         return "\nDelivery: pending admin processing."
