@@ -1225,8 +1225,8 @@ async def create_service(
     db: Session = Depends(get_db),
 ):
     admin_required(request)
-    fulfillment_type = fulfillment_type if fulfillment_type in {"manual", "stock"} else "auto"
-    need_email = require_email.lower() == "true"
+    fulfillment_type = fulfillment_type if fulfillment_type in {"manual", "stock", "canva"} else "auto"
+    need_email = require_email.lower() == "true" or fulfillment_type == "canva"
     image_path = await save_icon_image(icon_image, SERVICE_UPLOAD_DIR, "svc")
     sku = make_manual_service_sku(name, db)
     warranty_value = warranty.strip() or None
@@ -1378,8 +1378,8 @@ async def edit_service(
     service.provider_service_id = new_psid
     service.sort_order = sort_order
     # min_qty / max_qty stay as already stored (defaults 1 / 10000) — not edited on this form.
-    service.fulfillment_type = fulfillment_type if fulfillment_type in {"manual", "stock"} else "auto"
-    service.require_email = require_email.lower() == "true"
+    service.fulfillment_type = fulfillment_type if fulfillment_type in {"manual", "stock", "canva"} else "auto"
+    service.require_email = require_email.lower() == "true" or service.fulfillment_type == "canva"
 
     # Same sync model as before (cost + markup), but editing sell price updates
     # the saved markup so the new price sticks on the next sync.
