@@ -1633,6 +1633,9 @@ def stock_edit_page(service_id: int, request: Request, db: Session = Depends(get
 async def add_stock_route(
     request: Request,
     service_id: int = Form(...),
+    stock_type: str = Form("account"),
+    quantity: int = Form(0),
+    is_unlimited: str = Form("false"),
     notes: str = Form(""),
     login_details: str = Form(""),
     bulk_file: UploadFile | None = File(None),
@@ -1641,25 +1644,38 @@ async def add_stock_route(
     admin_required(request)
     from utils.stock_file_import import extract_stock_lines_from_upload, merge_login_lines
 
+    stock_type = "quantity" if stock_type == "quantity" else "account"
+    unlimited = stock_type == "quantity" and is_unlimited.lower() in {"true", "1", "on", "yes"}
+
+    if stock_type == "account":
+        try:
+            file_lines = await extract_stock_lines_from_upload(bulk_file)
+        except ValueError as exc:
+            return redirect(f"/admin/stock/new?error={quote(str(exc))}")
+        lines = merge_login_lines(login_details, file_lines)
+        add_quantity = len(lines)
+        if add_quantity < 1:
+            return redirect(f"/admin/stock/new?error={quote('Add at least one account line or choose Quantity Stock.')}" )
+        details = "\n".join(lines)
+    else:
+        add_quantity = 0 if unlimited else max(int(quantity or 0), 0)
+        if not unlimited and add_quantity < 1:
+            return redirect(f"/admin/stock/new?error={quote('Quantity must be at least 1, or enable Unlimited Stock.')}" )
+        details = None
+
     try:
-        file_lines = await extract_stock_lines_from_upload(bulk_file)
+        stock = add_stock(
+            db, service_id, add_quantity, notes or None, details,
+            stock_type=stock_type, is_unlimited=unlimited,
+        )
     except ValueError as exc:
         return redirect(f"/admin/stock/new?error={quote(str(exc))}")
 
-    lines = merge_login_lines(login_details, file_lines)
-    quantity = len(lines)
-    if quantity < 1:
-        return redirect(
-            f"/admin/stock/new?error={quote('Add at least one account line (textarea or bulk import file). Quantity is set from the number of lines.')}"
-        )
-    try:
-        stock = add_stock(db, service_id, quantity, notes or None, "\n".join(lines))
-    except ValueError as exc:
-        return redirect(f"/admin/stock/new?error={quote(str(exc))}")
-    await notify_stock_added(stock.service, quantity)
-    return redirect(
-        f"/admin/stock?message={quote(f'Stock added ({quantity} line(s)). Notification sent.')}"
-    )
+    if unlimited:
+        return redirect(f"/admin/stock?message={quote('Unlimited quantity stock enabled.')}" )
+    await notify_stock_added(stock.service, add_quantity)
+    label = "account line(s)" if stock_type == "account" else "unit(s)"
+    return redirect(f"/admin/stock?message={quote(f'Stock added ({add_quantity} {label}). Notification sent.')}" )
 
 
 @router.post("/stock/update")
@@ -1743,6 +1759,8 @@ async def edit_stock_logins_route(
     lines = [line.strip() for line in (login_details or "").splitlines() if line.strip()]
     added = max(0, len(lines) - len(old_lines))
     cleaned = "\n".join(lines) if lines else None
+    stock.stock_type = "account"
+    stock.is_unlimited = False
     reserved = max(int(stock.reserved_qty or 0), 0)
     # 1 login/promo line = 1 stock unit (+ reserved holds).
     quantity = max(len(lines) + reserved, reserved)
