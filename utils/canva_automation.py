@@ -93,19 +93,39 @@ async def send_invite(email: str) -> tuple[bool, str]:
             if security:
                 return False, "AUTH_REQUIRED: Canva security verification required"
 
-            invite = await _first_visible(page, [
+            invite_selectors = [
+                ("role", ("button", "Invite students")),
                 ("role", ("button", "Invite for free")),
+                ("role", ("button", "Invite team members")),
                 ("role", ("button", "Invite")),
+                ("text", "Invite students"),
                 ("text", "Invite for free"),
-            ], timeout=7000)
+                ("text", "Invite team members"),
+            ]
+            invite = await _first_visible(page, invite_selectors, timeout=7000)
+
+            # CANVA_TEAM_URL may point to Settings/People while Canva exposes
+            # the Education invite CTA on the team Home page. Fall back to
+            # Canva Home using the same authenticated/team context.
             if not invite:
-                return False, "UI_ERROR: Invite button not found"
+                await page.goto("https://www.canva.com/", wait_until="domcontentloaded", timeout=60000)
+                await page.wait_for_timeout(2200)
+                current = page.url.lower()
+                if "login" in current or "signup" in current:
+                    return False, "AUTH_REQUIRED: Canva session expired"
+                invite = await _first_visible(page, invite_selectors, timeout=8000)
+
+            if not invite:
+                logger.warning("[CANVA] Invite CTA not found. url=%s title=%s", page.url, await page.title())
+                return False, "UI_ERROR: Invite students / Invite for free button not found"
             await invite.click()
+            await page.wait_for_timeout(900)
 
             email_box = await _first_visible(page, [
                 ("placeholder", "Email"), ("label", "Email"),
                 ("placeholder", "name or email"), ("placeholder", "email address"),
-            ], timeout=6000)
+                ("placeholder", "Enter email"), ("label", "Email address"),
+            ], timeout=7000)
             if not email_box:
                 return False, "UI_ERROR: invitation email field not found"
             await email_box.fill(email)
