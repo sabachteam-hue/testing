@@ -293,11 +293,17 @@ class Stock(Base):
     # Optional account/login inventory text for manual-fulfillment products
     # (e.g. "email:pass" list) so admin has it ready when completing an order.
     login_details: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Inventory mode: account = one deliverable line per unit; quantity = numeric inventory.
+    stock_type: Mapped[str] = mapped_column(String(20), default="account")
+    # Unlimited quantity stock never decreases; useful for automated services such as Canva invites.
+    is_unlimited: Mapped[bool] = mapped_column(Boolean, default=False)
 
     service: Mapped[Service] = relationship(back_populates="stock")
 
     @property
     def available_qty(self) -> int:
+        if getattr(self, "is_unlimited", False):
+            return 1_000_000_000
         return max(self.quantity - self.reserved_qty, 0)
 
 
