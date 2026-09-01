@@ -44,6 +44,8 @@ def effective_available_qty(service_or_stock) -> int:
     stock = getattr(service_or_stock, "stock", service_or_stock)
     if stock is None or not hasattr(stock, "available_qty"):
         return 0
+    if getattr(stock, "is_unlimited", False):
+        return 1_000_000_000
     available = int(stock.available_qty or 0)
     lines = login_detail_lines(stock)
     fulfillment = getattr(service_or_stock, "fulfillment_type", None)
@@ -60,6 +62,8 @@ def effective_available_qty(service_or_stock) -> int:
 def align_quantity_to_login_lines(stock) -> None:
     """Keep quantity consistent with remaining login accounts + reserved holds."""
     if stock is None:
+        return
+    if getattr(stock, "stock_type", "account") == "quantity":
         return
     lines = len(login_detail_lines(stock))
     reserved = max(int(stock.reserved_qty or 0), 0)

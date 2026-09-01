@@ -31,16 +31,33 @@ def _append_login_details(existing: str | None, addition: str | None) -> str | N
     return "\n".join(combined) if combined else None
 
 
-def add_stock(db: Session, service_id: int, quantity: int, notes: str | None = None, login_details: str | None = None) -> Stock:
-    if quantity <= 0:
+def add_stock(db: Session, service_id: int, quantity: int, notes: str | None = None, login_details: str | None = None, *, stock_type: str = "account", is_unlimited: bool = False) -> Stock:
+    if quantity <= 0 and not is_unlimited:
         raise ValueError("Quantity must be greater than zero")
     stock = get_or_create_stock(db, service_id)
-    stock.quantity += quantity
+    stock_type = "quantity" if stock_type == "quantity" else "account"
+    previous_type = getattr(stock, "stock_type", "account") or "account"
+    if previous_type != stock_type:
+        # Switching inventory modes starts the selected mode cleanly; do not mix
+        # numeric units with old account lines.
+        stock.quantity = 0
+        stock.reserved_qty = 0
+        stock.login_details = None
+    stock.stock_type = stock_type
+    stock.is_unlimited = bool(is_unlimited) if stock_type == "quantity" else False
+    if stock.is_unlimited:
+        stock.quantity = 0
+        stock.reserved_qty = 0
+    else:
+        stock.quantity += quantity
     stock.notes = notes
-    stock.login_details = _append_login_details(stock.login_details, login_details)
+    if stock_type == "account":
+        stock.login_details = _append_login_details(stock.login_details, login_details)
+    else:
+        stock.login_details = None
     stock.last_updated = datetime.utcnow()
     service = db.get(Service, service_id)
-    if service and stock.quantity > 0:
+    if service and (stock.quantity > 0 or stock.is_unlimited):
         service.is_active = True
     db.commit()
     db.refresh(stock)
@@ -135,14 +152,15 @@ def complete_reserved_stock(db: Session, service_id: int, quantity: int) -> Stoc
     stock = get_or_create_stock(db, service_id)
     if stock.reserved_qty < quantity:
         raise InsufficientStockError("Reserved quantity is lower than completion quantity")
-    stock.quantity = max(stock.quantity - quantity, 0)
+    if not getattr(stock, "is_unlimited", False):
+        stock.quantity = max(stock.quantity - quantity, 0)
     stock.reserved_qty = max(stock.reserved_qty - quantity, 0)
     stock.last_updated = datetime.utcnow()
     service = db.get(Service, service_id)
     # Stock-delivery products: keep quantity aligned to remaining login lines.
     if service and getattr(service, "fulfillment_type", None) == "stock":
         align_quantity_to_login_lines(stock)
-    if service and (stock.quantity <= 0 or (getattr(service, "fulfillment_type", None) == "stock" and not login_detail_lines(stock))):
+    if service and not getattr(stock, "is_unlimited", False) and (stock.quantity <= 0 or (getattr(service, "fulfillment_type", None) == "stock" and not login_detail_lines(stock))):
         service.is_active = False
     db.flush()
     return stock
