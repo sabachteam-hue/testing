@@ -15,6 +15,7 @@ from api.payfast import router as payfast_router
 from api.v1 import router as api_v1_router
 from api.web import cors_allow_origins, router as api_web_router
 from api.webhooks import router as api_webhooks_router
+from api.canva_worker import router as canva_worker_router
 from bot.bot_main import create_bot, setup_webhook_bot
 from database.models import init_db
 from utils.background_tasks import (
@@ -121,6 +122,7 @@ app.include_router(api_v1_router)
 app.include_router(api_web_router)
 app.include_router(docs_router)
 app.include_router(api_webhooks_router)
+app.include_router(canva_worker_router)
 app.include_router(payfast_router)
 @app.post(WEBHOOK_PATH)
 async def telegram_webhook(request: Request):
