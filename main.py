@@ -50,6 +50,13 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.info(f"Migration skip (payfast_reference, likely already applied): {e}")
     try:
+        from migrate_stock_modes import run as migrate_stock_modes
+
+        migrate_stock_modes()
+        logger.info("Stock mode migration ready.")
+    except Exception as e:
+        logger.info(f"Migration skip (stock modes, likely already applied): {e}")
+    try:
         conn = sqlite3.connect('/app/data/smm_reseller.db')
         cursor = conn.cursor()
         cursor.execute("ALTER TABLE announcements ADD COLUMN image_path TEXT")
