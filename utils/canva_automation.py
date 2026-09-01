@@ -25,6 +25,15 @@ def enabled() -> bool:
     return os.getenv("CANVA_AUTOMATION_ENABLED", "false").lower() in {"1", "true", "yes", "on"}
 
 
+def railway_worker_enabled() -> bool:
+    """Run Playwright on Railway only in legacy/default railway mode.
+
+    In local mode, canva_local_worker.py on Windows claims paid orders through
+    the private worker API instead.
+    """
+    return enabled() and (os.getenv("CANVA_AUTOMATION_MODE", "railway").strip().lower() != "local")
+
+
 def _session_path() -> Path:
     return Path(os.getenv("CANVA_SESSION_PATH", "/data/canva/session.json"))
 
@@ -186,7 +195,7 @@ async def send_invite(email: str) -> tuple[bool, str]:
 
 
 async def process_canva_orders_once() -> None:
-    if not enabled() or _LOCK.locked():
+    if not railway_worker_enabled() or _LOCK.locked():
         return
     async with _LOCK:
         db = SessionLocal()
