@@ -33,11 +33,11 @@
   <tbody>
     {% for stock in stocks %}
     <tr>
-      <td>{{ stock.service.name|admin_plain }}</td>
+      <td>{{ stock.service.name|admin_plain }}<br><span class="muted">{{ "Quantity" if stock.stock_type == "quantity" else "Account" }} stock</span></td>
       <td>{{ "🛠 Manual" if stock.service.fulfillment_type == "manual" else ("📦 Stock" if stock.service.fulfillment_type == "stock" else "⚡ Auto") }}</td>
-      <td>{{ stock.quantity }}</td>
-      <td>{{ stock.reserved_qty }}</td>
-      <td>{{ stock.available_qty }}</td>
+      <td>{% if stock.is_unlimited %}∞ Unlimited{% else %}{{ stock.quantity }}{% endif %}</td>
+      <td>{% if stock.is_unlimited %}—{% else %}{{ stock.reserved_qty }}{% endif %}</td>
+      <td>{% if stock.is_unlimited %}∞{% else %}{{ stock.available_qty }}{% endif %}</td>
       <td>{{ stock.low_stock_threshold }}</td>
       <td>{{ stock.last_updated }}</td>
       <td class="stock-notes-cell">{{ stock.notes or "-" }}</td>
@@ -49,10 +49,12 @@
         {% endif %}
       </td>
       <td class="stock-actions">
+        {% if stock.stock_type != "quantity" %}
         <textarea class="stock-logins-data" hidden>{{ stock.login_details or '' }}</textarea>
         <button type="button" class="secondary stock-view-btn"
           data-service-id="{{ stock.service_id }}"
           data-product="{{ stock.service.name|admin_plain|e }}">View stock</button>
+        {% endif %}
         <a class="btn secondary add-entry-btn" href="/admin/stock/{{ stock.service_id }}/edit">Edit</a>
       </td>
     </tr>
