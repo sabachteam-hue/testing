@@ -18,4 +18,6 @@ Pillow
 openpyxl
 pypdf
 python-docx
-
+bcrypt>=4.1.0
+argon2-cffi>=23.1.0
+redis>=5.0.0

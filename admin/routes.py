@@ -3,10 +3,24 @@ import os
 import re
 import shutil
 import html
+import secrets
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
 from urllib.parse import quote
+
+from utils.security import (
+    constant_time_compare,
+    is_production,
+    safe_upload_filename,
+    validate_image_upload,
+    verify_password,
+)
+from utils.rate_limiter import (
+    clear_failures,
+    is_locked_out,
+    record_failure_and_check_lockout,
+)
 
 from aiogram import Bot
 from aiogram.types import FSInputFile
@@ -172,20 +186,22 @@ CUSTOM_EMOJI_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 
 async def save_icon_image(icon_image: UploadFile | None, upload_dir: Path, prefix: str) -> str | None:
-    """Category/Service/PaymentMethod teeno ke liye same upload logic - ek
-    uploaded icon file ko disk par save kar ke uska web-relative path (jaise
-    "/admin/static/uploads/services/svc_20260710.png") return karta hai. Yeh
-    path hi bot ke catalog-image generator ke liye "real logo" ban jata hai."""
+    """Category/Service/PaymentMethod upload logic with security validation."""
     if not icon_image or not icon_image.filename:
         return None
-    suffix = Path(icon_image.filename).suffix.lower()
-    if suffix not in {".png", ".jpg", ".jpeg", ".webp", ".gif"}:
+    try:
+        content = await icon_image.read()
+        valid, err_msg = validate_image_upload(content, icon_image.filename)
+        if not valid:
+            logger.warning("Rejected invalid image upload '%s': %s", icon_image.filename, err_msg)
+            return None
+        safe_name = safe_upload_filename(prefix, icon_image.filename)
+        destination = upload_dir / safe_name
+        destination.write_bytes(content)
+        return f"/{destination.as_posix()}"
+    except Exception as exc:
+        logger.exception("Error saving uploaded image: %s", exc)
         return None
-    safe_name = f"{prefix}_{datetime.utcnow().strftime('%Y%m%d%H%M%S%f')}{suffix}"
-    destination = upload_dir / safe_name
-    with destination.open("wb") as buffer:
-        shutil.copyfileobj(icon_image.file, buffer)
-    return f"/{destination.as_posix()}"
 
 
 def _sidebar_badge_counts() -> dict:
@@ -266,7 +282,15 @@ def _mark_sidebar_seen(db: Session, field: str) -> None:
 
 
 def render(request: Request, template_name: str, context: dict | None = None, status_code: int = 200):
-    payload = {"request": request, "sidebar_counts": _sidebar_badge_counts(), **(context or {})}
+    if "csrf_token" not in request.session:
+        request.session["csrf_token"] = secrets.token_hex(32)
+    csrf_token = request.session["csrf_token"]
+    payload = {
+        "request": request,
+        "csrf_token": csrf_token,
+        "sidebar_counts": _sidebar_badge_counts(),
+        **(context or {}),
+    }
     return templates.TemplateResponse(request, template_name, payload, status_code=status_code)
 
 
@@ -315,12 +339,34 @@ def login_page(request: Request):
 
 
 @router.post("/login")
-def login(request: Request, username: str = Form(...), password: str = Form(...), db: Session = Depends(get_db)):
-    # Username is always "admin"; password comes from ADMIN_PASSWORD env var.
-    expected_user = "admin"
-    expected_password = os.getenv("ADMIN_PASSWORD", "admin123")
-    if username.strip() == expected_user and password == expected_password:
+async def login(request: Request, username: str = Form(...), password: str = Form(...), db: Session = Depends(get_db)):
+    client_ip = request.client.host if request.client else "unknown"
+    lockout_key = f"admin_login:{client_ip}"
+
+    locked, retry_after = await is_locked_out(lockout_key)
+    if locked:
+        return render(
+            request,
+            "login.html",
+            {"error": f"Too many failed attempts. Temporary lockout active. Try again in {retry_after} seconds."},
+            status_code=429,
+        )
+
+    expected_user = (os.getenv("ADMIN_USERNAME") or "admin").strip()
+    admin_hash = (os.getenv("ADMIN_PASSWORD_HASH") or "").strip()
+    admin_pass = (os.getenv("ADMIN_PASSWORD") or ("admin123" if not is_production() else "")).strip()
+
+    user_matches = constant_time_compare(username.strip(), expected_user)
+    pass_matches = False
+    if admin_hash:
+        pass_matches, _ = verify_password(password, admin_hash)
+    elif admin_pass:
+        pass_matches = constant_time_compare(password, admin_pass)
+
+    if user_matches and pass_matches:
+        await clear_failures(lockout_key)
         request.session["admin_logged_in"] = True
+        request.session["csrf_token"] = secrets.token_hex(32)
         _touch_admin_session(request)
         log_admin_action(
             db,
@@ -331,6 +377,10 @@ def login(request: Request, username: str = Form(...), password: str = Form(...)
         )
         db.commit()
         return redirect("/admin/dashboard")
+
+    locked, retry_after = await record_failure_and_check_lockout(
+        lockout_key, max_failures=5, window_seconds=600, lockout_seconds=900
+    )
     log_admin_action(
         db,
         action="admin.login.failed",
@@ -340,11 +390,24 @@ def login(request: Request, username: str = Form(...), password: str = Form(...)
         request=request,
     )
     db.commit()
+
+    if locked:
+        error_msg = f"Invalid credentials. Account locked out for {retry_after} seconds due to repeated failed attempts."
+        return render(request, "login.html", {"error": error_msg}, status_code=429)
     return render(request, "login.html", {"error": "Invalid admin credentials"}, status_code=401)
 
 
 @router.get("/logout")
-def logout(request: Request):
+def logout(request: Request, db: Session = Depends(get_db)):
+    if request.session.get("admin_logged_in"):
+        log_admin_action(
+            db,
+            action="admin.logout",
+            entity_type="admin_session",
+            entity_label="admin session",
+            request=request,
+        )
+        db.commit()
     request.session.clear()
     return redirect("/admin/login")
 

@@ -65,8 +65,15 @@ async def deliver_admin_panel_access(message: Message) -> None:
     finally:
         db.close()
 
-    username = "admin"
-    password = os.getenv("ADMIN_PASSWORD", "admin123")
+    username = (os.getenv("ADMIN_USERNAME") or "admin").strip()
+    admin_hash = (os.getenv("ADMIN_PASSWORD_HASH") or "").strip()
+    password = (os.getenv("ADMIN_PASSWORD") or "").strip()
+    if not password and admin_hash:
+        password_display = "(Configured via ADMIN_PASSWORD_HASH)"
+    elif not password:
+        password_display = "admin123 (Warning: default placeholder)"
+    else:
+        password_display = password
     url = admin_panel_url()
 
     if url:
@@ -75,7 +82,7 @@ async def deliver_admin_panel_access(message: Message) -> None:
             "",
             f"🔗 <b>URL:</b> <a href=\"{html.escape(url)}\">{html.escape(url)}</a>",
             f"👤 <b>Username:</b> <code>{html.escape(username)}</code>",
-            f"🔑 <b>Password:</b> <code>{html.escape(password)}</code>",
+            f"🔑 <b>Password:</b> <code>{html.escape(password_display)}</code>",
             "",
             "Link open karo → login karo → panel se changes manage karo.",
         ]

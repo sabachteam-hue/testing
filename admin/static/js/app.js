@@ -1,3 +1,43 @@
+// CSRF Protection: auto-inject CSRF token into all forms and state-changing fetch calls
+(function () {
+  const meta = document.querySelector('meta[name="csrf-token"]');
+  const csrfToken = meta ? meta.getAttribute("content") : "";
+
+  document.addEventListener("submit", (event) => {
+    const form = event.target;
+    if (form && (form.method || "").toLowerCase() === "post" && csrfToken) {
+      if (!form.querySelector('input[name="csrf_token"]')) {
+        const input = document.createElement("input");
+        input.type = "hidden";
+        input.name = "csrf_token";
+        input.value = csrfToken;
+        form.appendChild(input);
+      }
+    }
+  }, true);
+
+  if (window.fetch && csrfToken) {
+    const originalFetch = window.fetch;
+    window.fetch = function (resource, init) {
+      init = init || {};
+      const method = (init.method || "GET").toUpperCase();
+      if (["POST", "PUT", "PATCH", "DELETE"].includes(method)) {
+        init.headers = init.headers || {};
+        if (init.headers instanceof Headers) {
+          if (!init.headers.has("X-CSRF-Token")) {
+            init.headers.set("X-CSRF-Token", csrfToken);
+          }
+        } else if (Array.isArray(init.headers)) {
+          init.headers.push(["X-CSRF-Token", csrfToken]);
+        } else if (!init.headers["X-CSRF-Token"] && !init.headers["x-csrf-token"]) {
+          init.headers["X-CSRF-Token"] = csrfToken;
+        }
+      }
+      return originalFetch.apply(this, [resource, init]);
+    };
+  }
+})();
+
 document.addEventListener("submit", (event) => {
   const form = event.target;
   if (form.dataset.confirm && !window.confirm(form.dataset.confirm)) {

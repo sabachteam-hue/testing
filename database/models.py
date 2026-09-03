@@ -329,7 +329,7 @@ class User(Base):
     force_join_ok: Mapped[bool] = mapped_column(Boolean, default=False)
     # Mini App / website signup (not Telegram). telegram_id is still set to web:{email}.
     email: Mapped[str | None] = mapped_column(String(200), nullable=True, unique=True)
-    password_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     referrer: Mapped["User | None"] = relationship(remote_side="User.id")
     orders: Mapped[list["Order"]] = relationship(back_populates="user")
@@ -921,6 +921,21 @@ def run_light_migrations() -> None:
         if "reason" not in existing_columns:
             with engine.begin() as connection:
                 connection.execute(text("ALTER TABLE payment_verifications ADD COLUMN reason TEXT"))
+
+    if "announcements" in table_names:
+        existing_columns = {col["name"] for col in inspector.get_columns("announcements")}
+        if "image_path" not in existing_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE announcements ADD COLUMN image_path VARCHAR(500)"))
+
+    if "users" in table_names:
+        # Widen password_hash for Argon2id on Postgres
+        if engine.dialect.name.startswith("postgresql"):
+            try:
+                with engine.begin() as connection:
+                    connection.execute(text("ALTER TABLE users ALTER COLUMN password_hash TYPE VARCHAR(255)"))
+            except Exception:
+                pass
 
 
 def seed_defaults() -> None:

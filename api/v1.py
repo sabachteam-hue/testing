@@ -52,8 +52,10 @@ def service_payload(service: Service) -> dict:
 
 @router.post("/auth/verify")
 def verify_api_key(payload: VerifyRequest, db: Session = Depends(get_db)) -> dict:
+    from utils.security import constant_time_compare
+
     key = db.query(ApiKey).filter(ApiKey.api_key == payload.api_key, ApiKey.is_active.is_(True)).first()
-    if not key:
+    if not key or not constant_time_compare(key.api_key, payload.api_key) or (key.expires_at and key.expires_at < datetime.utcnow()):
         return {"valid": False}
     return {
         "valid": True,

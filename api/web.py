@@ -40,7 +40,9 @@ from database.models import (
     get_active_payment_methods,
     get_db,
 )
-from utils.helpers import generate_order_code, get_mini_app_url, get_public_base_url, hash_secret, parse_icon
+from utils.helpers import generate_order_code, get_mini_app_url, get_public_base_url, parse_icon
+from utils.rate_limiter import check_rate_limit
+from utils.security import hash_password, verify_password
 from utils.stock_display import effective_available_qty
 from utils.stock_manager import InsufficientStockError, reserve_stock
 
@@ -520,7 +522,7 @@ def _get_or_create_web_user(db: Session, email: str, name: str = "", password: s
             username=clean_email.split("@")[0][:80],
             full_name=(name or "").strip() or clean_email.split("@")[0],
             email=clean_email,
-            password_hash=hash_secret(password) if password else None,
+            password_hash=hash_password(password) if password else None,
             force_join_ok=True,
         )
         db.add(user)
@@ -529,7 +531,7 @@ def _get_or_create_web_user(db: Session, email: str, name: str = "", password: s
     if name and not user.full_name:
         user.full_name = name.strip()
     if password and not user.password_hash:
-        user.password_hash = hash_secret(password)
+        user.password_hash = hash_password(password)
     if not user.email:
         user.email = clean_email
     return user
@@ -541,7 +543,15 @@ def list_payment_methods(request: Request, db: Session = Depends(get_db)) -> lis
 
 
 @router.post("/signup")
-def web_signup(body: SignupBody, db: Session = Depends(get_db)) -> dict:
+async def web_signup(request: Request, body: SignupBody, db: Session = Depends(get_db)) -> dict:
+    client_ip = request.client.host if request.client else "unknown"
+    allowed, retry_after = await check_rate_limit(f"web_signup:{client_ip}", limit=5, window_seconds=60)
+    if not allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Too many signup attempts. Try again in {retry_after} seconds.",
+        )
+
     email = body.email.strip().lower()
     password = (body.password or "").strip()
     if len(password) < 6:
@@ -550,20 +560,35 @@ def web_signup(body: SignupBody, db: Session = Depends(get_db)) -> dict:
     if existing and existing.password_hash:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="An account with this email already exists")
     user = _get_or_create_web_user(db, email, body.name, password)
-    user.password_hash = hash_secret(password)
+    user.password_hash = hash_password(password)
     db.commit()
     db.refresh(user)
     return {"ok": True, "user": _public_user(user)}
 
 
 @router.post("/login")
-def web_login(body: LoginBody, db: Session = Depends(get_db)) -> dict:
+async def web_login(request: Request, body: LoginBody, db: Session = Depends(get_db)) -> dict:
+    client_ip = request.client.host if request.client else "unknown"
+    allowed, retry_after = await check_rate_limit(f"web_login:{client_ip}", limit=10, window_seconds=60)
+    if not allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Too many login attempts. Try again in {retry_after} seconds.",
+        )
+
     email = body.email.strip().lower()
     user = db.query(User).filter(User.email == email).first()
-    if not user or not user.password_hash or user.password_hash != hash_secret(body.password):
+    is_valid, needs_rehash = verify_password(body.password, user.password_hash if user else None)
+    if not user or not is_valid:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Email or password is incorrect")
     if user.is_banned:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This account is banned")
+
+    # Transparent migration: upgrade legacy SHA-256 password hash to modern algorithm
+    if needs_rehash:
+        user.password_hash = hash_password(body.password)
+        db.commit()
+
     return {"ok": True, "user": _public_user(user)}
 
 

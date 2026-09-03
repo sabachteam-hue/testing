@@ -393,8 +393,8 @@ def generate_public_key(db: Session) -> str:
 
 
 def hash_secret(secret: str) -> str:
-    pepper = os.getenv("SECRET_KEY", "dev-secret")
-    return hashlib.sha256(f"{secret}:{pepper}".encode("utf-8")).hexdigest()
+    from utils.security import hash_password
+    return hash_password(secret)
 
 
 def generate_api_credentials(db: Session, user: User, rate_limit: int | None = None) -> tuple[ApiKey, str]:
