@@ -295,7 +295,7 @@ class Stock(Base):
     login_details: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Inventory mode: account = one deliverable line per unit; quantity = numeric inventory.
     stock_type: Mapped[str] = mapped_column(String(20), default="account")
-    # Unlimited quantity stock never decreases; useful for automated services such as Canva invites.
+    # Unlimited quantity stock never decreases.
     is_unlimited: Mapped[bool] = mapped_column(Boolean, default=False)
 
     service: Mapped[Service] = relationship(back_populates="stock")
