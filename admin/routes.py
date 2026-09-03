@@ -21,6 +21,7 @@ from utils.rate_limiter import (
     is_locked_out,
     record_failure_and_check_lockout,
 )
+from utils.storage import get_upload_dir, resolve_file_path
 
 from aiogram import Bot
 from aiogram.types import FSInputFile
@@ -175,18 +176,14 @@ def admin_icon_fallback(value) -> str:
 templates.env.filters["admin_icon_id"] = admin_icon_id
 templates.env.filters["admin_icon_fb"] = admin_icon_fallback
 
-CATEGORY_UPLOAD_DIR = Path("admin/static/uploads/categories")
-CATEGORY_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-SERVICE_UPLOAD_DIR = Path("admin/static/uploads/services")
-SERVICE_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-PAYMENT_METHOD_UPLOAD_DIR = Path("admin/static/uploads/payment_methods")
-PAYMENT_METHOD_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-CUSTOM_EMOJI_UPLOAD_DIR = Path("admin/static/uploads/custom_emoji")
-CUSTOM_EMOJI_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+CATEGORY_UPLOAD_DIR = get_upload_dir("categories")
+SERVICE_UPLOAD_DIR = get_upload_dir("services")
+PAYMENT_METHOD_UPLOAD_DIR = get_upload_dir("payment_methods")
+CUSTOM_EMOJI_UPLOAD_DIR = get_upload_dir("custom_emoji")
 
 
 async def save_icon_image(icon_image: UploadFile | None, upload_dir: Path, prefix: str) -> str | None:
-    """Category/Service/PaymentMethod upload logic with security validation."""
+    """Category/Service/PaymentMethod upload logic with persistent storage and security validation."""
     if not icon_image or not icon_image.filename:
         return None
     try:
@@ -198,7 +195,8 @@ async def save_icon_image(icon_image: UploadFile | None, upload_dir: Path, prefi
         safe_name = safe_upload_filename(prefix, icon_image.filename)
         destination = upload_dir / safe_name
         destination.write_bytes(content)
-        return f"/{destination.as_posix()}"
+        category_name = upload_dir.name
+        return f"/admin/static/uploads/{category_name}/{safe_name}"
     except Exception as exc:
         logger.exception("Error saving uploaded image: %s", exc)
         return None
@@ -3056,8 +3054,7 @@ async def create_announcement(
     admin_required(request)
     image_path = None
     if image and image.filename:
-        upload_dir = Path("admin/static/uploads/announcements")
-        upload_dir.mkdir(parents=True, exist_ok=True)
+        upload_dir = get_upload_dir("announcements")
         saved = await save_icon_image(image, upload_dir, "ann")
         if saved:
             # store path relative for FSInputFile (no leading slash)
@@ -3079,10 +3076,11 @@ async def send_announcement(announcement_id: int, request: Request, db: Session 
     bot = Bot(token=os.getenv("BOT_TOKEN"))
     users = db.query(User).all()
     sent_count = 0
+    resolved_photo = resolve_file_path(announcement.image_path) if announcement.image_path else None
     for user in users:
         try:
-            if announcement.image_path:
-                photo = FSInputFile(announcement.image_path)
+            if resolved_photo and resolved_photo.is_file():
+                photo = FSInputFile(str(resolved_photo))
                 await bot.send_photo(
                     chat_id=user.telegram_id,
                     photo=photo,

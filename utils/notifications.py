@@ -670,10 +670,13 @@ async def post_to_notify_channel(
     try:
         if photo_path:
             from aiogram.types import FSInputFile
+            from utils.storage import resolve_file_path
 
+            resolved = resolve_file_path(photo_path)
+            target_path = str(resolved) if resolved else photo_path
             await bot.send_photo(
                 chat_id=chat_id,
-                photo=FSInputFile(photo_path),
+                photo=FSInputFile(target_path),
                 caption=text,
                 reply_markup=reply_markup,
                 parse_mode=parse_mode,
@@ -716,10 +719,13 @@ async def post_to_notify_group(
     try:
         if photo_path:
             from aiogram.types import FSInputFile
+            from utils.storage import resolve_file_path
 
+            resolved = resolve_file_path(photo_path)
+            target_path = str(resolved) if resolved else photo_path
             await bot.send_photo(
                 chat_id=chat_id,
-                photo=FSInputFile(photo_path),
+                photo=FSInputFile(target_path),
                 caption=text,
                 reply_markup=reply_markup,
                 parse_mode=parse_mode,

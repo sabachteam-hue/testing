@@ -3,6 +3,8 @@ import logging
 import os
 import secrets
 from contextlib import asynccontextmanager
+from pathlib import Path
+
 from aiogram.types import Update
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,7 +20,14 @@ from api.v1 import router as api_v1_router
 from api.web import cors_allow_origins, router as api_web_router
 from api.webhooks import router as api_webhooks_router
 from bot.bot_main import create_bot, setup_webhook_bot
-from database.models import SessionLocal, Service, init_db
+from database.models import (
+    DATABASE_URL,
+    SessionLocal,
+    Service,
+    check_db_health,
+    init_db,
+    verify_database_connection,
+)
 from utils.background_tasks import (
     check_order_status_job,
     expire_active_sales_job,
@@ -27,12 +36,14 @@ from utils.background_tasks import (
     sync_provider_stock_job,
     verify_transactions_job,
 )
+from utils.legacy_db import check_and_report_legacy_sqlite
 from utils.security import (
     SensitiveDataFilter,
     constant_time_compare,
     is_production,
     validate_environment_secrets,
 )
+from utils.storage import get_storage_root, init_storage
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -63,6 +74,17 @@ async def lifespan(app: FastAPI):
     # Validate critical secrets on startup (fails in production if insecure)
     validate_environment_secrets()
 
+    # Initialize persistent storage directories
+    init_storage()
+
+    # Verify primary database connectivity on startup
+    verify_database_connection()
+
+    # Safe detection and reporting of legacy SQLite files (zero deletion)
+    is_pg = not DATABASE_URL.startswith("sqlite")
+    check_and_report_legacy_sqlite(is_postgres_active=is_pg)
+
+    # Initialize schema, additive idempotent migrations, and default seeds
     init_db()
 
     # Legacy cleanup: products that used the removed Canva auto-invite mode
@@ -75,19 +97,6 @@ async def lifespan(app: FastAPI):
         db.commit()
     finally:
         db.close()
-
-    try:
-        from migrate_payfast_reference import run as migrate_payfast_reference
-        migrate_payfast_reference()
-    except Exception as e:
-        logger.info(f"Migration skip (payfast_reference, likely already applied): {e}")
-
-    try:
-        from migrate_stock_modes import run as migrate_stock_modes
-        migrate_stock_modes()
-        logger.info("Stock mode migration ready.")
-    except Exception as e:
-        logger.info(f"Migration skip (stock modes, likely already applied): {e}")
 
     webhook_url = get_webhook_url()
     if webhook_url:
@@ -227,6 +236,38 @@ async def generic_exception_handler(request: Request, exc: Exception):
     )
 
 
+class PersistentStaticFiles(StaticFiles):
+    """Serve uploaded static files from Railway persistent volume, falling back to repository static files."""
+    def __init__(self, persistent_dir: Path, repo_dir: Path, **kwargs):
+        persistent_dir.mkdir(parents=True, exist_ok=True)
+        super().__init__(directory=str(persistent_dir), **kwargs)
+        self.repo_dir = repo_dir
+        self.persistent_dir = persistent_dir
+
+    def lookup_path(self, path: str):
+        full_path, stat_result = super().lookup_path(path)
+        if stat_result:
+            return full_path, stat_result
+        if self.repo_dir and self.repo_dir.is_dir():
+            try:
+                candidate = (self.repo_dir / path).resolve()
+                # Prevent directory traversal
+                if str(candidate).startswith(str(self.repo_dir.resolve())) and candidate.is_file():
+                    return str(candidate), candidate.stat()
+            except Exception:
+                pass
+        return full_path, stat_result
+
+
+# Mount persistent uploads before general static mounts
+_persistent_uploads = get_storage_root() / "uploads"
+_persistent_uploads.mkdir(parents=True, exist_ok=True)
+
+app.mount(
+    "/admin/static/uploads",
+    PersistentStaticFiles(persistent_dir=_persistent_uploads, repo_dir=Path("admin/static/uploads")),
+    name="admin-uploads",
+)
 app.mount("/admin/static", StaticFiles(directory="admin/static"), name="admin-static")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
@@ -271,7 +312,14 @@ def mini_shop():
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    db_ok = check_db_health()
+    if not db_ok:
+        status_code = 503
+        return JSONResponse(
+            status_code=status_code,
+            content={"status": "unhealthy", "database": "disconnected"},
+        )
+    return {"status": "ok", "database": "connected"}
 
 
 @app.get("/")

@@ -9,8 +9,11 @@ class InsufficientStockError(ValueError):
     pass
 
 
-def get_or_create_stock(db: Session, service_id: int) -> Stock:
-    stock = db.query(Stock).filter(Stock.service_id == service_id).first()
+def get_or_create_stock(db: Session, service_id: int, *, for_update: bool = False) -> Stock:
+    query = db.query(Stock).filter(Stock.service_id == service_id)
+    if for_update and db.bind and db.bind.dialect.name.startswith("postgresql"):
+        query = query.with_for_update()
+    stock = query.first()
     if stock:
         return stock
     stock = Stock(service_id=service_id, quantity=0, reserved_qty=0)
@@ -107,7 +110,7 @@ def consume_stock_account(db: Session, service_id: int, quantity: int) -> list[s
     caller iss case me manual fulfillment par fall back kare."""
     from utils.stock_display import align_quantity_to_login_lines
 
-    stock = get_or_create_stock(db, service_id)
+    stock = get_or_create_stock(db, service_id, for_update=True)
     lines = [line for line in (stock.login_details or "").splitlines() if line.strip()]
     if len(lines) < quantity:
         # Heal stale quantity so catalog stops showing In Stock with 0 accounts.
@@ -127,7 +130,7 @@ def consume_stock_account(db: Session, service_id: int, quantity: int) -> list[s
 def reserve_stock(db: Session, service_id: int, quantity: int) -> Stock:
     from utils.stock_display import effective_available_qty
 
-    stock = get_or_create_stock(db, service_id)
+    stock = get_or_create_stock(db, service_id, for_update=True)
     service = db.get(Service, service_id)
     available = effective_available_qty(service) if service is not None else int(stock.available_qty or 0)
     if available < quantity:
@@ -139,7 +142,7 @@ def reserve_stock(db: Session, service_id: int, quantity: int) -> Stock:
 
 
 def release_stock(db: Session, service_id: int, quantity: int) -> Stock:
-    stock = get_or_create_stock(db, service_id)
+    stock = get_or_create_stock(db, service_id, for_update=True)
     stock.reserved_qty = max(stock.reserved_qty - quantity, 0)
     stock.last_updated = datetime.utcnow()
     db.flush()
@@ -149,7 +152,7 @@ def release_stock(db: Session, service_id: int, quantity: int) -> Stock:
 def complete_reserved_stock(db: Session, service_id: int, quantity: int) -> Stock:
     from utils.stock_display import align_quantity_to_login_lines, login_detail_lines
 
-    stock = get_or_create_stock(db, service_id)
+    stock = get_or_create_stock(db, service_id, for_update=True)
     if stock.reserved_qty < quantity:
         raise InsufficientStockError("Reserved quantity is lower than completion quantity")
     if not getattr(stock, "is_unlimited", False):

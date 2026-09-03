@@ -1,3 +1,4 @@
+import logging
 import os
 from datetime import datetime
 
@@ -10,41 +11,120 @@ from sqlalchemy import (
     String,
     Text,
     create_engine,
+    text,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker
 
+logger = logging.getLogger(__name__)
+
+
+def is_production() -> bool:
+    env = (os.getenv("DEPLOYMENT_ENV") or os.getenv("ENVIRONMENT") or "").strip().lower()
+    if env == "production":
+        return True
+    if os.getenv("RAILWAY_ENVIRONMENT") and os.getenv("RAILWAY_ENVIRONMENT") != "development":
+        return True
+    return False
+
+
+def sanitize_database_url(url: str | None) -> str:
+    """Mask database password from URL for safe logging."""
+    if not url:
+        return "None"
+    try:
+        from urllib.parse import urlsplit, urlunsplit
+        parts = urlsplit(url)
+        if parts.password:
+            netloc = parts.netloc.replace(f":{parts.password}@", ":***@")
+            return urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment))
+    except Exception:
+        pass
+    return url
+
 
 def build_database_url() -> str:
-    database_url = os.getenv("DATABASE_URL")
-    if database_url:
-        if database_url.startswith(("http://", "https://")):
-            return fallback_database_url()
-        if database_url.startswith("postgres://"):
-            return database_url.replace("postgres://", "postgresql+psycopg://", 1)
-        if database_url.startswith("postgresql://"):
-            return database_url.replace("postgresql://", "postgresql+psycopg://", 1)
-        if database_url.startswith(("sqlite://", "postgresql+psycopg://")):
-            return database_url
-        if "://" not in database_url:
-            return f"sqlite:///{database_url}"
-        return fallback_database_url()
+    raw = (os.getenv("DATABASE_URL") or "").strip()
+    prod = is_production()
 
+    if prod:
+        if not raw:
+            raise RuntimeError(
+                "FATAL: In production (DEPLOYMENT_ENV=production), a valid PostgreSQL DATABASE_URL is required. "
+                "SQLite fallback is disabled to prevent accidental data loss. Please configure PostgreSQL in Railway."
+            )
+        if raw.startswith("sqlite"):
+            raise RuntimeError(
+                "FATAL: SQLite is not supported in production (DEPLOYMENT_ENV=production). "
+                "Please configure a persistent PostgreSQL database on Railway."
+            )
+
+    if raw:
+        if raw.startswith("postgres://"):
+            return raw.replace("postgres://", "postgresql+psycopg://", 1)
+        if raw.startswith("postgresql://"):
+            return raw.replace("postgresql://", "postgresql+psycopg://", 1)
+        if raw.startswith(("sqlite://", "postgresql+psycopg://")):
+            return raw
+        if "://" not in raw:
+            return f"sqlite:///{raw}"
+        return raw
+
+    # Safe local development fallback
     return fallback_database_url()
 
 
 def fallback_database_url() -> str:
-    volume_path = os.getenv("RAILWAY_VOLUME_MOUNT_PATH")
-    if volume_path:
-        return f"sqlite:///{volume_path.rstrip('/')}/smm_reseller.db"
-
     return "sqlite:///./smm_reseller.db"
 
 
 DATABASE_URL = build_database_url()
 
-connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
-engine = create_engine(DATABASE_URL, connect_args=connect_args, pool_pre_ping=True)
+if DATABASE_URL.startswith("sqlite"):
+    connect_args = {"check_same_thread": False}
+    engine = create_engine(
+        DATABASE_URL,
+        connect_args=connect_args,
+        pool_pre_ping=True,
+    )
+else:
+    connect_args = {}
+    engine = create_engine(
+        DATABASE_URL,
+        connect_args=connect_args,
+        pool_pre_ping=True,
+        pool_recycle=300,
+        pool_size=10,
+        max_overflow=20,
+        pool_timeout=30,
+    )
+
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
+
+
+def verify_database_connection(target_engine=None) -> None:
+    """Verify primary database connectivity on startup."""
+    e = target_engine or engine
+    try:
+        with e.connect() as conn:
+            conn.execute(text("SELECT 1"))
+    except Exception as exc:
+        sanitized = sanitize_database_url(str(e.url))
+        if is_production():
+            raise RuntimeError(
+                f"FATAL: Failed to connect to primary database at {sanitized}: {exc}. "
+                "Startup aborted to prevent running with an unreachable database."
+            ) from exc
+        logger.warning("Database connection check failed (%s): %s", sanitized, exc)
+
+
+def check_db_health() -> bool:
+    """Lightweight database ping for the /health endpoint."""
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        return True
+    except Exception:
+        return False
 
 
 class Base(DeclarativeBase):
@@ -645,6 +725,9 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 
@@ -674,23 +757,26 @@ def init_db() -> None:
 
 
 def run_light_migrations() -> None:
-    """Add newly introduced columns to already-existing tables (no-op if already present)."""
+    """Add newly introduced columns and indexes to already-existing tables (idempotent, additive only)."""
     from sqlalchemy import inspect, text
 
     inspector = inspect(engine)
-    table_names = inspector.get_table_names()
+    table_names = set(inspector.get_table_names())
 
     if "services" in table_names:
         existing_columns = {col["name"] for col in inspector.get_columns("services")}
         if "is_deleted" not in existing_columns:
             with engine.begin() as connection:
-                connection.execute(text("ALTER TABLE services ADD COLUMN is_deleted BOOLEAN DEFAULT 0"))
+                connection.execute(text("ALTER TABLE services ADD COLUMN is_deleted BOOLEAN DEFAULT FALSE"))
         if "fulfillment_type" not in existing_columns:
             with engine.begin() as connection:
                 connection.execute(text("ALTER TABLE services ADD COLUMN fulfillment_type VARCHAR(20) DEFAULT 'auto'"))
         if "image_path" not in existing_columns:
             with engine.begin() as connection:
                 connection.execute(text("ALTER TABLE services ADD COLUMN image_path VARCHAR(500)"))
+        if "emoji" not in existing_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE services ADD COLUMN emoji VARCHAR(60)"))
         if "sort_order" not in existing_columns:
             with engine.begin() as connection:
                 connection.execute(text("ALTER TABLE services ADD COLUMN sort_order INTEGER DEFAULT 0"))
@@ -699,19 +785,25 @@ def run_light_migrations() -> None:
                 connection.execute(text("ALTER TABLE services ADD COLUMN warranty VARCHAR(200)"))
         if "require_email" not in existing_columns:
             with engine.begin() as connection:
-                connection.execute(text("ALTER TABLE services ADD COLUMN require_email BOOLEAN DEFAULT 0"))
+                connection.execute(text("ALTER TABLE services ADD COLUMN require_email BOOLEAN DEFAULT FALSE"))
         if "markup_fixed_usdt" not in existing_columns:
             with engine.begin() as connection:
                 connection.execute(text("ALTER TABLE services ADD COLUMN markup_fixed_usdt FLOAT DEFAULT 0"))
         if "manual_sell_price" not in existing_columns:
             with engine.begin() as connection:
-                connection.execute(text("ALTER TABLE services ADD COLUMN manual_sell_price BOOLEAN DEFAULT 0"))
+                connection.execute(text("ALTER TABLE services ADD COLUMN manual_sell_price BOOLEAN DEFAULT FALSE"))
 
     if "stocks" in table_names:
         existing_columns = {col["name"] for col in inspector.get_columns("stocks")}
         if "login_details" not in existing_columns:
             with engine.begin() as connection:
                 connection.execute(text("ALTER TABLE stocks ADD COLUMN login_details TEXT"))
+        if "stock_type" not in existing_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE stocks ADD COLUMN stock_type VARCHAR(20) DEFAULT 'account'"))
+        if "is_unlimited" not in existing_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE stocks ADD COLUMN is_unlimited BOOLEAN DEFAULT FALSE"))
 
     if "categories" in table_names:
         existing_columns = {col["name"] for col in inspector.get_columns("categories")}
@@ -721,12 +813,21 @@ def run_light_migrations() -> None:
         if "image_path" not in existing_columns:
             with engine.begin() as connection:
                 connection.execute(text("ALTER TABLE categories ADD COLUMN image_path VARCHAR(500)"))
-        # Widen name for embedded <tg-emoji> tags (Postgres). SQLite keeps flexible TEXT.
-        try:
+        if "is_active" not in existing_columns:
             with engine.begin() as connection:
-                connection.execute(text("ALTER TABLE categories ALTER COLUMN name TYPE VARCHAR(500)"))
-        except Exception:
-            pass
+                connection.execute(text("ALTER TABLE categories ADD COLUMN is_active BOOLEAN DEFAULT TRUE"))
+        # Widen name and emoji for embedded <tg-emoji> tags on Postgres
+        if engine.dialect.name.startswith("postgresql"):
+            try:
+                with engine.begin() as connection:
+                    connection.execute(text("ALTER TABLE categories ALTER COLUMN name TYPE VARCHAR(500)"))
+            except Exception:
+                pass
+            try:
+                with engine.begin() as connection:
+                    connection.execute(text("ALTER TABLE categories ALTER COLUMN emoji TYPE VARCHAR(60)"))
+            except Exception:
+                pass
 
     if "orders" in table_names:
         existing_columns = {col["name"] for col in inspector.get_columns("orders")}
@@ -738,7 +839,7 @@ def run_light_migrations() -> None:
                 connection.execute(text("ALTER TABLE orders ADD COLUMN payment_method VARCHAR(40)"))
         if "expire_notify" not in existing_columns:
             with engine.begin() as connection:
-                connection.execute(text("ALTER TABLE orders ADD COLUMN expire_notify BOOLEAN DEFAULT 1"))
+                connection.execute(text("ALTER TABLE orders ADD COLUMN expire_notify BOOLEAN DEFAULT TRUE"))
         if "refund_method" not in existing_columns:
             with engine.begin() as connection:
                 connection.execute(text("ALTER TABLE orders ADD COLUMN refund_method VARCHAR(20)"))
@@ -756,7 +857,7 @@ def run_light_migrations() -> None:
         existing_columns = {col["name"] for col in inspector.get_columns("transactions")}
         if "expire_notify" not in existing_columns:
             with engine.begin() as connection:
-                connection.execute(text("ALTER TABLE transactions ADD COLUMN expire_notify BOOLEAN DEFAULT 1"))
+                connection.execute(text("ALTER TABLE transactions ADD COLUMN expire_notify BOOLEAN DEFAULT TRUE"))
         if "user_notified_at" not in existing_columns:
             with engine.begin() as connection:
                 connection.execute(text("ALTER TABLE transactions ADD COLUMN user_notified_at DATETIME"))
@@ -766,6 +867,31 @@ def run_light_migrations() -> None:
         if "payfast_check_message_id" not in existing_columns:
             with engine.begin() as connection:
                 connection.execute(text("ALTER TABLE transactions ADD COLUMN payfast_check_message_id INTEGER"))
+        if "payfast_reference" not in existing_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE transactions ADD COLUMN payfast_reference VARCHAR(40)"))
+
+        # Safe unique index on payfast_reference
+        try:
+            indexes = {idx["name"] for idx in inspector.get_indexes("transactions")}
+        except Exception:
+            indexes = set()
+        if "ix_transactions_payfast_reference" not in indexes:
+            try:
+                with engine.begin() as connection:
+                    if engine.dialect.name.startswith("postgresql"):
+                        connection.execute(text(
+                            "CREATE UNIQUE INDEX ix_transactions_payfast_reference "
+                            "ON transactions (payfast_reference) "
+                            "WHERE payfast_reference IS NOT NULL"
+                        ))
+                    else:
+                        connection.execute(text(
+                            "CREATE UNIQUE INDEX ix_transactions_payfast_reference "
+                            "ON transactions (payfast_reference)"
+                        ))
+            except Exception:
+                pass
 
     if "issue_reports" in table_names:
         existing_columns = {col["name"] for col in inspector.get_columns("issue_reports")}
@@ -786,13 +912,72 @@ def run_light_migrations() -> None:
                 connection.execute(text("ALTER TABLE users ADD COLUMN language VARCHAR(10) DEFAULT 'en'"))
         if "force_join_ok" not in existing_columns:
             with engine.begin() as connection:
-                connection.execute(text("ALTER TABLE users ADD COLUMN force_join_ok BOOLEAN DEFAULT 0"))
+                connection.execute(text("ALTER TABLE users ADD COLUMN force_join_ok BOOLEAN DEFAULT FALSE"))
         if "email" not in existing_columns:
             with engine.begin() as connection:
                 connection.execute(text("ALTER TABLE users ADD COLUMN email VARCHAR(200)"))
         if "password_hash" not in existing_columns:
             with engine.begin() as connection:
-                connection.execute(text("ALTER TABLE users ADD COLUMN password_hash VARCHAR(128)"))
+                connection.execute(text("ALTER TABLE users ADD COLUMN password_hash VARCHAR(255)"))
+        if "referral_join_credited" not in existing_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE users ADD COLUMN referral_join_credited BOOLEAN DEFAULT FALSE"))
+
+        # Widen password_hash for Argon2id on Postgres
+        if engine.dialect.name.startswith("postgresql"):
+            try:
+                with engine.begin() as connection:
+                    connection.execute(text("ALTER TABLE users ALTER COLUMN password_hash TYPE VARCHAR(255)"))
+            except Exception:
+                pass
+
+    if "referral_earnings" in table_names:
+        existing_columns = {col["name"] for col in inspector.get_columns("referral_earnings")}
+        if "earning_type" not in existing_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE referral_earnings ADD COLUMN earning_type VARCHAR(20) DEFAULT 'per_purchase'"))
+
+    if "providers" in table_names:
+        existing_columns = {col["name"] for col in inspector.get_columns("providers")}
+        if "balance_url" not in existing_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE providers ADD COLUMN balance_url VARCHAR(500)"))
+        if "api_balance" not in existing_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE providers ADD COLUMN api_balance FLOAT"))
+        if "api_username" not in existing_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE providers ADD COLUMN api_username VARCHAR(120)"))
+        if "balance_synced_at" not in existing_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE providers ADD COLUMN balance_synced_at DATETIME"))
+        if "low_balance_alert_active" not in existing_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE providers ADD COLUMN low_balance_alert_active BOOLEAN DEFAULT FALSE"))
+
+    if "payment_methods" in table_names:
+        existing_columns = {col["name"] for col in inspector.get_columns("payment_methods")}
+        if "image_path" not in existing_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE payment_methods ADD COLUMN image_path VARCHAR(500)"))
+        if engine.dialect.name.startswith("postgresql"):
+            try:
+                with engine.begin() as connection:
+                    connection.execute(text("ALTER TABLE payment_methods ALTER COLUMN icon TYPE VARCHAR(60)"))
+            except Exception:
+                pass
+
+    if "payment_verifications" in table_names:
+        existing_columns = {col["name"] for col in inspector.get_columns("payment_verifications")}
+        if "reason" not in existing_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE payment_verifications ADD COLUMN reason TEXT"))
+
+    if "announcements" in table_names:
+        existing_columns = {col["name"] for col in inspector.get_columns("announcements")}
+        if "image_path" not in existing_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE announcements ADD COLUMN image_path VARCHAR(500)"))
 
     if "bot_configs" in table_names:
         existing_columns = {col["name"] for col in inspector.get_columns("bot_configs")}
@@ -814,20 +999,19 @@ def run_light_migrations() -> None:
             if "orders_notify_chat_id" not in existing_columns:
                 connection.execute(text("ALTER TABLE bot_configs ADD COLUMN orders_notify_chat_id VARCHAR(500)"))
             else:
-                # Older installs used VARCHAR(80) — widen so t.me links are not truncated.
                 try:
                     connection.execute(text("ALTER TABLE bot_configs ALTER COLUMN orders_notify_chat_id TYPE VARCHAR(500)"))
-                except Exception:  # noqa: BLE001
+                except Exception:
                     pass
             if "channel_notify_chat_id" not in existing_columns:
                 connection.execute(text("ALTER TABLE bot_configs ADD COLUMN channel_notify_chat_id VARCHAR(500)"))
             else:
                 try:
                     connection.execute(text("ALTER TABLE bot_configs ALTER COLUMN channel_notify_chat_id TYPE VARCHAR(500)"))
-                except Exception:  # noqa: BLE001
+                except Exception:
                     pass
             if "referral_enabled" not in existing_columns:
-                connection.execute(text("ALTER TABLE bot_configs ADD COLUMN referral_enabled BOOLEAN DEFAULT 1"))
+                connection.execute(text("ALTER TABLE bot_configs ADD COLUMN referral_enabled BOOLEAN DEFAULT TRUE"))
             if "referral_program_type" not in existing_columns:
                 connection.execute(text("ALTER TABLE bot_configs ADD COLUMN referral_program_type VARCHAR(20) DEFAULT 'per_purchase'"))
             if "referral_commission_type" not in existing_columns:
@@ -847,7 +1031,7 @@ def run_light_migrations() -> None:
             if "payfast_tutorial_url" not in existing_columns:
                 connection.execute(text("ALTER TABLE bot_configs ADD COLUMN payfast_tutorial_url VARCHAR(300)"))
             if "force_join_enabled" not in existing_columns:
-                connection.execute(text("ALTER TABLE bot_configs ADD COLUMN force_join_enabled BOOLEAN DEFAULT 0"))
+                connection.execute(text("ALTER TABLE bot_configs ADD COLUMN force_join_enabled BOOLEAN DEFAULT FALSE"))
             if "force_join_channel" not in existing_columns:
                 connection.execute(text("ALTER TABLE bot_configs ADD COLUMN force_join_channel VARCHAR(120)"))
             if "force_join_channel_url" not in existing_columns:
@@ -857,7 +1041,7 @@ def run_light_migrations() -> None:
             else:
                 try:
                     connection.execute(text("ALTER TABLE bot_configs ALTER COLUMN force_join_group TYPE VARCHAR(500)"))
-                except Exception:  # noqa: BLE001
+                except Exception:
                     pass
             if "force_join_group_url" not in existing_columns:
                 connection.execute(text("ALTER TABLE bot_configs ADD COLUMN force_join_group_url VARCHAR(500)"))
@@ -871,71 +1055,6 @@ def run_light_migrations() -> None:
                 connection.execute(text("ALTER TABLE bot_configs ADD COLUMN sidebar_seen_users_at DATETIME"))
             if "mini_app_url" not in existing_columns:
                 connection.execute(text("ALTER TABLE bot_configs ADD COLUMN mini_app_url VARCHAR(500)"))
-
-    if "users" in table_names:
-        existing_columns = {col["name"] for col in inspector.get_columns("users")}
-        if "referral_join_credited" not in existing_columns:
-            with engine.begin() as connection:
-                connection.execute(text("ALTER TABLE users ADD COLUMN referral_join_credited BOOLEAN DEFAULT 0"))
-
-    if "referral_earnings" in table_names:
-        existing_columns = {col["name"] for col in inspector.get_columns("referral_earnings")}
-        if "earning_type" not in existing_columns:
-            with engine.begin() as connection:
-                connection.execute(text("ALTER TABLE referral_earnings ADD COLUMN earning_type VARCHAR(20) DEFAULT 'per_purchase'"))
-
-    if "categories" in table_names:
-        existing_columns = {col["name"] for col in inspector.get_columns("categories")}
-        with engine.begin() as connection:
-            if "image_path" not in existing_columns:
-                connection.execute(text("ALTER TABLE categories ADD COLUMN image_path VARCHAR(500)"))
-            if "is_active" not in existing_columns:
-                connection.execute(text("ALTER TABLE categories ADD COLUMN is_active BOOLEAN DEFAULT 1"))
-
-    if "providers" in table_names:
-        existing_columns = {col["name"] for col in inspector.get_columns("providers")}
-        if "balance_url" not in existing_columns:
-            with engine.begin() as connection:
-                connection.execute(text("ALTER TABLE providers ADD COLUMN balance_url VARCHAR(500)"))
-        if "api_balance" not in existing_columns:
-            with engine.begin() as connection:
-                connection.execute(text("ALTER TABLE providers ADD COLUMN api_balance FLOAT"))
-        if "api_username" not in existing_columns:
-            with engine.begin() as connection:
-                connection.execute(text("ALTER TABLE providers ADD COLUMN api_username VARCHAR(120)"))
-        if "balance_synced_at" not in existing_columns:
-            with engine.begin() as connection:
-                connection.execute(text("ALTER TABLE providers ADD COLUMN balance_synced_at DATETIME"))
-        if "low_balance_alert_active" not in existing_columns:
-            with engine.begin() as connection:
-                connection.execute(text("ALTER TABLE providers ADD COLUMN low_balance_alert_active BOOLEAN DEFAULT 0"))
-
-    if "payment_methods" in table_names:
-        existing_columns = {col["name"] for col in inspector.get_columns("payment_methods")}
-        if "image_path" not in existing_columns:
-            with engine.begin() as connection:
-                connection.execute(text("ALTER TABLE payment_methods ADD COLUMN image_path VARCHAR(500)"))
-
-    if "payment_verifications" in table_names:
-        existing_columns = {col["name"] for col in inspector.get_columns("payment_verifications")}
-        if "reason" not in existing_columns:
-            with engine.begin() as connection:
-                connection.execute(text("ALTER TABLE payment_verifications ADD COLUMN reason TEXT"))
-
-    if "announcements" in table_names:
-        existing_columns = {col["name"] for col in inspector.get_columns("announcements")}
-        if "image_path" not in existing_columns:
-            with engine.begin() as connection:
-                connection.execute(text("ALTER TABLE announcements ADD COLUMN image_path VARCHAR(500)"))
-
-    if "users" in table_names:
-        # Widen password_hash for Argon2id on Postgres
-        if engine.dialect.name.startswith("postgresql"):
-            try:
-                with engine.begin() as connection:
-                    connection.execute(text("ALTER TABLE users ALTER COLUMN password_hash TYPE VARCHAR(255)"))
-            except Exception:
-                pass
 
 
 def seed_defaults() -> None:
@@ -1042,9 +1161,12 @@ def seed_defaults() -> None:
 
         # Ensure menu command rows exist (Admin → Commands). Missing keys only —
         # never overwrite names/icons the admin already customized.
-        from utils.menu_commands import ensure_menu_commands
+        try:
+            from utils.menu_commands import ensure_menu_commands
 
-        ensure_menu_commands(db)
+            ensure_menu_commands(db)
+        except Exception as exc:
+            logger.debug("Skipping menu command seeding (optional bot dependency not loaded): %s", exc)
 
         db.commit()
     finally:
