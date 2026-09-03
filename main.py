@@ -15,9 +15,8 @@ from api.payfast import router as payfast_router
 from api.v1 import router as api_v1_router
 from api.web import cors_allow_origins, router as api_web_router
 from api.webhooks import router as api_webhooks_router
-from api.canva_worker import router as canva_worker_router
 from bot.bot_main import create_bot, setup_webhook_bot
-from database.models import init_db
+from database.models import SessionLocal, Service, init_db
 from utils.background_tasks import (
     check_order_status_job,
     expire_active_sales_job,
@@ -26,7 +25,6 @@ from utils.background_tasks import (
     sync_provider_stock_job,
     verify_transactions_job,
 )
-from utils.canva_automation import canva_invite_job
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 WEBHOOK_PATH = "/telegram/webhook"
@@ -44,6 +42,16 @@ def get_webhook_url() -> str | None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    # Legacy cleanup: products that used the removed Canva auto-invite mode
+    # return to normal manual fulfillment while preserving their email setting.
+    db = SessionLocal()
+    try:
+        db.query(Service).filter(Service.fulfillment_type == "canva").update(
+            {Service.fulfillment_type: "manual"}, synchronize_session=False
+        )
+        db.commit()
+    finally:
+        db.close()
     try:
         from migrate_payfast_reference import run as migrate_payfast_reference
 
@@ -93,7 +101,6 @@ async def lifespan(app: FastAPI):
         asyncio.create_task(process_referral_payouts_job()),
         asyncio.create_task(expire_unpaid_checkouts_job()),
         asyncio.create_task(expire_active_sales_job()),
-        asyncio.create_task(canva_invite_job()),
     ]
 
     yield
@@ -122,7 +129,6 @@ app.include_router(api_v1_router)
 app.include_router(api_web_router)
 app.include_router(docs_router)
 app.include_router(api_webhooks_router)
-app.include_router(canva_worker_router)
 app.include_router(payfast_router)
 @app.post(WEBHOOK_PATH)
 async def telegram_webhook(request: Request):
