@@ -13,6 +13,7 @@ from sqlalchemy.pool import StaticPool
 
 from database.models import Base, Order, PaymentMethod, Service, Stock, User, get_db
 from main import app
+from utils.rate_limiter import _memory_failures, _memory_lockouts, _memory_windows
 from utils.security import hash_password
 
 
@@ -124,6 +125,10 @@ class CustomerPortalTests(unittest.TestCase):
             db.close()
 
     def setUp(self):
+        _memory_windows.clear()
+        _memory_failures.clear()
+        _memory_lockouts.clear()
+
         def override_get_db():
             db = self.TestingSessionLocal()
             try:
@@ -349,5 +354,324 @@ class CustomerPortalTests(unittest.TestCase):
             db.close()
 
 
+class CustomerOrdersMissionLogsTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.engine = create_engine(
+            "sqlite:///:memory:",
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+        )
+        cls.TestingSessionLocal = sessionmaker(bind=cls.engine, autoflush=False, autocommit=False)
+        Base.metadata.create_all(bind=cls.engine)
+
+        db = cls.TestingSessionLocal()
+        try:
+            method = PaymentMethod(
+                name="USDT TRC20",
+                code="TRC20",
+                method_type="crypto",
+                network="Tron (TRC20)",
+                address="TXYZ9876543210",
+                is_active=True,
+            )
+            db.add(method)
+
+            service = Service(
+                sku="CURSOR-PRO-TEST",
+                name="Cursor Pro Subscription",
+                sell_price=20.0,
+                is_active=True,
+                is_deleted=False,
+                min_qty=1,
+                max_qty=5,
+            )
+            db.add(service)
+            db.flush()
+
+            # Alice
+            alice = User(
+                telegram_id="web:alice_logs@example.com",
+                username="alice_logs",
+                full_name="Alice Logs",
+                email="alice_logs@example.com",
+                password_hash=hash_password("password123"),
+                wallet_usdt=100.0,
+            )
+            # Bob
+            bob = User(
+                telegram_id="web:bob_logs@example.com",
+                username="bob_logs",
+                full_name="Bob Logs",
+                email="bob_logs@example.com",
+                password_hash=hash_password("password456"),
+                wallet_usdt=50.0,
+            )
+            db.add_all([alice, bob])
+            db.flush()
+
+            cls.alice_id = alice.id
+            cls.bob_id = bob.id
+
+            # Alice orders: completed, pending, preorder, refunded, cancelled
+            ord1 = Order(
+                order_code="ORD-A-COMPL",
+                user_id=alice.id,
+                service_id=service.id,
+                link="web_order",
+                quantity=1,
+                amount_usdt=20.0,
+                status="completed",
+                payment_method="TRC20",
+                delivered_info="user:pass123",
+            )
+            ord2 = Order(
+                order_code="ORD-A-PEND",
+                user_id=alice.id,
+                service_id=service.id,
+                link="web_order",
+                quantity=1,
+                amount_usdt=20.0,
+                status="pending",
+                payment_method="TRC20",
+            )
+            ord3 = Order(
+                order_code="ORD-A-PRE",
+                user_id=alice.id,
+                service_id=service.id,
+                link="web_order",
+                quantity=1,
+                amount_usdt=20.0,
+                status="preorder_waiting",
+                is_preorder=True,
+                payment_method="TRC20",
+            )
+            ord4 = Order(
+                order_code="ORD-A-REF",
+                user_id=alice.id,
+                service_id=service.id,
+                link="web_order",
+                quantity=1,
+                amount_usdt=20.0,
+                status="refunded",
+                refund_amount=20.0,
+                refund_method="wallet",
+                refunded_at=datetime.utcnow(),
+                payment_method="TRC20",
+            )
+            ord5 = Order(
+                order_code="ORD-A-CANC",
+                user_id=alice.id,
+                service_id=service.id,
+                link="web_order",
+                quantity=1,
+                amount_usdt=20.0,
+                status="cancelled",
+                payment_method="TRC20",
+            )
+            # Bob order
+            ord_bob = Order(
+                order_code="ORD-B-COMPL",
+                user_id=bob.id,
+                service_id=service.id,
+                link="web_order",
+                quantity=1,
+                amount_usdt=20.0,
+                status="completed",
+                payment_method="TRC20",
+                delivered_info="bob_user:bob_pass",
+            )
+            db.add_all([ord1, ord2, ord3, ord4, ord5, ord_bob])
+            db.commit()
+        finally:
+            db.close()
+
+    def setUp(self):
+        _memory_windows.clear()
+        _memory_failures.clear()
+        _memory_lockouts.clear()
+
+        def override_get_db():
+            db = self.TestingSessionLocal()
+            try:
+                yield db
+            finally:
+                db.close()
+
+        app.dependency_overrides[get_db] = override_get_db
+        self.client = TestClient(app)
+
+    def tearDown(self):
+        app.dependency_overrides.clear()
+
+    def _login_alice(self) -> TestClient:
+        client = TestClient(app)
+        res = client.post(
+            "/api/web/login",
+            json={"email": "alice_logs@example.com", "password": "password123"},
+        )
+        self.assertEqual(res.status_code, 200)
+        return client
+
+    def _login_bob(self) -> TestClient:
+        client = TestClient(app)
+        res = client.post(
+            "/api/web/login",
+            json={"email": "bob_logs@example.com", "password": "password456"},
+        )
+        self.assertEqual(res.status_code, 200)
+        return client
+
+    # 1. Unauthenticated customer cannot access order list or order details
+    def test_orders_unauthenticated_blocked(self):
+        client = TestClient(app)
+        res_list = client.get("/api/web/account/orders")
+        self.assertEqual(res_list.status_code, 401)
+
+        res_detail = client.get("/api/web/account/orders/ORD-A-COMPL")
+        self.assertEqual(res_detail.status_code, 401)
+
+    # 2. Customer sees only their own orders
+    def test_customer_sees_only_own_orders(self):
+        client = self._login_alice()
+        res = client.get("/api/web/account/orders")
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["total"], 5)
+
+        codes = [o["order_code"] for o in data["orders"]]
+        # Alice's orders must be present
+        self.assertIn("ORD-A-COMPL", codes)
+        self.assertIn("ORD-A-PEND", codes)
+        self.assertIn("ORD-A-PRE", codes)
+        self.assertIn("ORD-A-REF", codes)
+        self.assertIn("ORD-A-CANC", codes)
+        # Bob's order must NOT be present
+        self.assertNotIn("ORD-B-COMPL", codes)
+
+    # 3. Customer orders are sorted newest first
+    def test_customer_orders_newest_first(self):
+        client = self._login_alice()
+        res = client.get("/api/web/account/orders")
+        self.assertEqual(res.status_code, 200)
+        orders = res.json()["orders"]
+        self.assertGreaterEqual(len(orders), 2)
+        # ORD-A-CANC was inserted last, so it must be first
+        self.assertEqual(orders[0]["order_code"], "ORD-A-CANC")
+
+    # 4. Bob sees only Bob's orders
+    def test_other_customer_sees_only_their_orders(self):
+        client = self._login_bob()
+        res = client.get("/api/web/account/orders")
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertEqual(data["total"], 1)
+        self.assertEqual(len(data["orders"]), 1)
+        self.assertEqual(data["orders"][0]["order_code"], "ORD-B-COMPL")
+        # None of Alice's orders
+        codes = [o["order_code"] for o in data["orders"]]
+        self.assertNotIn("ORD-A-COMPL", codes)
+
+    # 5. Tamper attempt: Alice cannot access Bob's order detail (returns 404)
+    def test_tamper_attempt_prevented_on_order_detail(self):
+        client = self._login_alice()
+        # Alice tries to request Bob's order detail
+        res = client.get("/api/web/account/orders/ORD-B-COMPL")
+        self.assertEqual(res.status_code, 404)
+
+        # Alice tries tampering with query params to access Bob's data
+        res_tamper = client.get(
+            "/api/web/account/orders",
+            params={"user_id": self.bob_id, "email": "bob_logs@example.com"},
+        )
+        self.assertEqual(res_tamper.status_code, 200)
+        codes = [o["order_code"] for o in res_tamper.json()["orders"]]
+        self.assertNotIn("ORD-B-COMPL", codes)
+        self.assertIn("ORD-A-COMPL", codes)
+
+    # 6. Status filtering works correctly
+    def test_status_filtering(self):
+        client = self._login_alice()
+
+        # Active: pending, preorder_waiting
+        res_act = client.get("/api/web/account/orders", params={"status_filter": "active"})
+        self.assertEqual(res_act.status_code, 200)
+        act_codes = [o["order_code"] for o in res_act.json()["orders"]]
+        self.assertIn("ORD-A-PEND", act_codes)
+        self.assertIn("ORD-A-PRE", act_codes)
+        self.assertNotIn("ORD-A-COMPL", act_codes)
+        self.assertNotIn("ORD-A-REF", act_codes)
+        self.assertNotIn("ORD-A-CANC", act_codes)
+
+        # Completed
+        res_comp = client.get("/api/web/account/orders", params={"status_filter": "completed"})
+        self.assertEqual(res_comp.status_code, 200)
+        comp_codes = [o["order_code"] for o in res_comp.json()["orders"]]
+        self.assertEqual(comp_codes, ["ORD-A-COMPL"])
+
+        # Refunded
+        res_ref = client.get("/api/web/account/orders", params={"status_filter": "refunded"})
+        self.assertEqual(res_ref.status_code, 200)
+        ref_codes = [o["order_code"] for o in res_ref.json()["orders"]]
+        self.assertEqual(ref_codes, ["ORD-A-REF"])
+
+        # Cancelled
+        res_canc = client.get("/api/web/account/orders", params={"status_filter": "cancelled"})
+        self.assertEqual(res_canc.status_code, 200)
+        canc_codes = [o["order_code"] for o in res_canc.json()["orders"]]
+        self.assertEqual(canc_codes, ["ORD-A-CANC"])
+
+    # 7. Preorder order presentation and detail
+    def test_preorder_display_and_detail(self):
+        client = self._login_alice()
+        res = client.get("/api/web/account/orders/ORD-A-PRE")
+        self.assertEqual(res.status_code, 200)
+        order = res.json()["order"]
+        self.assertTrue(order["is_preorder"])
+        self.assertEqual(order["status_badge"], "preorder")
+        self.assertIn("Pre-order", order["status_label"])
+        self.assertEqual(order["delivery_status"], "Pre-order Waiting")
+        self.assertIn("stock", order["delivery_info"].lower())
+
+    # 8. Refunded order presentation and detail
+    def test_refunded_order_display_and_detail(self):
+        client = self._login_alice()
+        res = client.get("/api/web/account/orders/ORD-A-REF")
+        self.assertEqual(res.status_code, 200)
+        order = res.json()["order"]
+        self.assertTrue(order["is_refunded"])
+        self.assertEqual(order["status_badge"], "refunded")
+        self.assertEqual(order["refund_amount"], 20.0)
+        self.assertEqual(order["refund_method"], "wallet")
+        self.assertEqual(order["delivery_status"], "Refunded")
+        self.assertIn("refunded", order["delivery_info"].lower())
+
+    # 9. Completed order delivery info returned safely
+    def test_completed_order_delivery_info(self):
+        client = self._login_alice()
+        res = client.get("/api/web/account/orders/ORD-A-COMPL")
+        self.assertEqual(res.status_code, 200)
+        order = res.json()["order"]
+        self.assertEqual(order["status_badge"], "completed")
+        self.assertEqual(order["delivery_status"], "Delivered")
+        self.assertEqual(order["delivery_info"], "user:pass123")
+
+    # 10. Public order lookup still works without authentication
+    def test_public_order_lookup_still_works(self):
+        client = TestClient(app)
+        res = client.get("/api/web/orders/ORD-A-COMPL")
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertEqual(data["order_code"], "ORD-A-COMPL")
+        self.assertEqual(data["amount"], 20.0)
+        self.assertEqual(data["status"], "completed")
+
+        # Nonexistent returns 404
+        res_nonexistent = client.get("/api/web/orders/NONEXISTENT-CODE")
+        self.assertEqual(res_nonexistent.status_code, 404)
+
+
 if __name__ == "__main__":
     unittest.main()
+

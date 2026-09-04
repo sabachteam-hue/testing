@@ -52,7 +52,7 @@ def process_waiting_preorders(db: Session, service_id: int) -> List[Order]:
         )
     )
     if db.bind and db.bind.dialect.name.startswith("postgresql"):
-        query = query.with_for_update()
+        query = query.with_for_update(of=Order)
 
     waiting_orders = query.all()
     if not waiting_orders:
@@ -143,7 +143,7 @@ def check_expired_preorders_once(db: Session | None = None) -> int:
             )
         )
         if db.bind and db.bind.dialect.name.startswith("postgresql"):
-            query = query.with_for_update()
+            query = query.with_for_update(of=Order)
 
         candidates = query.all()
         expired_count = 0

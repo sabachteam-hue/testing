@@ -374,6 +374,180 @@
         font-size: 12px;
       }
     }
+
+    /* Mission Logs & Order Cards styles */
+    .filter-pills {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      scrollbar-width: none;
+      padding: 4px 0 12px 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .filter-pills::-webkit-scrollbar { display: none; }
+    .filter-pill {
+      background: var(--surface-2);
+      border: 1px solid var(--line);
+      color: var(--muted);
+      padding: 6px 14px;
+      border-radius: 999px;
+      font-size: 12.5px;
+      font-weight: 650;
+      white-space: nowrap;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .filter-pill:hover {
+      color: var(--ink);
+      border-color: rgba(139, 108, 255, 0.4);
+    }
+    .filter-pill.active {
+      background: rgba(139, 108, 255, 0.22);
+      color: #fff;
+      border-color: var(--purple-2);
+      box-shadow: 0 2px 10px rgba(139, 108, 255, 0.2);
+    }
+    .orders-cards-grid {
+      display: grid;
+      gap: 14px;
+    }
+    .order-mission-card {
+      background: var(--surface-2);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      transition: border-color 0.2s ease, transform 0.18s ease;
+    }
+    .order-mission-card:hover {
+      border-color: rgba(139, 108, 255, 0.35);
+      transform: translateY(-1px);
+    }
+    .mission-card-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .mission-prod-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .mission-prod-thumb {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: #1c1730;
+      display: grid;
+      place-items: center;
+      font-size: 22px;
+      flex-shrink: 0;
+      overflow: hidden;
+    }
+    .mission-prod-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .mission-prod-title {
+      font-weight: 700;
+      font-size: 15px;
+      color: var(--ink);
+      margin: 0 0 2px 0;
+    }
+    .mission-prod-sku {
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .mission-card-mid {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 0;
+      border-top: 1px solid rgba(196, 181, 253, 0.08);
+      border-bottom: 1px solid rgba(196, 181, 253, 0.08);
+      font-size: 13px;
+      flex-wrap: wrap;
+    }
+    .mission-code-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-family: monospace;
+      font-size: 12px;
+      font-weight: 700;
+      background: rgba(255, 255, 255, 0.06);
+      padding: 4px 8px;
+      border-radius: 6px;
+      color: var(--purple-2);
+      border: 1px solid var(--line);
+    }
+    .copy-icon-btn {
+      background: none;
+      border: 0;
+      padding: 0;
+      cursor: pointer;
+      color: var(--muted);
+      display: inline-flex;
+      align-items: center;
+    }
+    .copy-icon-btn:hover { color: var(--ink); }
+    .status-preorder {
+      background: rgba(139, 108, 255, 0.18);
+      color: var(--purple-2);
+      border: 1px solid rgba(139, 108, 255, 0.4);
+    }
+    .status-refunded {
+      background: rgba(244, 63, 94, 0.16);
+      color: #fda4af;
+      border: 1px solid rgba(244, 63, 94, 0.35);
+    }
+    .status-cancelled {
+      background: rgba(148, 163, 184, 0.14);
+      color: #cbd5e1;
+      border: 1px solid rgba(148, 163, 184, 0.3);
+    }
+    .refund-notice-bar {
+      background: rgba(244, 63, 94, 0.12);
+      border: 1px solid rgba(244, 63, 94, 0.28);
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 12px;
+      color: #fda4af;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .info-grid-2col {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px;
+      margin: 14px 0;
+    }
+    .info-box-item {
+      background: var(--surface-2);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px;
+      font-size: 13px;
+    }
+    .info-box-label {
+      color: var(--muted);
+      font-size: 11.5px;
+      margin-bottom: 4px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .info-box-val {
+      font-weight: 700;
+      color: var(--ink);
+    }
   </style>
 </head>
 <body>
@@ -497,7 +671,7 @@
 
         <!-- 4 KPI Stat Cards -->
         <div class="stats-grid" style="margin-top: 20px;">
-          <div class="stat-card">
+          <div class="stat-card" style="cursor: pointer;" onclick="switchTab('orders')" title="View Mission Logs">
             <div class="stat-head">
               <span>Total Orders</span>
               <div class="stat-icon-box">
@@ -505,7 +679,7 @@
               </div>
             </div>
             <div class="stat-value" id="stat-total-orders">0</div>
-            <div class="stat-sub">Lifetime orders placed</div>
+            <div class="stat-sub">Lifetime orders placed (Click to view)</div>
           </div>
 
           <div class="stat-card">
@@ -558,14 +732,32 @@
         </div>
       </div>
 
-      <!-- Placeholder Views for Next Phases -->
+      <!-- Functional Mission Logs / My Orders View -->
       <div id="tab-orders" class="portal-tab-content content-panel" hidden>
-        <div class="placeholder-card">
-          <div class="placeholder-badge">Phase 2 Preview</div>
-          <h2 style="margin: 0;">My Orders</h2>
-          <p class="muted">Detailed order histories, fulfillment tracking, automated credentials viewing, and instant receipt downloads will be available here in the next phase.</p>
-          <button type="button" class="btn btn-primary" onclick="switchTab('dashboard')">Back to Dashboard</button>
+        <div class="panel-head" style="flex-wrap: wrap; gap: 12px;">
+          <div>
+            <h2 style="margin: 0 0 4px 0; font-size: 22px; font-weight: 800;">Mission Logs</h2>
+            <p class="muted" style="margin: 0; font-size: 13px;">View order history, payment status, and fulfillment updates.</p>
+          </div>
+          <button type="button" class="btn btn-whatsapp" onclick="fetchOrders(currentFilter)" style="font-size: 12px; padding: 6px 14px; gap: 6px;">
+            <span>🔄</span> Refresh
+          </button>
         </div>
+
+        <!-- Filter Pills -->
+        <div class="filter-pills" id="order-filter-pills">
+          <button type="button" class="filter-pill active" data-filter="all">All Missions</button>
+          <button type="button" class="filter-pill" data-filter="active">Active / Processing</button>
+          <button type="button" class="filter-pill" data-filter="completed">Completed</button>
+          <button type="button" class="filter-pill" data-filter="refunded">Refunded</button>
+          <button type="button" class="filter-pill" data-filter="cancelled">Cancelled</button>
+        </div>
+
+        <!-- Orders List Container -->
+        <div id="orders-list-loading" class="empty-state" style="padding: 40px 16px;" hidden>
+          <p class="muted">Loading mission logs…</p>
+        </div>
+        <div id="orders-list-container" class="orders-cards-grid" style="margin-top: 16px;"></div>
       </div>
 
       <div id="tab-accounts" class="portal-tab-content content-panel" hidden>
@@ -613,6 +805,14 @@
         </div>
       </div>
     </main>
+  </div>
+
+  <!-- Order Details Slide-up Sheet Modal -->
+  <div class="sheet" id="order-detail-sheet" hidden>
+    <div class="sheet-card" style="max-width: 580px; width: 100%;">
+      <button type="button" class="sheet-close" id="btn-close-order-sheet" aria-label="Close">×</button>
+      <div id="order-detail-sheet-body"></div>
+    </div>
   </div>
 
   <script>
@@ -729,8 +929,8 @@
                   ${orders
                     .map(
                       (o) => `
-                    <tr>
-                      <td><code>${escapeHtml(o.order_code)}</code></td>
+                    <tr onclick="openOrderDetail('${escapeHtml(o.order_code)}')" style="cursor: pointer;" title="View details">
+                      <td><code style="color: var(--purple-2);">${escapeHtml(o.order_code)}</code></td>
                       <td><strong>${escapeHtml(o.product_name)}</strong></td>
                       <td>$${Number(o.amount || 0).toFixed(2)}</td>
                       <td><span class="status-pill status-${(o.status || 'pending').toLowerCase()}">${escapeHtml(o.status || 'pending')}</span></td>
@@ -754,6 +954,263 @@
           .replace(/"/g, "&quot;");
       }
 
+      // Copy Order Code with visual feedback
+      window.copyOrderCode = async (code, btn) => {
+        try {
+          await navigator.clipboard.writeText(code);
+          const orig = btn.innerHTML;
+          btn.innerHTML = `<span style="color: var(--live); font-size: 11px;">✓ Copied</span>`;
+          setTimeout(() => { btn.innerHTML = orig; }, 2000);
+        } catch (_err) {}
+      };
+
+      // Mission Logs: Fetch & Render Orders
+      let currentFilter = "all";
+
+      async function fetchOrders(filter = "all") {
+        currentFilter = filter;
+        const loadingEl = document.getElementById("orders-list-loading");
+        const listEl = document.getElementById("orders-list-container");
+        if (loadingEl) loadingEl.hidden = false;
+        if (listEl) listEl.innerHTML = "";
+
+        try {
+          const res = await fetchJSON(`/api/web/account/orders?status_filter=${encodeURIComponent(filter)}`);
+          if (loadingEl) loadingEl.hidden = true;
+          renderOrders(res.orders || []);
+        } catch (err) {
+          if (loadingEl) loadingEl.hidden = true;
+          if (listEl) {
+            listEl.innerHTML = `
+              <div class="empty-state">
+                <div class="empty-icon">⚠️</div>
+                <p>Could not load mission logs (${escapeHtml(err.message)}).</p>
+                <button type="button" class="btn btn-primary" onclick="fetchOrders(currentFilter)">Retry</button>
+              </div>
+            `;
+          }
+        }
+      }
+      window.fetchOrders = fetchOrders;
+
+      function renderOrders(orders) {
+        const listEl = document.getElementById("orders-list-container");
+        if (!listEl) return;
+
+        if (!orders.length) {
+          listEl.innerHTML = `
+            <div class="empty-state">
+              <div class="empty-icon">🚀</div>
+              <h3 style="margin: 0; font-size: 16px;">No missions found</h3>
+              <p style="margin: 0; max-width: 320px;">You don't have any orders matching this status filter.</p>
+              <a href="/mini" class="btn btn-primary" style="margin-top: 8px; font-size: 13px; padding: 8px 16px;">Browse Store</a>
+            </div>
+          `;
+          return;
+        }
+
+        listEl.innerHTML = orders
+          .map((o) => {
+            const thumb = o.image_url
+              ? `<img src="${escapeHtml(o.image_url)}" alt="">`
+              : (o.emoji || "🛍️");
+
+            const refundBar = o.is_refunded
+              ? `<div class="refund-notice-bar">
+                   <span>↩️</span>
+                   <span>Refunded ${o.refund_amount != null ? `$${Number(o.refund_amount).toFixed(2)} USDT` : ""} ${o.refund_method ? `via ${escapeHtml(o.refund_method.toUpperCase())}` : ""}</span>
+                 </div>`
+              : "";
+
+            return `
+              <article class="order-mission-card">
+                <div class="mission-card-top">
+                  <div class="mission-prod-info">
+                    <div class="mission-prod-thumb">${thumb}</div>
+                    <div>
+                      <h4 class="mission-prod-title">${escapeHtml(o.product_name)}</h4>
+                      <span class="mission-prod-sku">${escapeHtml(o.sku || "Custom Item")} • Qty: ${o.quantity}</span>
+                    </div>
+                  </div>
+                  <span class="status-pill status-${escapeHtml(o.status_badge || 'pending')}">
+                    ${escapeHtml(o.status_label || o.status || 'Pending')}
+                  </span>
+                </div>
+
+                ${refundBar}
+
+                <div class="mission-card-mid">
+                  <div>
+                    <span class="muted" style="font-size: 12px;">Order Code:</span>
+                    <span class="mission-code-badge">
+                      ${escapeHtml(o.order_code)}
+                      <button type="button" class="copy-icon-btn" onclick="copyOrderCode('${escapeHtml(o.order_code)}', this)" title="Copy Code">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                      </button>
+                    </span>
+                  </div>
+                  <div class="muted" style="font-size: 12px;">${escapeHtml(o.created_at_display || '')}</div>
+                </div>
+
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;">
+                  <div>
+                    <span style="font-size: 18px; font-weight: 800; color: var(--ink);">$${Number(o.amount_usdt || 0).toFixed(2)}</span>
+                    <span class="muted" style="font-size: 12px;">USDT (${escapeHtml(o.payment_method || 'Direct')})</span>
+                  </div>
+                  <button type="button" class="btn btn-primary" onclick="openOrderDetail('${escapeHtml(o.order_code)}')" style="font-size: 12.5px; padding: 7px 16px;">
+                    View Details
+                  </button>
+                </div>
+              </article>
+            `;
+          })
+          .join("");
+      }
+
+      // Order Details Modal / Sheet
+      const orderSheet = document.getElementById("order-detail-sheet");
+      const orderSheetBody = document.getElementById("order-detail-sheet-body");
+      const btnCloseOrderSheet = document.getElementById("btn-close-order-sheet");
+
+      function closeOrderDetail() {
+        if (orderSheet) {
+          orderSheet.classList.remove("sheet-open");
+          setTimeout(() => { orderSheet.hidden = true; }, 250);
+        }
+      }
+      window.closeOrderDetail = closeOrderDetail;
+      if (btnCloseOrderSheet) btnCloseOrderSheet.addEventListener("click", closeOrderDetail);
+
+      window.openOrderDetail = async (orderCode) => {
+        if (!orderSheet || !orderSheetBody) return;
+        orderSheet.hidden = false;
+        orderSheet.classList.add("sheet-open");
+        orderSheetBody.innerHTML = `
+          <div style="text-align: center; padding: 36px 16px;">
+            <p class="muted">Loading mission details for <code>${escapeHtml(orderCode)}</code>…</p>
+          </div>
+        `;
+
+        try {
+          const res = await fetchJSON(`/api/web/account/orders/${encodeURIComponent(orderCode)}`);
+          renderOrderDetail(res.order);
+        } catch (err) {
+          orderSheetBody.innerHTML = `
+            <div class="empty-state">
+              <div class="empty-icon">⚠️</div>
+              <h3 style="margin: 0;">Error Loading Order</h3>
+              <p class="muted">${escapeHtml(err.message)}</p>
+              <button type="button" class="btn btn-primary" onclick="closeOrderDetail()">Close</button>
+            </div>
+          `;
+        }
+      };
+
+      function renderOrderDetail(order) {
+        if (!orderSheetBody || !order) return;
+
+        const thumb = order.image_url
+          ? `<img src="${escapeHtml(order.image_url)}" alt="">`
+          : (order.emoji || "🛍️");
+
+        const refundSection = order.is_refunded
+          ? `
+            <div class="refund-notice-bar" style="margin-top: 14px; padding: 12px; border-radius: 12px;">
+              <div>
+                <strong style="display: block; font-size: 13px;">↩️ Refund Processed</strong>
+                <span>${order.refund_amount != null ? `$${Number(order.refund_amount).toFixed(2)} USDT` : ""} ${order.refund_method ? `via ${escapeHtml(order.refund_method.toUpperCase())}` : ""}</span>
+                ${order.refunded_at ? `<div class="muted" style="font-size: 11px; margin-top: 2px;">${escapeHtml(order.refunded_at)}</div>` : ""}
+              </div>
+            </div>
+          `
+          : "";
+
+        const paymentInstructions = order.payment_instructions
+          ? `
+            <div style="background: rgba(139, 108, 255, 0.08); border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin-top: 12px; font-size: 12.5px;">
+              <strong style="color: var(--purple-2); display: block; margin-bottom: 4px;">Payment Instructions</strong>
+              <p style="margin: 0; color: var(--ink);">${escapeHtml(order.payment_instructions)}</p>
+              ${order.pay_to ? `<p style="margin: 6px 0 0 0;">Pay to: <code style="word-break: break-all; color: var(--purple-2);">${escapeHtml(order.pay_to)}</code></p>` : ""}
+            </div>
+          `
+          : "";
+
+        orderSheetBody.innerHTML = `
+          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+            <div class="mission-prod-thumb" style="width: 52px; height: 52px; font-size: 26px;">${thumb}</div>
+            <div>
+              <span class="mission-code-badge" style="margin-bottom: 4px;">
+                ${escapeHtml(order.order_code)}
+                <button type="button" class="copy-icon-btn" onclick="copyOrderCode('${escapeHtml(order.order_code)}', this)">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                </button>
+              </span>
+              <h2 style="margin: 0; font-size: 18px; color: var(--ink);">${escapeHtml(order.product_name)}</h2>
+            </div>
+          </div>
+
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px;">
+            <span class="status-pill status-${escapeHtml(order.status_badge || 'pending')}">
+              ${escapeHtml(order.status_label || order.status || 'Pending')}
+            </span>
+            <span class="muted" style="font-size: 12px;">${escapeHtml(order.created_at || '')}</span>
+          </div>
+
+          ${refundSection}
+
+          <div class="info-grid-2col">
+            <div class="info-box-item">
+              <div class="info-box-label">Amount Paid</div>
+              <div class="info-box-val" style="font-size: 16px; color: var(--live);">$${Number(order.amount_usdt || 0).toFixed(2)} USDT</div>
+            </div>
+            <div class="info-box-item">
+              <div class="info-box-label">Quantity</div>
+              <div class="info-box-val">${order.quantity} item${order.quantity > 1 ? 's' : ''}</div>
+            </div>
+            <div class="info-box-item">
+              <div class="info-box-label">Payment Method</div>
+              <div class="info-box-val">${escapeHtml(order.payment_method_name || order.payment_method || 'Direct')}</div>
+            </div>
+            <div class="info-box-item">
+              <div class="info-box-label">Fulfillment Status</div>
+              <div class="info-box-val" style="color: var(--purple-2);">${escapeHtml(order.delivery_status || 'In Progress')}</div>
+            </div>
+          </div>
+
+          ${paymentInstructions}
+
+          <div style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin-top: 14px;">
+            <strong style="display: block; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px;">Delivery Details</strong>
+            <p style="margin: 0; font-size: 13.5px; color: var(--ink); white-space: pre-wrap; line-height: 1.5;">${escapeHtml(order.delivery_info || 'Account details will be assigned.')}</p>
+          </div>
+
+          <div class="hero-actions" style="margin-top: 20px;">
+            <a class="btn btn-whatsapp" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent('Hi SMF SHOP, I need support regarding Order ' + order.order_code)}">
+              <span>💬</span> Support on WhatsApp
+            </a>
+            <button type="button" class="btn btn-primary" onclick="closeOrderDetail()">Done</button>
+          </div>
+        `;
+      }
+
+      // Filter buttons listener
+      document.querySelectorAll(".filter-pill[data-filter]").forEach((pill) => {
+        pill.addEventListener("click", () => {
+          document.querySelectorAll(".filter-pill[data-filter]").forEach((p) => p.classList.remove("active"));
+          pill.classList.add("active");
+          fetchOrders(pill.dataset.filter);
+        });
+      });
+
+      // Hook tab switching to fetch orders if navigating to orders tab
+      const origSwitchTab = window.switchTab;
+      window.switchTab = (tabName) => {
+        origSwitchTab(tabName);
+        if (tabName === "orders") {
+          fetchOrders(currentFilter);
+        }
+      };
+
       // Check session on load
       async function loadPortal() {
         try {
@@ -770,6 +1227,12 @@
           currentCustomer = authRes.user;
           const dashboardData = await fetchJSON("/api/web/account/dashboard");
           renderDashboard(dashboardData);
+
+          // If URL hash requests orders tab
+          const hash = (location.hash || "").replace(/^#/, "");
+          if (hash === "orders" || hash === "/orders" || location.pathname.includes("/orders")) {
+            switchTab("orders");
+          }
         } catch (_err) {
           document.getElementById("section-loading").hidden = true;
           document.getElementById("section-unauthenticated").hidden = false;

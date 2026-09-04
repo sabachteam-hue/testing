@@ -733,6 +733,194 @@ def web_account_dashboard(
     }
 
 
+def _format_customer_order_status(status: str | None, is_preorder: bool = False) -> tuple[str, str]:
+    st = (status or "").lower()
+    if st == "completed":
+        return "Completed", "completed"
+    if st == "delivered":
+        return "Delivered", "completed"
+    if st == "refunded":
+        return "Refunded", "refunded"
+    if st == "preorder_waiting" or (is_preorder and st in ("pending", "manual_pending")):
+        return "Pre-order — Waiting for Stock", "preorder"
+    if st in ("processing", "stock_reserved"):
+        return "Processing Fulfillment", "processing"
+    if st in ("pending", "manual_pending"):
+        return "Pending Confirmation", "pending"
+    if st in ("cancelled", "canceled", "failed"):
+        return "Cancelled", "cancelled"
+    return (st.capitalize() or "Pending"), "pending"
+
+
+@router.get("/account/orders")
+def list_customer_orders(
+    request: Request,
+    status_filter: str = Query("all"),
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    current_user: User = Depends(get_current_customer),
+    db: Session = Depends(get_db),
+) -> dict:
+    base_query = db.query(Order).filter(Order.user_id == current_user.id)
+
+    filt = (status_filter or "").strip().lower()
+    if filt == "active":
+        base_query = base_query.filter(
+            Order.status.in_(["pending", "manual_pending", "processing", "preorder_waiting", "stock_reserved"])
+        )
+    elif filt == "completed":
+        base_query = base_query.filter(Order.status.in_(["completed", "delivered"]))
+    elif filt == "refunded":
+        base_query = base_query.filter(or_(Order.status == "refunded", Order.refunded_at.isnot(None)))
+    elif filt == "cancelled":
+        base_query = base_query.filter(Order.status.in_(["cancelled", "canceled", "failed"]))
+
+    total_count = base_query.count()
+
+    rows = (
+        base_query.options(joinedload(Order.service))
+        .order_by(Order.id.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+
+    serialized = []
+    for o in rows:
+        svc = o.service
+        is_pre = bool(getattr(o, "is_preorder", False)) or o.status == "preorder_waiting"
+        is_ref = o.status == "refunded" or bool(getattr(o, "refunded_at", None))
+        label, badge = _format_customer_order_status(o.status, is_pre)
+        serialized.append(
+            {
+                "order_code": o.order_code,
+                "sku": svc.sku if svc else None,
+                "product_name": _plain_text(svc.name) if svc else "Product",
+                "image_url": absolute_media_url(svc.image_path, request) if svc else None,
+                "emoji": _display_emoji(svc.emoji if svc else None, "🛍️"),
+                "quantity": int(o.quantity or 1),
+                "amount_usdt": float(o.amount_usdt or 0.0),
+                "currency": "USDT",
+                "status": o.status,
+                "status_label": label,
+                "status_badge": badge,
+                "payment_method": o.payment_method,
+                "is_preorder": is_pre,
+                "is_refunded": is_ref,
+                "refund_amount": float(o.refund_amount) if o.refund_amount is not None else None,
+                "refund_method": o.refund_method,
+                "created_at": o.created_at.isoformat() if getattr(o, "created_at", None) else None,
+                "created_at_display": (
+                    o.created_at.strftime("%b %d, %Y %I:%M %p")
+                    if getattr(o, "created_at", None)
+                    else "—"
+                ),
+            }
+        )
+
+    return {
+        "ok": True,
+        "total": total_count,
+        "limit": limit,
+        "offset": offset,
+        "orders": serialized,
+    }
+
+
+@router.get("/account/orders/{order_code}")
+def get_customer_order_detail(
+    order_code: str,
+    request: Request,
+    current_user: User = Depends(get_current_customer),
+    db: Session = Depends(get_db),
+) -> dict:
+    clean_code = (order_code or "").strip()
+    order = (
+        db.query(Order)
+        .options(joinedload(Order.service))
+        .filter(Order.order_code == clean_code, Order.user_id == current_user.id)
+        .first()
+    )
+    if not order:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
+
+    svc = order.service
+    is_pre = bool(getattr(order, "is_preorder", False)) or order.status == "preorder_waiting"
+    is_ref = order.status == "refunded" or bool(getattr(order, "refunded_at", None))
+    label, badge = _format_customer_order_status(order.status, is_pre)
+
+    method = (
+        db.query(PaymentMethod).filter(PaymentMethod.code == (order.payment_method or "")).first()
+        if order.payment_method
+        else None
+    )
+
+    # Fulfillment / Delivery details (safe for customers)
+    st = (order.status or "").lower()
+    if st in ("completed", "delivered"):
+        delivery_status = "Delivered"
+        delivery_info = (
+            order.delivered_info.strip()
+            if order.delivered_info
+            else "Your account details and credentials have been granted."
+        )
+    elif is_pre:
+        delivery_status = "Pre-order Waiting"
+        delivery_info = "Your pre-order has been logged and paid. Account details will be delivered automatically as soon as new stock is added."
+    elif st == "refunded":
+        delivery_status = "Refunded"
+        ref_details = []
+        if order.refund_amount is not None:
+            ref_details.append(f"${order.refund_amount:.2f} USDT")
+        if order.refund_method:
+            ref_details.append(f"via {order.refund_method.upper()}")
+        delivery_info = f"Order was refunded {(' '.join(ref_details)) if ref_details else ''}."
+    elif st in ("cancelled", "canceled", "failed"):
+        delivery_status = "Cancelled"
+        delivery_info = "This order was cancelled."
+    else:
+        delivery_status = "Pending Verification"
+        delivery_info = "Payment confirmation in progress. Fulfillment will complete shortly."
+
+    return {
+        "ok": True,
+        "order": {
+            "order_code": order.order_code,
+            "sku": svc.sku if svc else None,
+            "product_name": _plain_text(svc.name) if svc else "Product",
+            "emoji": _display_emoji(svc.emoji if svc else None, "🛍️"),
+            "image_url": absolute_media_url(svc.image_path, request) if svc else None,
+            "quantity": int(order.quantity or 1),
+            "amount_usdt": float(order.amount_usdt or 0.0),
+            "currency": "USDT",
+            "status": order.status,
+            "status_label": label,
+            "status_badge": badge,
+            "payment_method": order.payment_method,
+            "payment_method_name": method.name if method else order.payment_method,
+            "pay_to": method.address if method else None,
+            "payment_network": method.network if method else None,
+            "payment_instructions": _plain_text(method.instructions) if method else None,
+            "delivery_status": delivery_status,
+            "delivery_info": delivery_info,
+            "is_preorder": is_pre,
+            "is_refunded": is_ref,
+            "refund_amount": float(order.refund_amount) if order.refund_amount is not None else None,
+            "refund_method": order.refund_method,
+            "refunded_at": (
+                order.refunded_at.strftime("%b %d, %Y %I:%M %p")
+                if getattr(order, "refunded_at", None)
+                else None
+            ),
+            "created_at": (
+                order.created_at.strftime("%b %d, %Y %I:%M %p")
+                if getattr(order, "created_at", None)
+                else "—"
+            ),
+        },
+    }
+
+
 @router.post("/checkout")
 def web_checkout(
     body: CheckoutBody,
