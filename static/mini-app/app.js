@@ -235,8 +235,8 @@
     const signed = Boolean(state.user && state.user.email);
     const signBtn = document.getElementById("btn-signin");
     signBtn.textContent = signed ? state.user.name || "Account" : "Sign up";
-    signBtn.href = "#/signup";
-    document.getElementById("btn-account").href = "#/signup";
+    signBtn.href = signed ? "/account" : "#/signup";
+    document.getElementById("btn-account").href = signed ? "/account" : "#/signup";
     document.querySelectorAll(".nav-link").forEach((link) => {
       const href = link.getAttribute("href") || "";
       const isHome = link.id === "nav-home" || href === "/mini" || href === "#/";
@@ -519,12 +519,14 @@
     document.getElementById("signup-form").hidden = signed;
     document.getElementById("login-form").hidden = true;
     document.querySelector(".auth-switch").hidden = signed;
+    const signedActions = document.getElementById("auth-signed-actions");
+    if (signedActions) signedActions.hidden = !signed;
     const logout = document.getElementById("btn-logout");
     if (logout) logout.hidden = !signed;
     const lede = els.viewAuth.querySelector(".lede");
     if (lede) {
       lede.textContent = signed
-        ? "You are signed in with email — not Telegram."
+        ? "You are signed in to your SMF SHOP customer account."
         : "Sign up with email — no Telegram login.";
     }
     showView("view-auth");
@@ -612,6 +614,10 @@
           document.getElementById("order-title").textContent = "Order not found";
           document.getElementById("order-body").innerHTML = `<p class="empty">${escapeHtml(err.message)}</p>`;
         });
+      return;
+    }
+    if (state.route === "/account") {
+      window.location.href = "/account";
       return;
     }
     if (state.route === "/subscription") renderCollection("subscription");
@@ -764,11 +770,17 @@
     document.getElementById("login-form").hidden = false;
     document.getElementById("auth-title").textContent = "Log in to SMF SHOP";
   };
-  document.getElementById("btn-logout").onclick = () => {
-    saveUser(null);
-    location.hash = "#/signup";
-    renderAuth();
-  };
+  const logoutBtn = document.getElementById("btn-logout");
+  if (logoutBtn) {
+    logoutBtn.onclick = async () => {
+      try {
+        await postJSON("/api/web/logout", {});
+      } catch (_err) {}
+      saveUser(null);
+      location.hash = "#/signup";
+      renderAuth();
+    };
+  }
 
   document.getElementById("signup-form").addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -788,7 +800,11 @@
         password: payload.password,
       });
       saveUser(data.user);
-      location.hash = state.cart.length ? "#/checkout" : "#/";
+      if (state.cart.length) {
+        location.hash = "#/checkout";
+      } else {
+        window.location.href = "/account";
+      }
     } catch (err) {
       error.textContent = err.message;
       error.hidden = false;
@@ -803,7 +819,11 @@
     try {
       const data = await postJSON("/api/web/login", payload);
       saveUser(data.user);
-      location.hash = state.cart.length ? "#/checkout" : "#/";
+      if (state.cart.length) {
+        location.hash = "#/checkout";
+      } else {
+        window.location.href = "/account";
+      }
     } catch (err) {
       error.textContent = err.message;
       error.hidden = false;
@@ -843,13 +863,19 @@
     getJSON("/api/web/featured"),
     getJSON("/api/web/categories"),
     getJSON("/api/web/payment-methods").catch(() => []),
+    getJSON("/api/web/me").catch(() => ({ authenticated: false })),
   ])
-    .then(([shop, products, featured, categories, methods]) => {
+    .then(([shop, products, featured, categories, methods, authRes]) => {
       state.shop = shop;
       state.products = products;
       state.featured = featured;
       state.categories = categories;
       state.methods = methods;
+      if (authRes && authRes.authenticated && authRes.user) {
+        saveUser(authRes.user);
+      } else {
+        saveUser(null);
+      }
       applyRoute();
     })
     .catch((err) => {

@@ -20,6 +20,7 @@ from __future__ import annotations
 import html
 import os
 import re
+import time
 from datetime import datetime
 from urllib.parse import urlparse
 
@@ -477,11 +478,82 @@ def _web_telegram_id(email: str) -> str:
     return f"web:{email.strip().lower()}"
 
 
+CUSTOMER_USER_ID_KEY = "customer_user_id"
+CUSTOMER_LOGGED_IN_KEY = "customer_logged_in"
+CUSTOMER_LAST_ACTIVE_KEY = "customer_last_active"
+
+
+def _has_session(request: Request) -> bool:
+    return "session" in request.scope
+
+
+def _set_customer_session(request: Request, user_id: int) -> None:
+    if not _has_session(request):
+        return
+    request.session[CUSTOMER_USER_ID_KEY] = int(user_id)
+    request.session[CUSTOMER_LOGGED_IN_KEY] = True
+    request.session[CUSTOMER_LAST_ACTIVE_KEY] = time.time()
+
+
+def _clear_customer_session(request: Request) -> None:
+    if not _has_session(request):
+        return
+    request.session.pop(CUSTOMER_USER_ID_KEY, None)
+    request.session.pop(CUSTOMER_LOGGED_IN_KEY, None)
+    request.session.pop(CUSTOMER_LAST_ACTIVE_KEY, None)
+
+
+def get_current_customer(request: Request, db: Session = Depends(get_db)) -> User:
+    if not _has_session(request):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required. Please log in.",
+        )
+    user_id = request.session.get(CUSTOMER_USER_ID_KEY)
+    logged_in = request.session.get(CUSTOMER_LOGGED_IN_KEY)
+    if not user_id or not logged_in:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required. Please log in.",
+        )
+    user = db.query(User).filter(User.id == int(user_id)).first()
+    if not user:
+        _clear_customer_session(request)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Customer account not found.",
+        )
+    if user.is_banned:
+        _clear_customer_session(request)
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This account has been suspended.",
+        )
+    request.session[CUSTOMER_LAST_ACTIVE_KEY] = time.time()
+    return user
+
+
+def get_optional_customer(request: Request, db: Session = Depends(get_db)) -> User | None:
+    if not _has_session(request):
+        return None
+    user_id = request.session.get(CUSTOMER_USER_ID_KEY)
+    logged_in = request.session.get(CUSTOMER_LOGGED_IN_KEY)
+    if not user_id or not logged_in:
+        return None
+    user = db.query(User).filter(User.id == int(user_id)).first()
+    if not user or user.is_banned:
+        _clear_customer_session(request)
+        return None
+    request.session[CUSTOMER_LAST_ACTIVE_KEY] = time.time()
+    return user
+
+
 def _public_user(user: User) -> dict:
     return {
         "id": user.id,
         "name": user.full_name or "",
         "email": user.email or "",
+        "wallet_balance": float(user.wallet_usdt or 0.0),
     }
 
 
@@ -563,6 +635,7 @@ async def web_signup(request: Request, body: SignupBody, db: Session = Depends(g
     user.password_hash = hash_password(password)
     db.commit()
     db.refresh(user)
+    _set_customer_session(request, user.id)
     return {"ok": True, "user": _public_user(user)}
 
 
@@ -589,11 +662,83 @@ async def web_login(request: Request, body: LoginBody, db: Session = Depends(get
         user.password_hash = hash_password(body.password)
         db.commit()
 
+    _set_customer_session(request, user.id)
     return {"ok": True, "user": _public_user(user)}
 
 
+@router.post("/logout")
+def web_logout(request: Request) -> dict:
+    _clear_customer_session(request)
+    return {"ok": True}
+
+
+@router.get("/me")
+def web_me(request: Request, db: Session = Depends(get_db)) -> dict:
+    user = get_optional_customer(request, db)
+    if not user:
+        return {"ok": False, "authenticated": False, "user": None}
+    return {
+        "ok": True,
+        "authenticated": True,
+        "user": _public_user(user),
+    }
+
+
+@router.get("/account/dashboard")
+def web_account_dashboard(
+    current_user: User = Depends(get_current_customer),
+    db: Session = Depends(get_db),
+) -> dict:
+    orders_count = (
+        db.query(func.count(Order.id))
+        .filter(Order.user_id == current_user.id)
+        .scalar()
+        or 0
+    )
+    recent_orders = (
+        db.query(Order)
+        .options(joinedload(Order.service))
+        .filter(Order.user_id == current_user.id)
+        .order_by(Order.id.desc())
+        .limit(5)
+        .all()
+    )
+    return {
+        "ok": True,
+        "customer": {
+            "id": current_user.id,
+            "name": current_user.full_name or (current_user.email or "").split("@")[0],
+            "email": current_user.email or "",
+        },
+        "stats": {
+            "total_orders": int(orders_count),
+            "active_accounts": 0,
+            "wallet_balance": float(current_user.wallet_usdt or 0.0),
+            "open_claims": 0,
+        },
+        "recent_orders": [
+            {
+                "order_code": o.order_code,
+                "product_name": _plain_text(o.service.name) if o.service else "Product",
+                "amount": float(o.amount_usdt or 0.0),
+                "status": o.status,
+                "created_at": (
+                    o.created_at.strftime("%b %d, %Y")
+                    if getattr(o, "created_at", None)
+                    else None
+                ),
+            }
+            for o in recent_orders
+        ],
+    }
+
+
 @router.post("/checkout")
-def web_checkout(body: CheckoutBody, db: Session = Depends(get_db)) -> dict:
+def web_checkout(
+    body: CheckoutBody,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> dict:
     if not body.items:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cart is empty")
     method = (
@@ -603,7 +748,18 @@ def web_checkout(body: CheckoutBody, db: Session = Depends(get_db)) -> dict:
     )
     if not method:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Choose a valid payment method")
-    user = _get_or_create_web_user(db, body.email, body.name, body.password)
+
+    # If logged in as customer, link order to authenticated customer unless a different valid email was specified
+    logged_in_user = get_optional_customer(request, db)
+    clean_email = (body.email or "").strip().lower()
+    if logged_in_user and (not clean_email or clean_email == (logged_in_user.email or "").lower()):
+        user = logged_in_user
+    else:
+        user = _get_or_create_web_user(db, body.email, body.name, body.password)
+        # If user provided a password during checkout, establish session
+        if body.password:
+            _set_customer_session(request, user.id)
+
     created: list[dict] = []
     try:
         for item in body.items:

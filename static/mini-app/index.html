@@ -130,7 +130,10 @@
           <button type="submit" class="btn btn-primary">Sign up</button>
         </form>
         <p class="muted auth-switch">Already have an account? <button type="button" class="linkish" id="show-login">Log in</button></p>
-        <button type="button" class="btn btn-whatsapp" id="btn-logout" hidden>Log out</button>
+        <div id="auth-signed-actions" class="hero-actions" style="margin-top: 16px;" hidden>
+          <a class="btn btn-primary" href="/account" id="btn-go-portal">Customer Dashboard</a>
+          <button type="button" class="btn btn-whatsapp" id="btn-logout">Log out</button>
+        </div>
         <form id="login-form" class="form" hidden>
           <label>Email<input name="email" type="email" autocomplete="email" required></label>
           <label>Password<input name="password" type="password" autocomplete="current-password" required></label>

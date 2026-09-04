@@ -162,8 +162,8 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
 
-        # Mini App / Web catalog needs to be embeddable in Telegram Desktop / Web
-        if path.startswith(("/mini", "/app", "/shop", "/static/mini-app")):
+        # Mini App / Web catalog / Account portal needs to be embeddable in Telegram Desktop / Web
+        if path.startswith(("/mini", "/app", "/shop", "/account", "/static/mini-app")):
             frame_ancestors = "frame-ancestors 'self' https://web.telegram.org https://k.telegram.org https://*.telegram.org"
         else:
             frame_ancestors = "frame-ancestors 'self'"
@@ -307,6 +307,17 @@ async def telegram_webhook(request: Request):
 def mini_shop():
     return FileResponse(
         "static/mini-app/index.html",
+        media_type="text/html",
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+@app.api_route("/account", methods=["GET", "HEAD"], include_in_schema=False)
+@app.api_route("/account/", methods=["GET", "HEAD"], include_in_schema=False)
+@app.get("/account/{path:path}", include_in_schema=False)
+def customer_account(path: str = ""):
+    return FileResponse(
+        "static/mini-app/account.html",
         media_type="text/html",
         headers={"Cache-Control": "no-store"},
     )
