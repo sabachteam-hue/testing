@@ -856,7 +856,7 @@ def run_light_migrations() -> None:
                 connection.execute(text("ALTER TABLE orders ADD COLUMN refund_amount FLOAT"))
         if "refunded_at" not in existing_columns:
             with engine.begin() as connection:
-                connection.execute(text("ALTER TABLE orders ADD COLUMN refunded_at DATETIME"))
+                connection.execute(text("ALTER TABLE orders ADD COLUMN refunded_at TIMESTAMP"))
         if "customer_email" not in existing_columns:
             with engine.begin() as connection:
                 connection.execute(text("ALTER TABLE orders ADD COLUMN customer_email VARCHAR(200)"))
@@ -871,7 +871,7 @@ def run_light_migrations() -> None:
                 connection.execute(text("ALTER TABLE orders ADD COLUMN preorder_status VARCHAR(20)"))
         if "preorder_paid_at" not in existing_columns:
             with engine.begin() as connection:
-                connection.execute(text("ALTER TABLE orders ADD COLUMN preorder_paid_at DATETIME"))
+                connection.execute(text("ALTER TABLE orders ADD COLUMN preorder_paid_at TIMESTAMP"))
 
     if "transactions" in table_names:
         existing_columns = {col["name"] for col in inspector.get_columns("transactions")}
@@ -880,7 +880,7 @@ def run_light_migrations() -> None:
                 connection.execute(text("ALTER TABLE transactions ADD COLUMN expire_notify BOOLEAN DEFAULT TRUE"))
         if "user_notified_at" not in existing_columns:
             with engine.begin() as connection:
-                connection.execute(text("ALTER TABLE transactions ADD COLUMN user_notified_at DATETIME"))
+                connection.execute(text("ALTER TABLE transactions ADD COLUMN user_notified_at TIMESTAMP"))
         if "payfast_check_chat_id" not in existing_columns:
             with engine.begin() as connection:
                 connection.execute(text("ALTER TABLE transactions ADD COLUMN payfast_check_chat_id VARCHAR(40)"))
@@ -923,7 +923,7 @@ def run_light_migrations() -> None:
                 connection.execute(text("ALTER TABLE issue_reports ADD COLUMN status VARCHAR(20) DEFAULT 'pending'"))
         if "resolved_at" not in existing_columns:
             with engine.begin() as connection:
-                connection.execute(text("ALTER TABLE issue_reports ADD COLUMN resolved_at DATETIME"))
+                connection.execute(text("ALTER TABLE issue_reports ADD COLUMN resolved_at TIMESTAMP"))
 
     if "users" in table_names:
         existing_columns = {col["name"] for col in inspector.get_columns("users")}
@@ -970,7 +970,7 @@ def run_light_migrations() -> None:
                 connection.execute(text("ALTER TABLE providers ADD COLUMN api_username VARCHAR(120)"))
         if "balance_synced_at" not in existing_columns:
             with engine.begin() as connection:
-                connection.execute(text("ALTER TABLE providers ADD COLUMN balance_synced_at DATETIME"))
+                connection.execute(text("ALTER TABLE providers ADD COLUMN balance_synced_at TIMESTAMP"))
         if "low_balance_alert_active" not in existing_columns:
             with engine.begin() as connection:
                 connection.execute(text("ALTER TABLE providers ADD COLUMN low_balance_alert_active BOOLEAN DEFAULT FALSE"))
@@ -1066,13 +1066,13 @@ def run_light_migrations() -> None:
             if "force_join_group_url" not in existing_columns:
                 connection.execute(text("ALTER TABLE bot_configs ADD COLUMN force_join_group_url VARCHAR(500)"))
             if "sidebar_seen_revenue_at" not in existing_columns:
-                connection.execute(text("ALTER TABLE bot_configs ADD COLUMN sidebar_seen_revenue_at DATETIME"))
+                connection.execute(text("ALTER TABLE bot_configs ADD COLUMN sidebar_seen_revenue_at TIMESTAMP"))
             if "sidebar_seen_sold_accounts_at" not in existing_columns:
-                connection.execute(text("ALTER TABLE bot_configs ADD COLUMN sidebar_seen_sold_accounts_at DATETIME"))
+                connection.execute(text("ALTER TABLE bot_configs ADD COLUMN sidebar_seen_sold_accounts_at TIMESTAMP"))
             if "sidebar_seen_orders_at" not in existing_columns:
-                connection.execute(text("ALTER TABLE bot_configs ADD COLUMN sidebar_seen_orders_at DATETIME"))
+                connection.execute(text("ALTER TABLE bot_configs ADD COLUMN sidebar_seen_orders_at TIMESTAMP"))
             if "sidebar_seen_users_at" not in existing_columns:
-                connection.execute(text("ALTER TABLE bot_configs ADD COLUMN sidebar_seen_users_at DATETIME"))
+                connection.execute(text("ALTER TABLE bot_configs ADD COLUMN sidebar_seen_users_at TIMESTAMP"))
             if "mini_app_url" not in existing_columns:
                 connection.execute(text("ALTER TABLE bot_configs ADD COLUMN mini_app_url VARCHAR(500)"))
 
