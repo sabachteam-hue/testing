@@ -78,14 +78,75 @@ def hash_password(password: str) -> str:
     return _hash_pbkdf2(password)
 
 
+def normalize_password_hash(hash_str: str | None) -> str:
+    """Normalize a password hash string from environment variables.
+    Handles Railway/Docker/shell formatting artifacts without altering valid hash chars:
+    - Strips surrounding whitespace, outer quotes (", '), and backticks (`)
+    - Unescapes backslash-escaped dollar signs (\\$ -> $)
+    - Unescapes double dollar signs ($$ -> $) when used as escape sequence
+    - Restores missing leading dollar sign for known hash prefixes
+    - Preserves all valid hash characters ($, =, /, +, ., etc.)
+    """
+    if not hash_str:
+        return ""
+    h = str(hash_str).strip()
+
+    # 1. Strip surrounding quotes or backticks repeatedly
+    while len(h) >= 2 and (
+        (h.startswith('"') and h.endswith('"'))
+        or (h.startswith("'") and h.endswith("'"))
+        or (h.startswith("`") and h.endswith("`"))
+    ):
+        h = h[1:-1].strip()
+
+    # 2. Handle backslash-escaped dollar signs (\$)
+    if r"\$" in h:
+        h = h.replace(r"\$", "$")
+
+    # 3. Handle double-dollar escaping ($$) common in Docker Compose / systemd
+    if h.startswith("$$argon2") or h.startswith("$$pbkdf2") or h.startswith("$$2"):
+        h = h.replace("$$", "$")
+
+    # 4. Handle missing leading dollar sign if user omitted or shell consumed it
+    if h.startswith(("argon2", "pbkdf2-sha256", "2b$", "2a$", "2y$", "2x$")):
+        h = "$" + h
+
+    return h
+
+
+def _decode_bytes_field(s: str) -> bytes:
+    """Decode a hex or base64 (standard or passlib ab64) encoded string to bytes."""
+    try:
+        return bytes.fromhex(s)
+    except ValueError:
+        pass
+    import base64
+    # Passlib uses . instead of + for base64
+    padded = s.replace(".", "+")
+    rem = len(padded) % 4
+    if rem:
+        padded += "=" * (4 - rem)
+    try:
+        return base64.b64decode(padded)
+    except Exception:
+        pass
+    try:
+        return base64.urlsafe_b64decode(padded)
+    except Exception:
+        pass
+    raise ValueError("Cannot decode bytes field as hex or base64")
+
+
 def _verify_pbkdf2(plain_password: str, hashed_password: str) -> bool:
     try:
         parts = hashed_password.split("$")
-        if len(parts) != 5 or parts[1] != "pbkdf2-sha256":
+        if parts and parts[0] == "":
+            parts = parts[1:]
+        if len(parts) < 4 or not parts[0].startswith("pbkdf2"):
             return False
-        iterations = int(parts[2])
-        salt = bytes.fromhex(parts[3])
-        expected_derived = bytes.fromhex(parts[4])
+        iterations = int(parts[1])
+        salt = _decode_bytes_field(parts[2])
+        expected_derived = _decode_bytes_field(parts[3])
         actual_derived = hashlib.pbkdf2_hmac("sha256", plain_password.encode("utf-8"), salt, iterations)
         return secrets.compare_digest(expected_derived, actual_derived)
     except Exception:
@@ -107,23 +168,26 @@ def verify_password(plain_password: str, hashed_password: str | None) -> tuple[b
     if not plain_password or not hashed_password:
         return False, False
 
-    # 1. Argon2id
-    if hashed_password.startswith("$argon2"):
+    clean_hash = normalize_password_hash(hashed_password)
+    if not clean_hash:
+        return False, False
+
+    # 1. Argon2id / Argon2i / Argon2d
+    if clean_hash.startswith("$argon2"):
         try:
             from argon2 import PasswordHasher
             ph = PasswordHasher()
-            ph.verify(hashed_password, plain_password)
-            needs_rehash = ph.check_needs_rehash(hashed_password)
+            ph.verify(clean_hash, plain_password)
+            needs_rehash = ph.check_needs_rehash(clean_hash)
             return True, needs_rehash
         except Exception:
             return False, False
 
-    # 2. bcrypt
-    if hashed_password.startswith(("$2b$", "$2a$", "$2y$")):
+    # 2. bcrypt ($2b$, $2a$, $2y$, $2x$, $2$)
+    if clean_hash.startswith(("$2b$", "$2a$", "$2y$", "$2x$", "$2$")):
         try:
             import bcrypt
-            valid = bcrypt.checkpw(plain_password.encode("utf-8"), hashed_password.encode("utf-8"))
-            # If argon2 is installed, rehash bcrypt to argon2id
+            valid = bcrypt.checkpw(plain_password.encode("utf-8"), clean_hash.encode("utf-8"))
             needs_rehash = False
             try:
                 import argon2  # noqa: F401
@@ -135,9 +199,8 @@ def verify_password(plain_password: str, hashed_password: str | None) -> tuple[b
             return False, False
 
     # 3. PBKDF2-HMAC-SHA256
-    if hashed_password.startswith("$pbkdf2-sha256$"):
-        valid = _verify_pbkdf2(plain_password, hashed_password)
-        # If argon2 or bcrypt is installed, upgrade PBKDF2
+    if clean_hash.startswith(("$pbkdf2-sha256$", "$pbkdf2$")):
+        valid = _verify_pbkdf2(plain_password, clean_hash)
         needs_rehash = False
         try:
             import argon2  # noqa: F401
@@ -150,11 +213,13 @@ def verify_password(plain_password: str, hashed_password: str | None) -> tuple[b
                 pass
         return valid, (valid and needs_rehash)
 
-    # 4. Legacy 64-character hex SHA-256 + pepper
-    if len(hashed_password) == 64 and all(c in "0123456789abcdefABCDEF" for c in hashed_password):
+    # 4. Legacy 64-character hex SHA-256 (with pepper or raw)
+    if len(clean_hash) == 64 and all(c in "0123456789abcdefABCDEF" for c in clean_hash):
         legacy = legacy_hash_secret(plain_password)
-        if secrets.compare_digest(legacy.lower(), hashed_password.lower()):
-            # Valid legacy password! Signal transparent rehash to modern algorithm
+        if secrets.compare_digest(legacy.lower(), clean_hash.lower()):
+            return True, True
+        raw_sha = hashlib.sha256(plain_password.encode("utf-8")).hexdigest()
+        if secrets.compare_digest(raw_sha.lower(), clean_hash.lower()):
             return True, True
         return False, False
 
@@ -275,7 +340,7 @@ def validate_environment_secrets() -> None:
             )
 
         # 2. Admin password checks
-        admin_hash = (os.getenv("ADMIN_PASSWORD_HASH") or "").strip()
+        admin_hash = normalize_password_hash(os.getenv("ADMIN_PASSWORD_HASH"))
         admin_pass = (os.getenv("ADMIN_PASSWORD") or "").strip()
         if not admin_hash and not admin_pass:
             raise RuntimeError("FATAL: Neither ADMIN_PASSWORD nor ADMIN_PASSWORD_HASH is set in production.")

@@ -12,6 +12,7 @@ from urllib.parse import quote
 from utils.security import (
     constant_time_compare,
     is_production,
+    normalize_password_hash,
     safe_upload_filename,
     validate_image_upload,
     verify_password,
@@ -351,15 +352,20 @@ async def login(request: Request, username: str = Form(...), password: str = For
         )
 
     expected_user = (os.getenv("ADMIN_USERNAME") or "admin").strip()
-    admin_hash = (os.getenv("ADMIN_PASSWORD_HASH") or "").strip()
+    admin_hash = normalize_password_hash(os.getenv("ADMIN_PASSWORD_HASH"))
     admin_pass = (os.getenv("ADMIN_PASSWORD") or ("admin123" if not is_production() else "")).strip()
 
     user_matches = constant_time_compare(username.strip(), expected_user)
     pass_matches = False
     if admin_hash:
         pass_matches, _ = verify_password(password, admin_hash)
-    elif admin_pass:
+        if not pass_matches and password.strip() != password:
+            pass_matches, _ = verify_password(password.strip(), admin_hash)
+
+    if not pass_matches and admin_pass:
         pass_matches = constant_time_compare(password, admin_pass)
+        if not pass_matches and password.strip() != password:
+            pass_matches = constant_time_compare(password.strip(), admin_pass)
 
     if user_matches and pass_matches:
         await clear_failures(lockout_key)
