@@ -37,12 +37,15 @@ from database.models import (
     PaymentMethod,
     ProductSale,
     Service,
+    Transaction,
     User,
     get_active_languages,
     get_active_payment_methods,
     get_db,
 )
 from utils.granted_accounts import (
+    calculate_account_refund_estimate,
+    format_customer_transaction,
     format_granted_account_payload,
     sync_granted_accounts_for_order,
     sync_user_granted_accounts,
@@ -1040,6 +1043,108 @@ def get_customer_granted_account_detail(
     return {
         "ok": True,
         "account": format_granted_account_payload(account, account.order, account.service, request),
+    }
+
+
+@router.get("/account/granted-accounts/{account_id}/refund-estimate")
+def get_customer_granted_account_refund_estimate(
+    account_id: int,
+    current_user: User = Depends(get_current_customer),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Authoritative server-calculated pro-rata refund estimate for a customer's granted account."""
+    account = (
+        db.query(GrantedAccount)
+        .options(joinedload(GrantedAccount.service), joinedload(GrantedAccount.order))
+        .filter(GrantedAccount.id == account_id, GrantedAccount.user_id == current_user.id)
+        .first()
+    )
+    if not account:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Granted account not found")
+
+    estimate = calculate_account_refund_estimate(account, account.order)
+    return {
+        "ok": True,
+        "estimate": estimate,
+    }
+
+
+@router.get("/account/wallet")
+def get_customer_wallet(
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    type_filter: str = Query("all"),
+    current_user: User = Depends(get_current_customer),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Fetch authenticated customer's wallet balance, summary totals, and transaction ledger."""
+    balance = round(float(current_user.wallet_usdt or 0.0), 2)
+
+    # Confirmed credits: refund, admin_credit, deposit
+    total_credits = (
+        db.query(func.sum(Transaction.amount))
+        .filter(
+            Transaction.user_id == current_user.id,
+            Transaction.status == "confirmed",
+            Transaction.tx_type.in_(["refund", "admin_credit", "credit", "deposit"]),
+        )
+        .scalar()
+        or 0.0
+    )
+
+    # Confirmed debits: deduct, admin_debit, purchase
+    total_debits = (
+        db.query(func.sum(Transaction.amount))
+        .filter(
+            Transaction.user_id == current_user.id,
+            Transaction.status == "confirmed",
+            Transaction.tx_type.in_(["deduct", "admin_debit", "purchase", "order_payment"]),
+        )
+        .scalar()
+        or 0.0
+    )
+
+    # Confirmed refunds
+    total_refunds = (
+        db.query(func.sum(Transaction.amount))
+        .filter(
+            Transaction.user_id == current_user.id,
+            Transaction.status == "confirmed",
+            Transaction.tx_type == "refund",
+        )
+        .scalar()
+        or 0.0
+    )
+
+    query = db.query(Transaction).filter(Transaction.user_id == current_user.id)
+    tf = (type_filter or "all").lower().strip()
+    if tf == "credits":
+        query = query.filter(Transaction.tx_type.in_(["refund", "admin_credit", "credit", "deposit"]))
+    elif tf == "debits":
+        query = query.filter(Transaction.tx_type.in_(["deduct", "admin_debit", "purchase", "order_payment"]))
+    elif tf == "refunds":
+        query = query.filter(Transaction.tx_type == "refund")
+
+    total_count = query.count()
+    rows = (
+        query.order_by(Transaction.created_at.desc(), Transaction.id.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+
+    return {
+        "ok": True,
+        "balance": balance,
+        "currency": "USDT",
+        "total_credits": round(float(total_credits), 2),
+        "total_debits": round(float(total_debits), 2),
+        "total_refunds": round(float(total_refunds), 2),
+        "total": total_count,
+        "limit": limit,
+        "offset": offset,
+        "type_filter": tf,
+        "transactions": [format_customer_transaction(tx) for tx in rows],
     }
 
 

@@ -706,6 +706,171 @@
       background: rgba(139, 108, 255, 0.25);
       color: #fff;
     }
+
+    /* Phase 4: Wallet & Transactions */
+    .wallet-hero-card {
+      background: linear-gradient(135deg, rgba(139, 108, 255, 0.16) 0%, rgba(30, 20, 56, 0.8) 100%);
+      border: 1px solid rgba(139, 108, 255, 0.35);
+      border-radius: 20px;
+      padding: 24px;
+      margin-bottom: 20px;
+      box-shadow: 0 8px 32px rgba(139, 108, 255, 0.12);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+    .wallet-hero-balance {
+      font-size: 36px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      color: #fff;
+      margin: 6px 0 2px 0;
+      background: linear-gradient(135deg, #ffffff 0%, #c4b5fd 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .wallet-stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .wallet-stat-card {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .wallet-stat-card .label {
+      font-size: 11.5px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .wallet-stat-card .value {
+      font-size: 20px;
+      font-weight: 800;
+      color: var(--ink);
+    }
+    .wallet-stat-card .value.credit {
+      color: var(--live);
+    }
+    .wallet-stat-card .value.debit {
+      color: #fda4af;
+    }
+    .wallet-stat-card .value.refund {
+      color: var(--purple-2);
+    }
+    .tx-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 14px;
+    }
+    .tx-card {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      transition: border-color 0.15s ease;
+    }
+    .tx-card:hover {
+      border-color: rgba(139, 108, 255, 0.3);
+    }
+    .tx-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .tx-icon-circle {
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      display: grid;
+      place-items: center;
+      font-size: 18px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    .tx-icon-credit {
+      background: rgba(52, 211, 153, 0.12);
+      color: var(--live);
+      border: 1px solid rgba(52, 211, 153, 0.25);
+    }
+    .tx-icon-debit {
+      background: rgba(244, 63, 94, 0.12);
+      color: #f43f5e;
+      border: 1px solid rgba(244, 63, 94, 0.25);
+    }
+    .tx-icon-refund {
+      background: rgba(139, 108, 255, 0.12);
+      color: var(--purple-2);
+      border: 1px solid rgba(139, 108, 255, 0.25);
+    }
+    .tx-title {
+      font-weight: 700;
+      font-size: 14px;
+      color: var(--ink);
+      margin: 0 0 3px 0;
+    }
+    .tx-sub {
+      font-size: 12px;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .tx-right {
+      text-align: right;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 4px;
+    }
+    .tx-amount {
+      font-size: 16px;
+      font-weight: 800;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+    .tx-amount.credit {
+      color: var(--live);
+    }
+    .tx-amount.debit {
+      color: #cbd5e1;
+    }
+
+    /* Pro-Rata Refund Estimate Highlight */
+    .refund-calc-hero {
+      background: linear-gradient(135deg, rgba(139, 108, 255, 0.12) 0%, rgba(20, 15, 35, 0.9) 100%);
+      border: 1px solid rgba(139, 108, 255, 0.3);
+      border-radius: 16px;
+      padding: 18px;
+      margin: 14px 0;
+      text-align: center;
+    }
+    .refund-calc-val {
+      font-size: 32px;
+      font-weight: 800;
+      color: #34d399;
+      margin: 6px 0;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+    .refund-calc-sub {
+      font-size: 12.5px;
+      color: var(--muted);
+    }
   </style>
 </head>
 <body>
@@ -851,7 +1016,7 @@
             <div class="stat-sub">Active subscriptions (Click to view)</div>
           </div>
 
-          <div class="stat-card">
+          <div class="stat-card" style="cursor: pointer;" onclick="switchTab('wallet')" title="View Wallet">
             <div class="stat-head">
               <span>Wallet Balance</span>
               <div class="stat-icon-box">
@@ -859,7 +1024,7 @@
               </div>
             </div>
             <div class="stat-value" id="stat-wallet-balance">$0.00</div>
-            <div class="stat-sub">Available USDT credits</div>
+            <div class="stat-sub">Available USDT credits (Click to view)</div>
           </div>
 
           <div class="stat-card">
@@ -946,18 +1111,73 @@
         <div id="accounts-list-container" class="accounts-cards-grid" style="margin-top: 16px;"></div>
       </div>
 
+      <!-- Functional Customer Wallet View -->
       <div id="tab-wallet" class="portal-tab-content content-panel" hidden>
-        <div class="placeholder-card">
-          <div class="placeholder-badge">Phase 2 Preview</div>
-          <h2 style="margin: 0;">Wallet & Top-up</h2>
-          <p class="muted">Top-up USDT directly via crypto and local payment gateways, view deposit ledger, and pay for one-click orders instantly with your balance.</p>
-          <button type="button" class="btn btn-primary" onclick="switchTab('dashboard')">Back to Dashboard</button>
+        <div class="panel-head" style="flex-wrap: wrap; gap: 12px;">
+          <div>
+            <h2 style="margin: 0 0 4px 0; font-size: 22px; font-weight: 800;">Customer Wallet</h2>
+            <p class="muted" style="margin: 0; font-size: 13px;">Manage your USDT credits, track incoming refunds, and view transaction activity.</p>
+          </div>
+          <button type="button" class="btn btn-whatsapp" onclick="fetchWalletData(currentWalletFilter)" style="font-size: 12px; padding: 6px 14px; gap: 6px;">
+            <span>🔄</span> Refresh
+          </button>
         </div>
+
+        <!-- Wallet Hero Balance Card -->
+        <div class="wallet-hero-card">
+          <div>
+            <div style="font-size: 12px; font-weight: 700; color: var(--purple-2); text-transform: uppercase; letter-spacing: 0.05em;">Available Balance</div>
+            <div class="wallet-hero-balance" id="wallet-hero-balance-val">$0.00</div>
+            <div style="font-size: 13px; color: var(--muted);">Authoritative USDT balance for instant 1-click orders and automatic refund credits.</div>
+          </div>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <a href="/mini" class="btn btn-primary" style="font-size: 13px; padding: 10px 18px;">
+              <span>🛍️</span> Use at Storefront
+            </a>
+          </div>
+        </div>
+
+        <!-- Summary KPI Stats Grid -->
+        <div class="wallet-stats-grid">
+          <div class="wallet-stat-card">
+            <span class="label">Main Currency</span>
+            <span class="value" id="wallet-stat-currency">USDT</span>
+          </div>
+          <div class="wallet-stat-card">
+            <span class="label">Total Credits</span>
+            <span class="value credit" id="wallet-stat-credits">+$0.00</span>
+          </div>
+          <div class="wallet-stat-card">
+            <span class="label">Total Debits</span>
+            <span class="value debit" id="wallet-stat-debits">-$0.00</span>
+          </div>
+          <div class="wallet-stat-card">
+            <span class="label">Refunds Credited</span>
+            <span class="value refund" id="wallet-stat-refunds">+$0.00</span>
+          </div>
+        </div>
+
+        <!-- Filter Pills for Transactions -->
+        <div style="margin-top: 24px;">
+          <h3 style="font-size: 16px; font-weight: 700; margin: 0 0 12px 0;">Transaction Activity</h3>
+          <div class="filter-pills" id="wallet-filter-pills">
+            <button type="button" class="filter-pill active" data-filter="all">All Activity</button>
+            <button type="button" class="filter-pill" data-filter="credits">Credits (+)</button>
+            <button type="button" class="filter-pill" data-filter="debits">Debits (-)</button>
+            <button type="button" class="filter-pill" data-filter="refunds">Refunds</button>
+          </div>
+        </div>
+
+        <!-- Transactions Container -->
+        <div id="wallet-list-loading" class="empty-state" style="padding: 40px 16px;" hidden>
+          <p class="muted">Loading wallet transaction history…</p>
+        </div>
+        <div id="wallet-transactions-container" class="tx-list"></div>
       </div>
 
       <div id="tab-claims" class="portal-tab-content content-panel" hidden>
         <div class="placeholder-card">
-          <div class="placeholder-badge">Phase 2 Preview</div>
+          <div class="placeholder-badge">Phase 5 Preview</div>
           <h2 style="margin: 0;">Disputes & Claims</h2>
           <p class="muted">Automated replacement warranty claims, pro-rata refund requests, and direct support tickets will be centralized in this portal area.</p>
           <button type="button" class="btn btn-primary" onclick="switchTab('dashboard')">Back to Dashboard</button>
@@ -966,7 +1186,7 @@
 
       <div id="tab-messages" class="portal-tab-content content-panel" hidden>
         <div class="placeholder-card">
-          <div class="placeholder-badge">Phase 2 Preview</div>
+          <div class="placeholder-badge">Coming Soon</div>
           <h2 style="margin: 0;">Customer Messages</h2>
           <p class="muted">Direct synchronized inbox with Telegram announcements, admin replies, and order update notifications.</p>
           <button type="button" class="btn btn-primary" onclick="switchTab('dashboard')">Back to Dashboard</button>
@@ -975,7 +1195,7 @@
 
       <div id="tab-settings" class="portal-tab-content content-panel" hidden>
         <div class="placeholder-card">
-          <div class="placeholder-badge">Phase 2 Preview</div>
+          <div class="placeholder-badge">Coming Soon</div>
           <h2 style="margin: 0;">Account Settings</h2>
           <p class="muted">Update email addresses, configure password security, manage 2FA credentials, and notification preferences.</p>
           <button type="button" class="btn btn-primary" onclick="switchTab('dashboard')">Back to Dashboard</button>
@@ -989,6 +1209,14 @@
     <div class="sheet-card" style="max-width: 580px; width: 100%;">
       <button type="button" class="sheet-close" id="btn-close-order-sheet" aria-label="Close">×</button>
       <div id="order-detail-sheet-body"></div>
+    </div>
+  </div>
+
+  <!-- Pro-Rata Refund Estimate Slide-up Sheet Modal -->
+  <div class="sheet" id="refund-estimate-sheet" hidden>
+    <div class="sheet-card" style="max-width: 540px; width: 100%;">
+      <button type="button" class="sheet-close" id="btn-close-refund-sheet" aria-label="Close">×</button>
+      <div id="refund-estimate-sheet-body"></div>
     </div>
   </div>
 
@@ -1631,12 +1859,17 @@
             </div>
 
             <!-- Footer Actions -->
-            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: auto; padding-top: 4px;">
-              ${acc.order_code ? `
-                <button type="button" class="btn" onclick="openOrderDetail('${escapeHtml(acc.order_code)}')" style="font-size: 12px; padding: 7px 12px; background: var(--surface-2); border: 1px solid var(--line); color: var(--ink);">
-                  📄 View Order
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: auto; padding-top: 4px; flex-wrap: wrap;">
+              <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                ${acc.order_code ? `
+                  <button type="button" class="btn" onclick="openOrderDetail('${escapeHtml(acc.order_code)}')" style="font-size: 12px; padding: 7px 12px; background: var(--surface-2); border: 1px solid var(--line); color: var(--ink);">
+                    📄 Order
+                  </button>
+                ` : ''}
+                <button type="button" class="btn" onclick="openRefundEstimateSheet(${acc.id})" style="font-size: 12px; padding: 7px 12px; background: rgba(139, 108, 255, 0.15); border: 1px solid rgba(139, 108, 255, 0.3); color: var(--purple-2);" title="Calculate Pro-Rata Refund Estimate">
+                  🧮 Refund Estimate
                 </button>
-              ` : '<div></div>'}
+              </div>
               <a class="btn btn-whatsapp" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent('Hi SMF SHOP, I need help with my granted account for ' + acc.product_name + ' (Order: ' + (acc.order_code || '') + ')')}" style="font-size: 12px; padding: 7px 12px; gap: 5px;">
                 <span>💬</span> WhatsApp
               </a>
@@ -1645,7 +1878,243 @@
         `;
       }
 
-      // Hook tab switching to fetch orders or accounts
+      // Wallet State and Functions
+      let currentWalletFilter = "all";
+
+      async function fetchWalletData(typeFilter = "all") {
+        currentWalletFilter = typeFilter;
+        const container = document.getElementById("wallet-transactions-container");
+        const loading = document.getElementById("wallet-list-loading");
+        if (loading) loading.hidden = false;
+        if (container) container.innerHTML = "";
+
+        // Update filter pills active state
+        document.querySelectorAll("#wallet-filter-pills .filter-pill").forEach(p => {
+          p.classList.toggle("active", p.dataset.filter === typeFilter);
+        });
+
+        try {
+          const res = await fetchJSON(`/api/web/account/wallet?type_filter=${encodeURIComponent(typeFilter)}`);
+          if (loading) loading.hidden = true;
+
+          // Update Summary KPIs
+          const balance = Number(res.balance || 0).toFixed(2);
+          const credits = Number(res.total_credits || 0).toFixed(2);
+          const debits = Number(res.total_debits || 0).toFixed(2);
+          const refunds = Number(res.total_refunds || 0).toFixed(2);
+
+          const heroEl = document.getElementById("wallet-hero-balance-val");
+          if (heroEl) heroEl.textContent = `$${balance}`;
+          const statCredits = document.getElementById("wallet-stat-credits");
+          if (statCredits) statCredits.textContent = `+$${credits}`;
+          const statDebits = document.getElementById("wallet-stat-debits");
+          if (statDebits) statDebits.textContent = `-$${debits}`;
+          const statRefunds = document.getElementById("wallet-stat-refunds");
+          if (statRefunds) statRefunds.textContent = `+$${refunds}`;
+          const statBal = document.getElementById("stat-wallet-balance");
+          if (statBal) statBal.textContent = `$${balance}`;
+
+          // Render Transactions
+          const txs = res.transactions || [];
+          if (txs.length === 0) {
+            container.innerHTML = `
+              <div class="empty-state" style="padding: 40px 16px;">
+                <div class="empty-icon">👛</div>
+                <h3 style="margin: 0 0 6px 0; font-size: 16px;">No wallet activity yet</h3>
+                <p class="muted" style="margin: 0 0 16px 0; font-size: 13px;">When you receive refund credits or make purchases with your balance, transaction records will appear here.</p>
+                <a href="/mini" class="btn btn-primary" style="font-size: 13px; padding: 8px 16px;">Browse Store</a>
+              </div>
+            `;
+            return;
+          }
+
+          container.innerHTML = txs.map(tx => formatWalletTransactionRow(tx)).join("");
+        } catch (err) {
+          if (loading) loading.hidden = true;
+          container.innerHTML = `
+            <div class="empty-state">
+              <p class="muted" style="color: #fda4af;">Failed to load wallet ledger: ${escapeHtml(err.message)}</p>
+              <button type="button" class="btn btn-primary" onclick="fetchWalletData(currentWalletFilter)">Retry</button>
+            </div>
+          `;
+        }
+      }
+
+      function formatWalletTransactionRow(tx) {
+        const isCredit = tx.direction === "credit";
+        const isRefund = tx.tx_type === "refund";
+        const iconClass = isRefund ? "tx-icon-refund" : (isCredit ? "tx-icon-credit" : "tx-icon-debit");
+        const iconSymbol = isRefund ? "↺" : (isCredit ? "+" : "−");
+        const amtClass = isCredit ? "credit" : "debit";
+
+        return `
+          <div class="tx-card">
+            <div class="tx-left">
+              <div class="tx-icon-circle ${iconClass}">${iconSymbol}</div>
+              <div>
+                <div class="tx-title">${escapeHtml(tx.type_label || 'Transaction')}</div>
+                <div class="tx-sub">
+                  <span>${escapeHtml(tx.created_date_formatted || '—')}</span>
+                  ${tx.reference ? `<span class="badge" style="background: rgba(139, 108, 255, 0.12); color: var(--purple-2);">${escapeHtml(tx.reference)}</span>` : ''}
+                  ${tx.description ? `<span>• ${escapeHtml(tx.description)}</span>` : ''}
+                </div>
+              </div>
+            </div>
+            <div class="tx-right">
+              <div class="tx-amount ${amtClass}">${escapeHtml(tx.amount_formatted)}</div>
+              <span class="badge status-${escapeHtml(tx.status_badge || 'completed')}">${escapeHtml(tx.status_label || tx.status)}</span>
+            </div>
+          </div>
+        `;
+      }
+
+      // Wallet filter pills listener
+      document.querySelectorAll("#wallet-filter-pills .filter-pill").forEach(btn => {
+        btn.addEventListener("click", () => {
+          fetchWalletData(btn.dataset.filter);
+        });
+      });
+
+      // Pro-Rata Refund Estimate Sheet Handlers
+      const refundSheet = document.getElementById("refund-estimate-sheet");
+      const refundBody = document.getElementById("refund-estimate-sheet-body");
+      const btnCloseRefund = document.getElementById("btn-close-refund-sheet");
+
+      function closeRefundEstimateSheet() {
+        if (refundSheet) refundSheet.hidden = true;
+      }
+      if (btnCloseRefund) btnCloseRefund.addEventListener("click", closeRefundEstimateSheet);
+      if (refundSheet) {
+        refundSheet.addEventListener("click", (e) => {
+          if (e.target === refundSheet) closeRefundEstimateSheet();
+        });
+      }
+
+      window.openRefundEstimateSheet = async (accountId) => {
+        if (!refundSheet || !refundBody) return;
+        refundSheet.hidden = false;
+        refundBody.innerHTML = `
+          <div style="text-align: center; padding: 40px 16px;">
+            <p class="muted">Calculating live pro-rata refund estimate…</p>
+          </div>
+        `;
+
+        try {
+          const res = await fetchJSON(`/api/web/account/granted-accounts/${accountId}/refund-estimate`);
+          const est = res.estimate || {};
+          renderRefundEstimateSheet(est);
+        } catch (err) {
+          refundBody.innerHTML = `
+            <div style="text-align: center; padding: 30px 16px;">
+              <p style="color: #fda4af;">Failed to calculate refund estimate: ${escapeHtml(err.message)}</p>
+              <button type="button" class="btn btn-primary" onclick="closeRefundEstimateSheet()">Close</button>
+            </div>
+          `;
+        }
+      };
+
+      function renderRefundEstimateSheet(est) {
+        const estRefund = Number(est.estimated_refund || 0).toFixed(2);
+        const unitPaid = Number(est.amount_paid || 0).toFixed(2);
+        const dailyRate = Number(est.daily_rate || 0).toFixed(4);
+        const isEligible = est.is_eligible;
+
+        let alertBox = "";
+        if (est.already_refunded) {
+          alertBox = `
+            <div style="background: rgba(244, 63, 94, 0.12); border: 1px solid rgba(244, 63, 94, 0.25); border-radius: 12px; padding: 12px; margin-bottom: 14px; font-size: 13px; color: #fda4af;">
+              ⚠️ <strong>Already Refunded:</strong> ${escapeHtml(est.message || 'This order was already refunded.')}
+            </div>
+          `;
+        } else if (est.effective_status === "frozen") {
+          alertBox = `
+            <div style="background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 12px; padding: 12px; margin-bottom: 14px; font-size: 13px; color: #7dd3fc;">
+              ❄️ <strong>Frozen Status:</strong> ${escapeHtml(est.message || 'Account is currently frozen under dispute review.')}
+            </div>
+          `;
+        } else if (est.effective_status === "expired") {
+          alertBox = `
+            <div style="background: rgba(148, 163, 184, 0.12); border: 1px solid rgba(148, 163, 184, 0.25); border-radius: 12px; padding: 12px; margin-bottom: 14px; font-size: 13px; color: #94a3b8;">
+              ⌛ <strong>Expired:</strong> ${escapeHtml(est.message || 'Subscription has expired. No eligible days remaining.')}
+            </div>
+          `;
+        }
+
+        refundBody.innerHTML = `
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px;">
+            <div>
+              <h3 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 800;">Pro-Rata Refund Estimate</h3>
+              <p class="muted" style="margin: 0; font-size: 12px;">${escapeHtml(est.product_name || 'Service')} ${est.order_code ? '• ' + escapeHtml(est.order_code) : ''}</p>
+            </div>
+            <span class="badge status-${escapeHtml(est.effective_status || 'active')}">${escapeHtml(est.status_label || est.effective_status)}</span>
+          </div>
+
+          ${alertBox}
+
+          <!-- Highlight Hero -->
+          <div class="refund-calc-hero">
+            <div style="font-size: 11px; font-weight: 700; color: var(--purple-2); text-transform: uppercase; letter-spacing: 0.05em;">Estimated Refund Value</div>
+            <div class="refund-calc-val" style="color: ${isEligible ? '#34d399' : '#94a3b8'};">$${estRefund} ${escapeHtml(est.currency || 'USDT')}</div>
+            <div class="refund-calc-sub">${isEligible ? `Based on daily rate: $${dailyRate}/day` : (est.message || 'Zero refund eligibility')}</div>
+          </div>
+
+          <!-- Subscription Progress -->
+          <div class="sub-progress-section" style="margin-bottom: 14px;">
+            <div class="sub-progress-header">
+              <span><strong>${est.days_used || 0}</strong> of <strong>${est.total_days || 0}</strong> days used</span>
+              <span class="sub-countdown-badge ${isEligible ? 'sub-countdown-active' : 'sub-countdown-expired'}">
+                ${est.days_remaining || 0} days remaining
+              </span>
+            </div>
+            <div class="sub-progress-track">
+              <div class="sub-progress-bar ${!isEligible ? 'expired' : ''}" style="width: ${est.progress_percent || 0}%;"></div>
+            </div>
+          </div>
+
+          <!-- 6-Grid Breakdown -->
+          <div class="info-grid-2col" style="margin: 12px 0;">
+            <div class="info-box-item">
+              <div class="info-box-label">Amount Paid (Per Unit)</div>
+              <div class="info-box-val">$${unitPaid} USDT</div>
+            </div>
+            <div class="info-box-item">
+              <div class="info-box-label">Daily Allocation</div>
+              <div class="info-box-val">$${dailyRate} / day</div>
+            </div>
+            <div class="info-box-item">
+              <div class="info-box-label">Total Duration</div>
+              <div class="info-box-val">${est.total_days || 0} Days</div>
+            </div>
+            <div class="info-box-item">
+              <div class="info-box-label">Eligible Remaining</div>
+              <div class="info-box-val">${est.days_remaining || 0} Days</div>
+            </div>
+            <div class="info-box-item">
+              <div class="info-box-label">Subscription Start</div>
+              <div class="info-box-val">${est.subscription_start_at ? est.subscription_start_at.substring(0, 10) : '—'}</div>
+            </div>
+            <div class="info-box-item">
+              <div class="info-box-label">Subscription Expiry</div>
+              <div class="info-box-val">${est.subscription_expires_at ? est.subscription_expires_at.substring(0, 10) : '—'}</div>
+            </div>
+          </div>
+
+          <!-- Calculation Formula Explanation -->
+          <div style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: 11.5px; color: var(--muted); margin-bottom: 14px;">
+            ℹ️ <strong>Formula:</strong> <code>(Amount Paid ÷ Total Days) × Eligible Days Remaining</code>. Server-side authoritative calculation ensures strict fairness and accuracy.
+          </div>
+
+          <!-- Action Button: Placeholder for Phase 5 -->
+          <button type="button" class="btn btn-secondary" disabled style="width: 100%; opacity: 0.7; cursor: not-allowed; padding: 10px;">
+            Request Refund — Available in Claims
+          </button>
+          <div style="font-size: 11.5px; color: var(--muted); text-align: center; margin-top: 6px;">
+            Automated replacement warranty claims and refund submissions will be enabled in Phase 5.
+          </div>
+        `;
+      }
+
+      // Hook tab switching to fetch orders, accounts, or wallet
       const origSwitchTab = window.switchTab;
       window.switchTab = (tabName, orderFilter = null) => {
         origSwitchTab(tabName);
@@ -1653,6 +2122,8 @@
           fetchOrders(currentFilter);
         } else if (tabName === "accounts") {
           fetchGrantedAccounts(currentAccountsFilter, orderFilter);
+        } else if (tabName === "wallet") {
+          fetchWalletData(currentWalletFilter);
         }
       };
 
@@ -1685,6 +2156,12 @@
             location.pathname.includes("/granted-accounts")
           ) {
             switchTab("accounts");
+          } else if (
+            hash === "wallet" ||
+            hash === "/wallet" ||
+            location.pathname.includes("/wallet")
+          ) {
+            switchTab("wallet");
           }
         } catch (_err) {
           document.getElementById("section-loading").hidden = true;

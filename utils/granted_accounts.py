@@ -12,13 +12,17 @@ from __future__ import annotations
 
 import re
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Any, Optional
 
 from sqlalchemy.orm import Session, joinedload
 
-from database.models import GrantedAccount, Order, Service, User
+from database.models import GrantedAccount, Order, Service, Transaction, User
 from utils.helpers import parse_icon, strip_html_tags
 from utils.refund_tool import parse_subscription_days
+
+ZERO = Decimal("0.00")
+CENT = Decimal("0.01")
 
 
 def _format_media_url(path: str | None, request: Any = None) -> str | None:
@@ -214,7 +218,11 @@ def resolve_service_duration_days(service: Service | None) -> int:
     return 30
 
 
-def compute_account_lifecycle(account: GrantedAccount, order: Order | None = None) -> dict:
+def compute_account_lifecycle(
+    account: GrantedAccount,
+    order: Order | None = None,
+    now: datetime | None = None,
+) -> dict:
     """Calculate authoritative subscription metrics for a granted account.
 
     Returns:
@@ -227,10 +235,18 @@ def compute_account_lifecycle(account: GrantedAccount, order: Order | None = Non
     - progress_percent: float 0.0 to 100.0
     - is_active, is_expired, is_refunded, is_frozen
     """
-    now = datetime.utcnow()
+    if now is None:
+        now = datetime.utcnow()
+    if now.tzinfo is not None:
+        now = now.replace(tzinfo=None)
+
     total_days = max(1, int(account.duration_days or 30))
     start_at = account.subscription_start_at or account.created_at or now
+    if start_at and start_at.tzinfo is not None:
+        start_at = start_at.replace(tzinfo=None)
     expires_at = account.subscription_expires_at
+    if expires_at and expires_at.tzinfo is not None:
+        expires_at = expires_at.replace(tzinfo=None)
 
     # Check order refund state
     order_refunded = False
@@ -284,6 +300,249 @@ def compute_account_lifecycle(account: GrantedAccount, order: Order | None = Non
         "is_expired": effective_status == "expired",
         "is_refunded": effective_status == "refunded",
         "is_frozen": effective_status == "frozen",
+    }
+
+
+def calculate_account_refund_estimate(
+    account: GrantedAccount,
+    order: Order | None = None,
+    now: datetime | None = None,
+) -> dict:
+    """Calculate authoritative pro-rata refund breakdown for a granted account.
+
+    Formula:
+      Refund Value = Paid Amount / Total Subscription Days * Eligible Days Remaining
+    Deterministic decimal arithmetic with ROUND_HALF_UP.
+    """
+    if now is None:
+        now = datetime.utcnow()
+    if now.tzinfo is not None:
+        now = now.replace(tzinfo=None)
+
+    ord_obj = order or getattr(account, "order", None)
+    lifecycle = compute_account_lifecycle(account, order=ord_obj, now=now)
+
+    total_order_amount = Decimal(str(getattr(ord_obj, "amount_usdt", 0.0) or 0.0))
+    qty = max(1, int(getattr(ord_obj, "quantity", 1) or 1))
+    unit_paid = (total_order_amount / Decimal(str(qty))).quantize(CENT, rounding=ROUND_HALF_UP)
+
+    total_days = max(1, lifecycle["total_days"])
+    days_used = lifecycle["days_used"]
+    days_remaining = lifecycle["days_remaining"]
+
+    service_name = "Subscription Account"
+    if account.service:
+        service_name = getattr(account.service, "name", "Subscription Account")
+
+    # Check order/account refunded
+    if lifecycle["is_refunded"]:
+        hist_amount = float(getattr(ord_obj, "refund_amount", 0.0) or 0.0)
+        hist_method = getattr(ord_obj, "refund_method", "wallet") or "wallet"
+        hist_dt = getattr(ord_obj, "refunded_at", None)
+        hist_dt_iso = hist_dt.isoformat() if hist_dt else None
+
+        return {
+            "account_id": account.id,
+            "order_id": account.order_id,
+            "order_code": ord_obj.order_code if ord_obj else None,
+            "product_name": service_name,
+            "currency": "USDT",
+            "amount_paid": float(unit_paid),
+            "total_order_amount": float(total_order_amount),
+            "order_quantity": qty,
+            "subscription_start_at": (account.subscription_start_at or account.created_at).isoformat() if (account.subscription_start_at or account.created_at) else None,
+            "current_time": now.isoformat(),
+            "subscription_expires_at": account.subscription_expires_at.isoformat() if account.subscription_expires_at else None,
+            "total_days": total_days,
+            "days_used": total_days,
+            "days_remaining": 0,
+            "progress_percent": 100.0,
+            "daily_rate": 0.0,
+            "estimated_refund": 0.0,
+            "is_eligible": False,
+            "effective_status": "refunded",
+            "status_label": "Refunded",
+            "already_refunded": True,
+            "message": f"This order was already refunded (${hist_amount:.2f} via {hist_method.title()}).",
+            "historical_refund": {
+                "refund_amount": hist_amount,
+                "refund_method": hist_method,
+                "refunded_at": hist_dt_iso,
+            },
+        }
+
+    # Check frozen
+    if lifecycle["is_frozen"]:
+        return {
+            "account_id": account.id,
+            "order_id": account.order_id,
+            "order_code": ord_obj.order_code if ord_obj else None,
+            "product_name": service_name,
+            "currency": "USDT",
+            "amount_paid": float(unit_paid),
+            "total_order_amount": float(total_order_amount),
+            "order_quantity": qty,
+            "subscription_start_at": (account.subscription_start_at or account.created_at).isoformat() if (account.subscription_start_at or account.created_at) else None,
+            "current_time": now.isoformat(),
+            "subscription_expires_at": account.subscription_expires_at.isoformat() if account.subscription_expires_at else None,
+            "total_days": total_days,
+            "days_used": days_used,
+            "days_remaining": days_remaining,
+            "progress_percent": lifecycle["progress_percent"],
+            "daily_rate": 0.0,
+            "estimated_refund": 0.0,
+            "is_eligible": False,
+            "effective_status": "frozen",
+            "status_label": "Frozen (Claim in Review)",
+            "already_refunded": False,
+            "message": "Account is currently frozen under warranty claim review.",
+            "historical_refund": None,
+        }
+
+    # Check expired
+    if lifecycle["is_expired"] or days_remaining <= 0:
+        return {
+            "account_id": account.id,
+            "order_id": account.order_id,
+            "order_code": ord_obj.order_code if ord_obj else None,
+            "product_name": service_name,
+            "currency": "USDT",
+            "amount_paid": float(unit_paid),
+            "total_order_amount": float(total_order_amount),
+            "order_quantity": qty,
+            "subscription_start_at": (account.subscription_start_at or account.created_at).isoformat() if (account.subscription_start_at or account.created_at) else None,
+            "current_time": now.isoformat(),
+            "subscription_expires_at": account.subscription_expires_at.isoformat() if account.subscription_expires_at else None,
+            "total_days": total_days,
+            "days_used": total_days,
+            "days_remaining": 0,
+            "progress_percent": 100.0,
+            "daily_rate": 0.0,
+            "estimated_refund": 0.0,
+            "is_eligible": False,
+            "effective_status": "expired",
+            "status_label": "Expired",
+            "already_refunded": False,
+            "message": "Subscription has expired. No eligible days remaining for refund.",
+            "historical_refund": None,
+        }
+
+    # Active & eligible
+    daily_rate = (unit_paid / Decimal(str(total_days))).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+    refund_amount = (daily_rate * Decimal(str(days_remaining))).quantize(CENT, rounding=ROUND_HALF_UP)
+    refund_amount = min(unit_paid, max(ZERO, refund_amount))
+
+    return {
+        "account_id": account.id,
+        "order_id": account.order_id,
+        "order_code": ord_obj.order_code if ord_obj else None,
+        "product_name": service_name,
+        "currency": "USDT",
+        "amount_paid": float(unit_paid),
+        "total_order_amount": float(total_order_amount),
+        "order_quantity": qty,
+        "subscription_start_at": (account.subscription_start_at or account.created_at).isoformat() if (account.subscription_start_at or account.created_at) else None,
+        "current_time": now.isoformat(),
+        "subscription_expires_at": account.subscription_expires_at.isoformat() if account.subscription_expires_at else None,
+        "total_days": total_days,
+        "days_used": days_used,
+        "days_remaining": days_remaining,
+        "progress_percent": lifecycle["progress_percent"],
+        "daily_rate": float(daily_rate),
+        "estimated_refund": float(refund_amount),
+        "is_eligible": True,
+        "effective_status": "active",
+        "status_label": "Active",
+        "already_refunded": False,
+        "message": None,
+        "historical_refund": None,
+    }
+
+
+def format_customer_transaction(tx: Transaction) -> dict:
+    """Format transaction for customer-safe wallet ledger."""
+    raw_type = (tx.tx_type or "").lower().strip()
+    raw_status = (tx.status or "confirmed").lower().strip()
+
+    # Direction & Labels
+    if raw_type == "refund":
+        type_label = "Refund Credit"
+        direction = "credit"
+        sign = "+"
+    elif raw_type in ("admin_credit", "credit"):
+        type_label = "Admin Credit"
+        direction = "credit"
+        sign = "+"
+    elif raw_type == "deposit":
+        type_label = "Wallet Deposit"
+        direction = "credit"
+        sign = "+"
+    elif raw_type == "admin_debit":
+        type_label = "Admin Debit"
+        direction = "debit"
+        sign = "-"
+    elif raw_type in ("deduct", "purchase", "order_payment"):
+        type_label = "Purchase Debit"
+        direction = "debit"
+        sign = "-"
+    else:
+        type_label = raw_type.replace("_", " ").title() or "Adjustment"
+        direction = "credit" if raw_type.startswith("credit") else "debit"
+        sign = "+" if direction == "credit" else "-"
+
+    # Status label & badge
+    if raw_status in ("confirmed", "completed", "success"):
+        status_label = "Confirmed"
+        status_badge = "completed"
+    elif raw_status in ("pending", "waiting"):
+        status_label = "Pending"
+        status_badge = "pending"
+    elif raw_status in ("failed", "rejected", "cancelled", "canceled"):
+        status_label = "Failed"
+        status_badge = "cancelled"
+    else:
+        status_label = raw_status.title()
+        status_badge = "processing"
+
+    amt = float(tx.amount or 0.0)
+    amt_formatted = f"{sign}${amt:.2f}"
+
+    # Customer-safe reference
+    ref = tx.payfast_reference or None
+    if not ref and tx.tx_hash and not tx.tx_hash.startswith("internal_"):
+        ref = tx.tx_hash[:16] + "..." if len(tx.tx_hash) > 20 else tx.tx_hash
+
+    # Clean description: sanitize admin/internal notes
+    desc = tx.note or ""
+    order_code = None
+    m = re.search(r"\b(SMF-[A-Z0-9]+)\b", desc, re.IGNORECASE)
+    if m:
+        order_code = m.group(1).upper()
+        if not ref:
+            ref = order_code
+
+    if not desc or "secret" in desc.lower() or "token" in desc.lower():
+        desc = f"{type_label}" + (f" ({order_code})" if order_code else "")
+    else:
+        desc = desc.split("\n")[0].strip()
+        if len(desc) > 80:
+            desc = desc[:77] + "..."
+
+    return {
+        "id": tx.id,
+        "created_at": tx.created_at.isoformat() if tx.created_at else None,
+        "created_date_formatted": tx.created_at.strftime("%b %d, %Y %I:%M %p") if tx.created_at else "—",
+        "tx_type": raw_type,
+        "type_label": type_label,
+        "direction": direction,
+        "amount": amt,
+        "amount_formatted": amt_formatted,
+        "status": raw_status,
+        "status_label": status_label,
+        "status_badge": status_badge,
+        "reference": ref,
+        "order_code": order_code,
+        "description": desc,
     }
 
 
@@ -447,4 +706,5 @@ def format_granted_account_payload(
         "expiry_date": expires_dt.strftime("%b %d, %Y") if expires_dt else "—",
         "expiry_date_iso": expires_dt.isoformat() if expires_dt else None,
         "created_at": account.created_at.strftime("%b %d, %Y %I:%M %p") if getattr(account, "created_at", None) else "—",
+        "refund_estimate": calculate_account_refund_estimate(account, ord_obj),
     }
