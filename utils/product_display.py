@@ -80,6 +80,8 @@ def build_product_in_stock_parts(
     stock_label = "account" if available == 1 else "accounts"
     sold_label = "account" if sold == 1 else "accounts"
 
+    is_preorder = getattr(service, "availability", "in_stock") == "pre_order"
+
     if personal_discount and abs(price - base) > 1e-9:
         price_line = (
             f"{icons['price']} <b>Price:</b> <s>${base:.2f}</s> → "
@@ -88,15 +90,24 @@ def build_product_in_stock_parts(
     else:
         price_line = f"{icons['price']} <b>Price:</b> ${price:.2f}"
 
-    header = "\n".join(
-        [
-            _product_title_html(service),
-            price_line,
-            f"{icons['stock']} <b>Stock:</b> {available} {stock_label}",
-            f"{icons['sold']} <b>Sold:</b> {sold} {sold_label}",
-            "",
-        ]
-    )
+    if is_preorder:
+        stock_line = f"{icons['stock']} <b>Stock:</b> ⏳ Pre-Order (Ships when in stock)"
+        title_extra = " [PRE-ORDER]"
+    else:
+        stock_line = f"{icons['stock']} <b>Stock:</b> {available} {stock_label}"
+        title_extra = ""
+
+    header_lines = [
+        f"{_product_title_html(service)}{title_extra}",
+        price_line,
+        stock_line,
+        f"{icons['sold']} <b>Sold:</b> {sold} {sold_label}",
+    ]
+    if is_preorder:
+        header_lines.append("<i>ℹ️ Pre-order: Fulfilled in FIFO order upon restock (+$0.30 fee).</i>")
+    header_lines.append("")
+    header = "\n".join(header_lines)
+
     # Box style only — no extra "Description:" header (content is the template body).
     description = format_description_block(getattr(service, "description", None))
     desc_limit = max(_TEXT_SAFE_LIMIT - len(header), 200)
@@ -111,10 +122,16 @@ def build_product_in_stock_parts(
     card = f"{header}{description}"
 
     min_buy = int(getattr(service, "min_qty", 1) or 1)
-    max_buy = min(int(getattr(service, "max_qty", 1) or 1), available)
+    if is_preorder and available <= 0:
+        max_buy = int(getattr(service, "max_qty", 1) or 1)
+    else:
+        max_buy = min(int(getattr(service, "max_qty", 1) or 1), available)
     if max_buy < min_buy:
         max_buy = min_buy
-    qty_prompt = f"{icons['quantity']} Enter quantity to buy ({min_buy}-{max_buy}):"
+    if is_preorder:
+        qty_prompt = f"{icons['quantity']} Enter quantity to buy ({min_buy}-{max_buy}):\n<i>(A flat $0.30 pre-order fee applies)</i>"
+    else:
+        qty_prompt = f"{icons['quantity']} Enter quantity to buy ({min_buy}-{max_buy}):"
 
     return card, qty_prompt
 

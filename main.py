@@ -29,6 +29,7 @@ from database.models import (
     verify_database_connection,
 )
 from utils.background_tasks import (
+    check_expired_preorders_job,
     check_order_status_job,
     expire_active_sales_job,
     expire_unpaid_checkouts_job,
@@ -124,6 +125,7 @@ async def lifespan(app: FastAPI):
         asyncio.create_task(process_referral_payouts_job()),
         asyncio.create_task(expire_unpaid_checkouts_job()),
         asyncio.create_task(expire_active_sales_job()),
+        asyncio.create_task(check_expired_preorders_job()),
     ]
 
     yield

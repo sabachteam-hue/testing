@@ -275,12 +275,12 @@ class Service(Base, TimestampMixin):
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False)
-    # "auto" = provider API/instant delivery. "manual" = admin has to fulfil the
-    # order by hand (DM customer for email etc.) — drives the admin notification.
     fulfillment_type: Mapped[str] = mapped_column(String(20), default="auto")
     # When True, bot asks for customer email after quantity (for invite/team plans).
     # Admin sees that email on the order and invites them, then marks completed.
     require_email: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Product availability: "in_stock", "pre_order", "out_of_stock"
+    availability: Mapped[str] = mapped_column(String(20), default="in_stock")
 
     provider: Mapped[Provider | None] = relationship(back_populates="services")
     category: Mapped[Category | None] = relationship(back_populates="services")
@@ -450,6 +450,11 @@ class Order(Base):
     refund_method: Mapped[str | None] = mapped_column(String(20), nullable=True)
     refund_amount: Mapped[float | None] = mapped_column(Float, nullable=True)
     refunded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # Pre-order tracking
+    is_preorder: Mapped[bool] = mapped_column(Boolean, default=False)
+    preorder_fee: Mapped[float] = mapped_column(Float, default=0.0)
+    preorder_status: Mapped[str | None] = mapped_column(String(20), nullable=True)  # waiting | fulfilled | cancelled_refunded
+    preorder_paid_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     user: Mapped[User] = relationship(back_populates="orders")
     service: Mapped[Service] = relationship(back_populates="orders")
@@ -792,6 +797,9 @@ def run_light_migrations() -> None:
         if "manual_sell_price" not in existing_columns:
             with engine.begin() as connection:
                 connection.execute(text("ALTER TABLE services ADD COLUMN manual_sell_price BOOLEAN DEFAULT FALSE"))
+        if "availability" not in existing_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE services ADD COLUMN availability VARCHAR(20) DEFAULT 'in_stock'"))
 
     if "stocks" in table_names:
         existing_columns = {col["name"] for col in inspector.get_columns("stocks")}
@@ -852,6 +860,18 @@ def run_light_migrations() -> None:
         if "customer_email" not in existing_columns:
             with engine.begin() as connection:
                 connection.execute(text("ALTER TABLE orders ADD COLUMN customer_email VARCHAR(200)"))
+        if "is_preorder" not in existing_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE orders ADD COLUMN is_preorder BOOLEAN DEFAULT FALSE"))
+        if "preorder_fee" not in existing_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE orders ADD COLUMN preorder_fee FLOAT DEFAULT 0.0"))
+        if "preorder_status" not in existing_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE orders ADD COLUMN preorder_status VARCHAR(20)"))
+        if "preorder_paid_at" not in existing_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE orders ADD COLUMN preorder_paid_at DATETIME"))
 
     if "transactions" in table_names:
         existing_columns = {col["name"] for col in inspector.get_columns("transactions")}

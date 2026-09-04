@@ -320,13 +320,20 @@ def services_keyboard(
             price = float(prices[int(service.id)])
         else:
             price = float(getattr(service, "sell_price", 0) or 0)
-        label = f"{name} | ${price:.2f} | 📦 {available}"
-        if available <= 0:
-            icon_value = None
-            icon_fallback = "❌"
-        else:
+        is_preorder = getattr(service, "availability", "in_stock") == "pre_order"
+        if is_preorder:
+            label = f"{name} | ${price:.2f} | ⏳ Pre-Order"
             icon_value = getattr(service, "emoji", None)
-            icon_fallback = "🛍"
+            icon_fallback = "⏳"
+            style = "primary"
+        else:
+            label = f"{name} | ${price:.2f} | 📦 {available}"
+            if available <= 0:
+                icon_value = None
+                icon_fallback = "❌"
+            else:
+                icon_value = getattr(service, "emoji", None)
+                icon_fallback = "🛍"
         row.append(
             icon_button(
                 label,
@@ -404,10 +411,16 @@ def order_payment_keyboard(total: float, methods: list) -> InlineKeyboardMarkup:
 def orders_list_keyboard(orders: list) -> InlineKeyboardMarkup:
     rows = []
     for order in orders:
+        badge = ""
+        if order.status == "refunded":
+            badge = " [REFUNDED]"
+        elif order.status == "preorder_waiting" or getattr(order, "is_preorder", False):
+            badge = " [PRE-ORDER]"
+        svc_name = order.service.name if order.service else "Product"
         rows.append(
             [
                 InlineKeyboardButton(
-                    text=f"📦 {order.order_code} — {order.service.name}",
+                    text=f"📦 {order.order_code}{badge} — {svc_name}",
                     callback_data=f"orderview:{order.id}",
                 )
             ]

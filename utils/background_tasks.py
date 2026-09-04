@@ -27,6 +27,7 @@ from utils.provider_delivery import (
     provider_status_is_failed,
 )
 from utils.checkout_expire import expire_unpaid_checkouts_once
+from utils.preorder_manager import check_expired_preorders_job
 from utils.stock_manager import complete_reserved_stock, release_stock
 from utils.webhook_dispatcher import dispatch_webhook
 

@@ -78,6 +78,13 @@
       <option value="manual">Manual payment / fulfillment</option>
     </select>
   </label>
+  <label>Product Availability
+    <select name="availability">
+      <option value="in_stock" selected>In Stock</option>
+      <option value="pre_order">Pre Order</option>
+      <option value="out_of_stock">Out of Stock</option>
+    </select>
+  </label>
   <label><input type="checkbox" name="require_email" value="true"> Ask customer email after quantity
     <span class="field-hint">For invite/team plans: bot asks for email → shows on Orders so you can invite &amp; mark completed. Best with Manual fulfillment.</span>
   </label>

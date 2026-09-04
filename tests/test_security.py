@@ -107,11 +107,10 @@ class TestFileUploadValidation(unittest.TestCase):
         self.assertFalse(valid)
 
     def test_accepts_valid_png_image(self):
-        # 1x1 valid transparent PNG bytes
-        valid_png = (
-            b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
-            b"\x08\x06\x00\x00\x00\x1f\x15c4\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00"
-            b"\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
+        # 1x1 valid PNG bytes (hex encoded to prevent CRLF line-ending corruption)
+        valid_png = bytes.fromhex(
+            "89504e470d0a1a0a0000000d4948445200000001000000010802000000907753de"
+            "0000000c49444154789c63606060000000040001f61738550000000049454e44ae426082"
         )
         valid, msg = validate_image_upload(valid_png, "real.png")
         self.assertTrue(valid)

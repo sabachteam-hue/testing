@@ -21,6 +21,9 @@
       <label>Subscription days (optional override)
         <input type="number" name="subscription_days" min="1" step="1" value="{{ subscription_days_input or '' }}" placeholder="Auto from warranty">
       </label>
+      <label>End / Suspend Date
+        <input type="date" name="end_date" value="{{ end_date_input or '' }}">
+      </label>
     </div>
     <div class="sales-actions">
       <button type="submit">Calculate</button>
@@ -40,6 +43,9 @@
     <tr><td>Status</td><td>{{ order.status }}{% if order.refund_method %} ({{ order.refund_method }}){% endif %}</td></tr>
     <tr><td>Paid</td><td>${{ '%.2f'|format(order.amount_usdt) }}</td></tr>
     <tr><td>Purchase date</td><td>{{ breakdown.purchase_date or '—' }}</td></tr>
+    {% if breakdown.cutoff_date %}
+    <tr><td>End / Suspend Date</td><td>{{ breakdown.cutoff_date }}</td></tr>
+    {% endif %}
     <tr><td>Warranty field</td><td>{{ breakdown.warranty_text or '—' }}{% if breakdown.parsed_from_warranty %} <span class="muted">(auto)</span>{% endif %}</td></tr>
     <tr><td>Subscription days</td><td>{{ breakdown.subscription_days or '—' }}</td></tr>
     <tr><td>Days used</td><td>{{ breakdown.days_used }}</td></tr>
@@ -57,14 +63,16 @@
   <form method="post" action="/admin/refund-tool/confirm" class="sales-create" style="margin-top:16px;" onsubmit="return confirm('Confirm refund of ${{ '%.2f'|format(breakdown.refund_amount) }} for {{ order.order_code }}?');">
     <input type="hidden" name="order_id" value="{{ order.id }}">
     <input type="hidden" name="subscription_days" value="{{ breakdown.subscription_days }}">
+    <input type="hidden" name="end_date" value="{{ breakdown.cutoff_date or '' }}">
+    <input type="hidden" name="refund_method" id="refund_method_input" value="wallet">
     <div class="sales-create-grid">
       <label>Note (optional)
         <input type="text" name="note" placeholder="Reason / ticket ref">
       </label>
     </div>
     <div class="sales-actions">
-      <button type="submit" name="refund_method" value="wallet">Refund to Wallet</button>
-      <button type="submit" name="refund_method" value="manual" class="secondary">Mark Manual Refund</button>
+      <button type="submit" name="refund_method_btn" value="wallet" onclick="document.getElementById('refund_method_input').value='wallet';">Refund to Wallet</button>
+      <button type="submit" name="refund_method_btn" value="manual" onclick="document.getElementById('refund_method_input').value='manual';" class="secondary">Mark Manual Refund</button>
     </div>
   </form>
   {% endif %}

@@ -653,6 +653,21 @@ async def _fulfill_payfast_order(db, order: Order, tx: Transaction) -> str:
         raise RuntimeError(reason)
 
     service = order.service
+    if getattr(order, "is_preorder", False):
+        order.status = "preorder_waiting"
+        order.payment_method = order.payment_method or "PAYFAST"
+        order.preorder_paid_at = datetime.utcnow()
+        order.note = f"Pre-order paid via PayFast. TX: {tx.tx_hash or tx.id}"
+        await notify_admin_new_order(order, order.user, service)
+        from utils.preorder_manager import process_waiting_preorders
+        process_waiting_preorders(db, service.id)
+        from utils.ui_icons import label_icons
+        icons = label_icons(db)
+        return (
+            f"{icons['tick']} PayFast payment confirmed!\n"
+            f"{icons['order']} Order: {order.order_code}\n"
+            f"⏳ Status: Waiting in FIFO queue"
+        )
     order.status = "manual_pending"
     order.payment_method = order.payment_method or "PAYFAST"
     order.note = f"Paid via PayFast. TX: {tx.tx_hash or tx.id}"

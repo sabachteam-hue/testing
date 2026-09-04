@@ -297,7 +297,7 @@ async def menu_orders(callback: CallbackQuery) -> None:
         orders = (
             db.query(Order)
             .options(joinedload(Order.service))
-            .filter(Order.user_id == user.id)
+            .filter(Order.user_id == user.id, Order.status.in_(["completed", "refunded", "preorder_waiting"]))
             .order_by(Order.created_at.desc())
             .limit(20)
             .all()

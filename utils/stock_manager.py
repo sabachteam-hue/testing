@@ -61,9 +61,16 @@ def add_stock(db: Session, service_id: int, quantity: int, notes: str | None = N
     stock.last_updated = datetime.utcnow()
     service = db.get(Service, service_id)
     if service and (stock.quantity > 0 or stock.is_unlimited):
-        service.is_active = True
+        if getattr(service, "availability", "in_stock") == "out_of_stock":
+            service.availability = "in_stock"
     db.commit()
     db.refresh(stock)
+    if service and (stock.quantity > 0 or stock.is_unlimited):
+        try:
+            from utils.preorder_manager import process_waiting_preorders
+            process_waiting_preorders(db, service.id)
+        except Exception:
+            pass
     return stock
 
 
@@ -97,9 +104,20 @@ def set_stock(
     stock.last_updated = datetime.utcnow()
     service = db.get(Service, service_id)
     if service:
-        service.is_active = quantity > 0
+        if quantity > 0 or getattr(stock, "is_unlimited", False):
+            if getattr(service, "availability", "in_stock") == "out_of_stock":
+                service.availability = "in_stock"
+        elif not getattr(stock, "is_unlimited", False):
+            if getattr(service, "availability", "in_stock") != "pre_order":
+                service.availability = "out_of_stock"
     db.commit()
     db.refresh(stock)
+    if service and (quantity > 0 or getattr(stock, "is_unlimited", False)):
+        try:
+            from utils.preorder_manager import process_waiting_preorders
+            process_waiting_preorders(db, service.id)
+        except Exception:
+            pass
     return stock
 
 
@@ -117,12 +135,18 @@ def consume_stock_account(db: Session, service_id: int, quantity: int) -> list[s
         align_quantity_to_login_lines(stock)
         service = db.get(Service, service_id)
         if service and int(stock.available_qty or 0) <= 0 and not lines:
-            service.is_active = False
+            if getattr(service, "availability", "in_stock") != "pre_order":
+                service.availability = "out_of_stock"
         db.flush()
         return None
     delivered, remaining = lines[:quantity], lines[quantity:]
     stock.login_details = "\n".join(remaining) if remaining else None
     stock.last_updated = datetime.utcnow()
+    if not remaining:
+        service = db.get(Service, service_id)
+        if service and getattr(service, "fulfillment_type", None) == "stock":
+            if getattr(service, "availability", "in_stock") != "pre_order":
+                service.availability = "out_of_stock"
     db.flush()
     return delivered
 
@@ -164,6 +188,7 @@ def complete_reserved_stock(db: Session, service_id: int, quantity: int) -> Stoc
     if service and getattr(service, "fulfillment_type", None) == "stock":
         align_quantity_to_login_lines(stock)
     if service and not getattr(stock, "is_unlimited", False) and (stock.quantity <= 0 or (getattr(service, "fulfillment_type", None) == "stock" and not login_detail_lines(stock))):
-        service.is_active = False
+        if getattr(service, "availability", "in_stock") != "pre_order":
+            service.availability = "out_of_stock"
     db.flush()
     return stock

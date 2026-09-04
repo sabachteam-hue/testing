@@ -34,13 +34,13 @@ async def orders_command(message: Message) -> None:
         orders = (
             db.query(Order)
             .options(joinedload(Order.service))
-            .filter(Order.user_id == user.id, Order.status == "completed")
+            .filter(Order.user_id == user.id, Order.status.in_(["completed", "refunded", "preorder_waiting"]))
             .order_by(Order.created_at.desc())
             .limit(20)
             .all()
         )
         if not orders:
-            await message.answer("No completed orders found.")
+            await message.answer("No orders found.")
             return
         markup = orders_list_keyboard(orders)
         icons = label_icons(db)
@@ -71,7 +71,7 @@ async def order_detail_callback(callback: CallbackQuery) -> None:
             .filter(
                 Order.id == order_id,
                 Order.user_id == user.id,
-                Order.status == "completed",
+                Order.status.in_(["completed", "refunded", "preorder_waiting"]),
             )
             .first()
         )
@@ -81,6 +81,15 @@ async def order_detail_callback(callback: CallbackQuery) -> None:
 
         icons = label_icons(db)
         ui_icons = build_ui_icons(db)
+
+        status_display = order.status
+        if order.status == "refunded":
+            status_display = "REFUNDED"
+        elif order.status == "preorder_waiting":
+            status_display = "PRE-ORDER (Waiting in queue)"
+        elif order.status == "completed":
+            status_display = "completed"
+
         lines = [
             f"{icons['details']} ORDER DETAILS",
             "",
@@ -88,10 +97,18 @@ async def order_detail_callback(callback: CallbackQuery) -> None:
             f"{icons['product']} Product: {html.escape(order.service.name)}",
             f"{icons['quantity']} Quantity: {order.quantity}",
             f"{icons['price']} Amount: {html.escape(format_usdt(order.amount_usdt))}",
-            f"{icons['status']} Status: completed",
+            f"{icons['status']} Status: {status_display}",
             f"{icons['time']} Time: {order.created_at:%d/%m/%Y %H:%M}",
         ]
-        if order.delivered_info:
+        if getattr(order, "is_preorder", False) and getattr(order, "preorder_fee", None):
+            lines.append(f"⏳ Pre-order Fee: {html.escape(format_usdt(order.preorder_fee))}")
+        if order.status == "refunded":
+            lines.append("")
+            lines.append("↩️ <i>This order has been refunded.</i>")
+        elif order.status == "preorder_waiting":
+            lines.append("")
+            lines.append("⏳ <i>This pre-order is waiting in queue and will be fulfilled automatically upon restock.</i>")
+        elif order.delivered_info:
             lines.append("")
             lines.append(format_delivery_receipt_html(order, order.service, order.delivered_info))
         else:

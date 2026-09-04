@@ -90,6 +90,13 @@
       <option value="manual" {% if service.fulfillment_type == "manual" %}selected{% endif %}>Manual fulfillment</option>
     </select>
   </label>
+  <label>Product Availability
+    <select name="availability">
+      <option value="in_stock" {% if getattr(service, 'availability', 'in_stock') == 'in_stock' or not service.availability %}selected{% endif %}>In Stock</option>
+      <option value="pre_order" {% if service.availability == 'pre_order' %}selected{% endif %}>Pre Order</option>
+      <option value="out_of_stock" {% if service.availability == 'out_of_stock' %}selected{% endif %}>Out of Stock</option>
+    </select>
+  </label>
   <label><input type="checkbox" name="require_email" value="true" {% if service.require_email %}checked{% endif %}> Ask customer email after quantity</label>
 
   <div class="provider-add-actions">

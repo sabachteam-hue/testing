@@ -177,12 +177,18 @@ async def _show_order_payment_methods(
             )
         else:
             price_line = f"{icons['price']} Unit price: {format_usdt(price)}\n"
+        is_preorder = bool(data.get("is_preorder")) or getattr(service, "availability", "in_stock") == "pre_order"
+        preorder_fee = float(data.get("preorder_fee") or (0.30 if is_preorder else 0.0))
+        preorder_line = ""
+        if is_preorder and preorder_fee > 0:
+            preorder_line = f"⏳ Pre-order Fee: {format_usdt(preorder_fee)}\n"
         caption = (
             f"{icons['order']} Order summary\n\n"
-            f"{icons['product']} Product: {service.name}\n"
+            f"{icons['product']} Product: {service.name}" + (" [PRE-ORDER]\n" if is_preorder else "\n") +
             f"{icons['quantity']} Quantity: {quantity}\n"
             f"{email_line}"
             f"{price_line}"
+            f"{preorder_line}"
             f"{icons['total']} Total: {format_usdt(total)}\n\n"
             "Choose payment method:"
         )
@@ -307,8 +313,9 @@ async def service_callback(callback: CallbackQuery, state: FSMContext) -> None:
         if not service:
             await callback.answer("Service not found", show_alert=True)
             return
+        is_preorder = getattr(service, "availability", "in_stock") == "pre_order"
         available = effective_available_qty(service)
-        if available <= 0:
+        if available <= 0 and not is_preorder:
             await _send_product_message(
                 callback,
                 build_product_out_of_stock_text(service, db=db),
@@ -432,8 +439,9 @@ async def product_quantity_received(message: Message, state: FSMContext) -> None
                 await message.answer("⚠️ Product is not available anymore.")
                 await state.clear()
                 return
+            is_preorder = getattr(service, "availability", "in_stock") == "pre_order"
             available = effective_available_qty(service)
-            if available <= 0:
+            if available <= 0 and not is_preorder:
                 show_admin = is_admin_telegram_id(message.from_user.id if message.from_user else None)
                 await message.answer(
                     f"🚫 This product is out of stock, we will update soon.",
@@ -444,7 +452,7 @@ async def product_quantity_received(message: Message, state: FSMContext) -> None
             if quantity < service.min_qty or quantity > service.max_qty:
                 await message.answer(f"⚠️ Quantity must be between {service.min_qty} and {service.max_qty}.")
                 return
-            if quantity > available:
+            if not is_preorder and quantity > available:
                 await message.answer(f"⚠️ Only {available} items are available.")
                 return
             from utils.pricing import resolve_unit_price
@@ -456,12 +464,15 @@ async def product_quantity_received(message: Message, state: FSMContext) -> None
                 message.from_user.full_name,
             )
             quote = resolve_unit_price(db, service, user)
-            total = round(quote.unit_price * quantity, 6)
+            preorder_fee = 0.30 if is_preorder else 0.0
+            total = round(quote.unit_price * quantity + preorder_fee, 6)
             await state.update_data(
                 quantity=quantity,
                 total=total,
                 unit_price=quote.unit_price,
                 list_price=quote.list_price,
+                is_preorder=is_preorder,
+                preorder_fee=preorder_fee,
                 session_started_at=datetime.utcnow().isoformat(),
             )
             if getattr(service, "require_email", False):
@@ -732,6 +743,8 @@ async def create_wallet_order(from_user, data: dict) -> tuple[str, str | None, O
         total = float(data["total"])
         if not service:
             return "⚠️ Product not found.", None, None, None
+        is_preorder = bool(data.get("is_preorder")) or getattr(service, "availability", "in_stock") == "pre_order"
+        preorder_fee = float(data.get("preorder_fee") or (0.30 if is_preorder else 0.0))
         if user.wallet_usdt < total:
             return (
                 f"⚠️ Insufficient wallet balance. Required: {format_usdt(total)}, available: {format_usdt(user.wallet_usdt)}.",
@@ -739,11 +752,12 @@ async def create_wallet_order(from_user, data: dict) -> tuple[str, str | None, O
                 None,
                 None,
             )
-        try:
-            reserve_stock(db, service.id, quantity)
-        except InsufficientStockError as exc:
-            db.rollback()
-            return f"⚠️ {exc}", None, None, None
+        if not is_preorder:
+            try:
+                reserve_stock(db, service.id, quantity)
+            except InsufficientStockError as exc:
+                db.rollback()
+                return f"⚠️ {exc}", None, None, None
         user.wallet_usdt -= total
         order = Order(
             order_code=generate_order_code(db),
@@ -752,24 +766,59 @@ async def create_wallet_order(from_user, data: dict) -> tuple[str, str | None, O
             link="digital_product_order",
             quantity=quantity,
             amount_usdt=total,
-            status="manual_pending",
+            status="preorder_waiting" if is_preorder else "manual_pending",
             order_type="manual",
             payment_method="WALLET",
             customer_email=(data.get("customer_email") or "").strip() or None,
-            note="Paid with wallet from Telegram bot.",
+            note="Pre-order paid with wallet from Telegram bot." if is_preorder else "Paid with wallet from Telegram bot.",
+            is_preorder=is_preorder,
+            preorder_fee=preorder_fee if is_preorder else 0.0,
+            preorder_status="waiting" if is_preorder else None,
+            preorder_paid_at=datetime.utcnow() if is_preorder else None,
         )
         db.add(order)
-        db.add(Transaction(user_id=user.id, amount=total, tx_type="deduct", status="confirmed", blockchain_status="confirmed", note=f"Order {order.order_code}"))
+        db.add(Transaction(user_id=user.id, amount=total, tx_type="deduct", status="confirmed", blockchain_status="confirmed", note=f"Order {order.order_code}" + (" (Pre-Order)" if is_preorder else "")))
         db.flush()
+
+        from utils.ui_icons import label_icons
+
+        icons = label_icons(db)
+        if is_preorder:
+            db.commit()
+            await notify_admin_new_order(order, user, service)
+            from utils.preorder_manager import process_waiting_preorders
+            process_waiting_preorders(db, service.id)
+            completed_order, completed_service = _detach_completed_for_delivery(db, order, service)
+            if order.status == "completed":
+                note = stock_note_text(service)
+                return (
+                    f"{icons['tick']} Pre-order fulfilled immediately!\n"
+                    f"{icons['order']} Order: {order.order_code}",
+                    note,
+                    completed_order,
+                    completed_service,
+                )
+            return (
+                f"{icons['tick']} Pre-Order placed successfully!\n\n"
+                f"{icons['order']} Order: <code>{order.order_code}</code>\n"
+                f"{icons['product']} Product: {service.name}\n"
+                f"{icons['quantity']} Quantity: {order.quantity}\n"
+                f"⏳ Status: <b>Waiting in FIFO queue</b>\n"
+                f"💵 Total Paid: {format_usdt(order.amount_usdt)} (includes {format_usdt(preorder_fee)} pre-order fee)\n\n"
+                f"ℹ️ <i>Your order will be fulfilled automatically as soon as new stock arrives. "
+                f"If stock is not available within 24 hours, your order will be cancelled and 100% refunded to your wallet.</i>",
+                None,
+                completed_order,
+                completed_service,
+            )
+
         fulfillment = await fulfill_provider_order(db, order, service)
         db.commit()
         await notify_admin_new_order(order, user, service)
         if order.status == "completed":
             await notify_channel_order_completed(order, service, db)
         note = stock_note_text(service) if order.status == "completed" else None
-        from utils.ui_icons import label_icons
 
-        icons = label_icons(db)
         completed_order, completed_service = _detach_completed_for_delivery(db, order, service)
         return (
             f"{icons['tick']} Order placed successfully!\n"
@@ -801,11 +850,14 @@ async def create_external_payment_order(
 
         if payment_ref_already_used(db, reference):
             return "⚠️ This payment reference/TXID is already submitted.", None, None, None
-        try:
-            reserve_stock(db, service.id, quantity)
-        except InsufficientStockError as exc:
-            db.rollback()
-            return f"⚠️ {exc}", None, None, None
+        is_preorder = bool(data.get("is_preorder")) or getattr(service, "availability", "in_stock") == "pre_order"
+        preorder_fee = float(data.get("preorder_fee") or (0.30 if is_preorder else 0.0))
+        if not is_preorder:
+            try:
+                reserve_stock(db, service.id, quantity)
+            except InsufficientStockError as exc:
+                db.rollback()
+                return f"⚠️ {exc}", None, None, None
         order = Order(
             order_code=generate_order_code(db),
             user_id=user.id,
@@ -818,6 +870,9 @@ async def create_external_payment_order(
             payment_method=(code or "UNKNOWN").upper(),
             customer_email=(data.get("customer_email") or "").strip() or None,
             note=f"Awaiting {code} payment verification. Reference: {reference}",
+            is_preorder=is_preorder,
+            preorder_fee=preorder_fee if is_preorder else 0.0,
+            preorder_status="waiting" if is_preorder else None,
         )
         db.add(order)
         tx = Transaction(user_id=user.id, amount=total, tx_type="deposit", tx_hash=reference, status="pending", blockchain_status="pending", note=f"Payment for order {order.order_code} via {code}")
@@ -905,6 +960,25 @@ async def create_external_payment_order(
             tx.blockchain_status = "confirmed"
             tx.verified_at = datetime.utcnow()
             verification.verified_at = tx.verified_at
+            if getattr(order, "is_preorder", False):
+                order.status = "preorder_waiting"
+                order.preorder_paid_at = datetime.utcnow()
+                order.note = f"Pre-order paid via {code}. Reference: {reference}"
+                db.commit()
+                await notify_admin_new_order(order, user, service)
+                from utils.preorder_manager import process_waiting_preorders
+                process_waiting_preorders(db, service.id)
+                from utils.ui_icons import label_icons
+                icons = label_icons(db)
+                completed_order, completed_service = _detach_completed_for_delivery(db, order, service)
+                return (
+                    f"{icons['tick']} Payment verified and pre-order placed!\n"
+                    f"{icons['order']} Order: {order.order_code}\n"
+                    f"⏳ Status: Waiting in FIFO queue",
+                    None,
+                    completed_order,
+                    completed_service,
+                )
             order.status = "manual_pending"
             order.note = f"Paid via {code}. Reference: {reference}"
             fulfillment = await fulfill_provider_order(db, order, service)

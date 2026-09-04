@@ -581,12 +581,15 @@ async def start_payfast_order_checkout(
         if not service:
             await message.answer("⚠️ Product not found.")
             return
-        try:
-            reserve_stock(db, service.id, int(quantity))
-        except InsufficientStockError as exc:
-            db.rollback()
-            await message.answer(f"⚠️ {exc}")
-            return
+        is_preorder = getattr(service, "availability", "in_stock") == "pre_order"
+        preorder_fee = 0.30 if is_preorder else 0.0
+        if not is_preorder:
+            try:
+                reserve_stock(db, service.id, int(quantity))
+            except InsufficientStockError as exc:
+                db.rollback()
+                await message.answer(f"⚠️ {exc}")
+                return
 
         order = Order(
             order_code=generate_order_code(db),
@@ -599,8 +602,11 @@ async def start_payfast_order_checkout(
             order_type="manual",
             payment_method="PAYFAST",
             customer_email=(customer_email or "").strip() or None,
-            note="Awaiting PayFast payment.",
+            note="Awaiting PayFast pre-order payment." if is_preorder else "Awaiting PayFast payment.",
             expire_notify=True,
+            is_preorder=is_preorder,
+            preorder_fee=preorder_fee,
+            preorder_status="waiting" if is_preorder else None,
         )
         db.add(order)
         db.flush()

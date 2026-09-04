@@ -75,6 +75,7 @@ from utils.refund_tool import (
     credit_wallet_refund,
     mark_manual_refund,
     money,
+    notify_manual_refund,
     notify_wallet_refund,
 )
 from utils.stock_manager import InsufficientStockError, add_stock, complete_reserved_stock, release_stock, set_stock
@@ -1003,26 +1004,61 @@ def apply_provider_catalog_item_to_service(db: Session, service: Service, item: 
     Never changes SKU, name, description, category, orders, or soft-delete.
     """
     cost_price = float(item.get("cost") or item.get("rate") or 0)
-    available = int(item.get("available") or 0)
+    raw_avail = item.get("available")
+    if raw_avail is None:
+        raw_avail = item.get("stock") if item.get("stock") is not None else item.get("quantity")
+    available = int(raw_avail or 0)
     commission_pct = service.commission_pct if service.commission_pct is not None else 25.0
     fixed = float(getattr(service, "markup_fixed_usdt", 0) or 0)
 
-    service.cost_price = cost_price
-    # Keep flash/promo sale price intact while a ProductSale is active.
-    active_sale = (
-        db.query(ProductSale)
-        .filter(ProductSale.service_id == service.id, ProductSale.is_active.is_(True))
-        .first()
-    )
-    computed_sell = api_computed_sell_price(cost_price, commission_pct, fixed)
-    if active_sale:
-        active_sale.original_price = computed_sell
-    else:
-        service.sell_price = computed_sell
+    if cost_price > 0:
+        service.cost_price = cost_price
+        # Keep flash/promo sale price intact while a ProductSale is active.
+        active_sale = (
+            db.query(ProductSale)
+            .filter(ProductSale.service_id == service.id, ProductSale.is_active.is_(True))
+            .first()
+        )
+        computed_sell = api_computed_sell_price(cost_price, commission_pct, fixed)
+        if active_sale:
+            active_sale.original_price = computed_sell
+        else:
+            service.sell_price = computed_sell
+
+    from utils.stock_display import effective_available_qty
+    old_avail = effective_available_qty(service)
 
     stock = service.stock or Stock(service_id=service.id)
+    service.stock = stock
     apply_provider_stock(stock, available, service.fulfillment_type)
     db.add(stock)
+    db.flush()
+
+    avail_qty = max(int(getattr(stock, "available_qty", 0) or 0), available)
+    if avail_qty > 0:
+        if getattr(service, "availability", "in_stock") == "out_of_stock":
+            service.availability = "in_stock"
+        db.flush()
+        try:
+            from utils.preorder_manager import process_waiting_preorders
+            process_waiting_preorders(db, service.id)
+        except Exception:
+            pass
+        if old_avail == 0:
+            try:
+                import asyncio
+                from utils.notifications import notify_stock_added
+                try:
+                    loop = asyncio.get_running_loop()
+                    loop.create_task(notify_stock_added(service, avail_qty))
+                except RuntimeError:
+                    pass
+            except Exception:
+                pass
+    elif avail_qty <= 0:
+        if getattr(service, "availability", "in_stock") != "pre_order":
+            service.availability = "out_of_stock"
+    db.flush()
 
 
 async def sync_linked_service(db: Session, service: Service) -> tuple[bool, str]:
@@ -1070,7 +1106,12 @@ async def sync_provider_products(db: Session, provider: Provider) -> tuple[int, 
     Upstream wallet balance is refreshed AFTER product sync succeeds, and is
     best-effort: balance/API failures never fail or roll back price/stock sync.
     """
-    products = await fetch_services(provider)
+    try:
+        products = await fetch_services(provider)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("[PROVIDER-SYNC] Provider fetch failed for %s: %s", provider.name, exc)
+        return 0, 0, getattr(provider, "api_balance", None), str(exc)
+
     created = 0
     updated = 0
     for item in products:
@@ -1114,8 +1155,7 @@ async def sync_provider_products(db: Session, provider: Provider) -> tuple[int, 
         balance, _username, balance_err = await sync_provider_balance(db, provider)
         db.commit()
     except Exception:  # noqa: BLE001
-        logger = __import__("logging").getLogger(__name__)
-        logger.exception("[PROVIDER-BALANCE] ignored after successful product sync for %s", provider.name)
+        logging.getLogger(__name__).exception("[PROVIDER-BALANCE] ignored after successful product sync for %s", provider.name)
         try:
             db.rollback()
         except Exception:  # noqa: BLE001
@@ -1288,11 +1328,13 @@ async def create_service(
     initial_stock: int = Form(0),
     sort_order: int = Form(0),
     fulfillment_type: str = Form("auto"),
+    availability: str = Form("in_stock"),
     require_email: str = Form(""),
     db: Session = Depends(get_db),
 ):
     admin_required(request)
     fulfillment_type = fulfillment_type if fulfillment_type in {"manual", "stock"} else "auto"
+    availability_val = availability if availability in {"in_stock", "pre_order", "out_of_stock"} else "in_stock"
     need_email = require_email.lower() == "true"
     image_path = await save_icon_image(icon_image, SERVICE_UPLOAD_DIR, "svc")
     sku = make_manual_service_sku(name, db)
@@ -1326,6 +1368,7 @@ async def create_service(
         existing.max_qty = max_qty
         existing.sort_order = sort_order
         existing.fulfillment_type = fulfillment_type
+        existing.availability = availability_val
         existing.require_email = need_email
         existing.is_active = initial_stock > 0
         stock = existing.stock or Stock(service_id=existing.id)
@@ -1357,6 +1400,7 @@ async def create_service(
         max_qty=max_qty,
         sort_order=sort_order,
         fulfillment_type=fulfillment_type,
+        availability=availability_val,
         require_email=need_email,
         is_active=initial_stock > 0,
     )
@@ -1388,6 +1432,7 @@ async def edit_service(
     commission_pct: float = Form(0.0),
     sort_order: int = Form(0),
     fulfillment_type: str = Form("auto"),
+    availability: str = Form("in_stock"),
     require_email: str = Form(""),
     db: Session = Depends(get_db),
 ):
@@ -1395,6 +1440,9 @@ async def edit_service(
     service = db.get(Service, service_id)
     if not service:
         return redirect(f"/admin/services/{service_id}/edit?error={quote('Product not found')}")
+
+    availability_val = availability if availability in {"in_stock", "pre_order", "out_of_stock"} else "in_stock"
+    service.availability = availability_val
 
     new_provider_id = provider_id or None
     new_psid = (provider_service_id or "").strip() or None
@@ -2265,6 +2313,7 @@ def refund_tool_page(request: Request, db: Session = Depends(get_db)):
             "order": None,
             "breakdown": None,
             "subscription_days_input": "",
+            "end_date_input": "",
             "search_q": "",
             "lookup_q": "",
             "lookup_result": None,
@@ -2280,6 +2329,7 @@ def refund_tool_search(
     request: Request,
     q: str = Form(""),
     subscription_days: str = Form(""),
+    end_date: str = Form(""),
     db: Session = Depends(get_db),
 ):
     admin_required(request)
@@ -2293,6 +2343,7 @@ def refund_tool_search(
                 "order": None,
                 "breakdown": None,
                 "subscription_days_input": subscription_days,
+                "end_date_input": end_date,
                 "search_q": q,
                 "lookup_q": "",
                 "lookup_result": None,
@@ -2304,7 +2355,8 @@ def refund_tool_search(
 
     days_raw = (subscription_days or "").strip()
     days_override = int(days_raw) if days_raw.isdigit() and int(days_raw) > 0 else None
-    breakdown = calculate_refund(order, subscription_days=days_override)
+    cutoff = (end_date or "").strip() or None
+    breakdown = calculate_refund(order, subscription_days=days_override, cutoff_date=cutoff)
     return render(
         request,
         "refund_tool.html",
@@ -2312,6 +2364,7 @@ def refund_tool_search(
             "order": order,
             "breakdown": breakdown,
             "subscription_days_input": str(days_override or ""),
+            "end_date_input": end_date,
             "search_q": q,
             "lookup_q": "",
             "lookup_result": None,
@@ -2366,6 +2419,7 @@ def refund_tool_check_order(
             "order": None,
             "breakdown": None,
             "subscription_days_input": "",
+            "end_date_input": "",
             "search_q": "",
             "lookup_q": raw,
             "lookup_result": lookup_result,
@@ -2415,12 +2469,20 @@ async def refund_tool_confirm(
     request: Request,
     order_id: int = Form(...),
     subscription_days: int = Form(...),
-    refund_method: str = Form(...),
+    refund_method: str = Form("wallet"),
+    end_date: str = Form(""),
     note: str = Form(""),
     db: Session = Depends(get_db),
 ):
     admin_required(request)
-    method = (refund_method or "").strip().lower()
+    form_data = await request.form()
+    method_raw = (
+        form_data.get("refund_method")
+        or form_data.get("refund_method_btn")
+        or refund_method
+        or ""
+    )
+    method = str(method_raw).strip().lower()
     if method not in {"wallet", "manual"}:
         return redirect(f"/admin/refund-tool?error={quote('Invalid refund method')}")
 
@@ -2436,17 +2498,20 @@ async def refund_tool_confirm(
     if not order or not order.user:
         return redirect(f"/admin/refund-tool?error={quote('Order not found')}")
 
-    if getattr(order, "refund_method", None) or order.status == "refunded":
+    existing_log = db.query(RefundLog).filter(RefundLog.order_id == order.id).first()
+    if existing_log or getattr(order, "refund_method", None) or order.status == "refunded":
         return redirect(f"/admin/refund-tool?error={quote('Already refunded (wallet/manual).')}")
 
     if subscription_days <= 0:
         return redirect(f"/admin/refund-tool?error={quote('Enter valid subscription days')}")
 
-    breakdown = calculate_refund(order, subscription_days=subscription_days)
+    cutoff = (end_date or "").strip() or None
+    breakdown = calculate_refund(order, subscription_days=subscription_days, cutoff_date=cutoff)
     if not breakdown.has_refund:
         msg = breakdown.message or "Already complete / no refund found"
         return redirect(f"/admin/refund-tool?error={quote(msg)}")
 
+    clean_note = (note or "").strip() or None
     try:
         if method == "wallet":
             new_balance, _tx = credit_wallet_refund(
@@ -2456,16 +2521,18 @@ async def refund_tool_confirm(
                 amount=breakdown.refund_amount,
                 breakdown=breakdown,
                 admin_actor="admin",
-                note=(note or "").strip() or None,
+                note=clean_note,
             )
             db.commit()
-            await notify_wallet_refund(
-                order.user.telegram_id,
-                order.order_code,
-                breakdown.refund_amount,
-                new_balance,
-                db=db,
-            )
+            if order.user and order.user.telegram_id:
+                await notify_wallet_refund(
+                    order.user.telegram_id,
+                    order.order_code,
+                    breakdown.refund_amount,
+                    new_balance,
+                    note=clean_note,
+                    db=db,
+                )
             ok = (
                 f"Wallet refund ${float(money(breakdown.refund_amount)):.2f} "
                 f"for {order.order_code}. New balance ${float(money(new_balance)):.2f}"
@@ -2478,9 +2545,17 @@ async def refund_tool_confirm(
             amount=breakdown.refund_amount,
             breakdown=breakdown,
             admin_actor="admin",
-            note=(note or "").strip() or None,
+            note=clean_note,
         )
         db.commit()
+        if order.user and order.user.telegram_id:
+            await notify_manual_refund(
+                order.user.telegram_id,
+                order.order_code,
+                breakdown.refund_amount,
+                note=clean_note,
+                db=db,
+            )
         ok = (
             f"Manual refund ${float(money(breakdown.refund_amount)):.2f} "
             f"marked for {order.order_code}"
