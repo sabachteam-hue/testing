@@ -2883,6 +2883,12 @@ async def update_order(order_id: int, request: Request, status: str = Form(...),
             change={"from": previous, "to": status},
             request=request,
         )
+        if order.status in ("completed", "delivered", "refunded") and order.delivered_info:
+            try:
+                from utils.granted_accounts import sync_granted_accounts_for_order
+                sync_granted_accounts_for_order(db, order)
+            except Exception as exc:
+                logger.warning("[GRANTED-ACCOUNTS] Sync failed for order %s: %s", order.order_code, exc)
         db.commit()
         if refund_info:
             telegram_id, amount, order_code = refund_info

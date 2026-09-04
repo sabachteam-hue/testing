@@ -1106,6 +1106,11 @@ async def fulfill_provider_order(db, order: Order, service: Service) -> str:
         order.completed_at = datetime.utcnow()
         if delivered_items:
             order.delivered_info = "\n".join(delivered_items)
+            try:
+                from utils.granted_accounts import sync_granted_accounts_for_order
+                sync_granted_accounts_for_order(db, order)
+            except Exception:
+                pass
         complete_reserved_stock(db, order.service_id, order.quantity)
         order.note = "Auto-delivered to customer via provider API."
     elif provider_oid:
@@ -1152,6 +1157,11 @@ def fulfill_stock_order(db, order: Order, service: Service) -> str:
     order.completed_at = datetime.utcnow()
     order.delivered_info = delivered_text
     order.note = "Delivered automatically from stock."
+    try:
+        from utils.granted_accounts import sync_granted_accounts_for_order
+        sync_granted_accounts_for_order(db, order)
+    except Exception:
+        pass
     complete_reserved_stock(db, order.service_id, order.quantity)
     return _customer_fulfillment_message(order, service, delivered_text)
 

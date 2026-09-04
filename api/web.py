@@ -26,12 +26,13 @@ from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
-from sqlalchemy import func, or_
+from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from database.models import (
     BotConfig,
     Category,
+    GrantedAccount,
     Order,
     PaymentMethod,
     ProductSale,
@@ -40,6 +41,11 @@ from database.models import (
     get_active_languages,
     get_active_payment_methods,
     get_db,
+)
+from utils.granted_accounts import (
+    format_granted_account_payload,
+    sync_granted_accounts_for_order,
+    sync_user_granted_accounts,
 )
 from utils.helpers import generate_order_code, get_mini_app_url, get_public_base_url, parse_icon
 from utils.rate_limiter import check_rate_limit
@@ -689,9 +695,23 @@ def web_account_dashboard(
     current_user: User = Depends(get_current_customer),
     db: Session = Depends(get_db),
 ) -> dict:
+    # Ensure all user's fulfilled orders are registered as granted accounts
+    sync_user_granted_accounts(db, current_user.id)
+
+    now = datetime.utcnow()
     orders_count = (
         db.query(func.count(Order.id))
         .filter(Order.user_id == current_user.id)
+        .scalar()
+        or 0
+    )
+    active_accounts_count = (
+        db.query(func.count(GrantedAccount.id))
+        .filter(
+            GrantedAccount.user_id == current_user.id,
+            GrantedAccount.status == "active",
+            GrantedAccount.subscription_expires_at > now,
+        )
         .scalar()
         or 0
     )
@@ -712,7 +732,7 @@ def web_account_dashboard(
         },
         "stats": {
             "total_orders": int(orders_count),
-            "active_accounts": 0,
+            "active_accounts": int(active_accounts_count),
             "wallet_balance": float(current_user.wallet_usdt or 0.0),
             "open_claims": 0,
         },
@@ -918,6 +938,108 @@ def get_customer_order_detail(
                 else "—"
             ),
         },
+    }
+
+
+@router.get("/account/granted-accounts")
+def list_customer_granted_accounts(
+    request: Request,
+    status_filter: str = Query("all"),
+    order_code: str | None = Query(None),
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    current_user: User = Depends(get_current_customer),
+    db: Session = Depends(get_db),
+) -> dict:
+    # Ensure all user's fulfilled orders have granted account records
+    sync_user_granted_accounts(db, current_user.id)
+
+    now = datetime.utcnow()
+    base_query = (
+        db.query(GrantedAccount)
+        .options(joinedload(GrantedAccount.service), joinedload(GrantedAccount.order))
+        .filter(GrantedAccount.user_id == current_user.id)
+    )
+
+    if order_code and order_code.strip():
+        clean_code = order_code.strip()
+        base_query = base_query.join(Order).filter(Order.order_code == clean_code)
+
+    filt = (status_filter or "").strip().lower()
+    if filt == "active":
+        base_query = base_query.filter(
+            GrantedAccount.status == "active",
+            GrantedAccount.subscription_expires_at > now,
+        )
+    elif filt == "expired":
+        base_query = base_query.filter(
+            or_(
+                GrantedAccount.status == "expired",
+                and_(
+                    GrantedAccount.status == "active",
+                    GrantedAccount.subscription_expires_at <= now,
+                ),
+            )
+        )
+    elif filt == "refunded":
+        base_query = base_query.filter(GrantedAccount.status == "refunded")
+    elif filt == "frozen":
+        base_query = base_query.filter(GrantedAccount.status == "frozen")
+
+    total_count = base_query.count()
+
+    rows = (
+        base_query.order_by(GrantedAccount.id.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+
+    active_count = (
+        db.query(func.count(GrantedAccount.id))
+        .filter(
+            GrantedAccount.user_id == current_user.id,
+            GrantedAccount.status == "active",
+            GrantedAccount.subscription_expires_at > now,
+        )
+        .scalar()
+        or 0
+    )
+
+    serialized = [
+        format_granted_account_payload(acc, acc.order, acc.service, request)
+        for acc in rows
+    ]
+
+    return {
+        "ok": True,
+        "total": total_count,
+        "active_count": int(active_count),
+        "limit": limit,
+        "offset": offset,
+        "accounts": serialized,
+    }
+
+
+@router.get("/account/granted-accounts/{account_id}")
+def get_customer_granted_account_detail(
+    account_id: int,
+    request: Request,
+    current_user: User = Depends(get_current_customer),
+    db: Session = Depends(get_db),
+) -> dict:
+    account = (
+        db.query(GrantedAccount)
+        .options(joinedload(GrantedAccount.service), joinedload(GrantedAccount.order))
+        .filter(GrantedAccount.id == account_id, GrantedAccount.user_id == current_user.id)
+        .first()
+    )
+    if not account:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Granted account not found")
+
+    return {
+        "ok": True,
+        "account": format_granted_account_payload(account, account.order, account.service, request),
     }
 
 

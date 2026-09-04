@@ -192,6 +192,12 @@ async def check_processing_orders_once() -> None:
                 referral_notifications += credit_referral_for_order(db, order)
                 referral_notifications += credit_referral_join_bonus(db, order.user)
                 await trigger_order_webhooks(db, order, "order_completed")
+                if order.delivered_info:
+                    try:
+                        from utils.granted_accounts import sync_granted_accounts_for_order
+                        sync_granted_accounts_for_order(db, order)
+                    except Exception:
+                        pass
                 completed_orders.append((order.id, order.service_id))
             elif provider_status_is_failed(provider_status):
                 order.status = "failed"

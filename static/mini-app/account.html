@@ -548,6 +548,164 @@
       font-weight: 700;
       color: var(--ink);
     }
+    .status-expired {
+      background: rgba(148, 163, 184, 0.16);
+      color: #cbd5e1;
+      border: 1px solid rgba(148, 163, 184, 0.35);
+    }
+    .status-frozen {
+      background: rgba(56, 189, 248, 0.16);
+      color: #7dd3fc;
+      border: 1px solid rgba(56, 189, 248, 0.35);
+    }
+    .accounts-cards-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+      gap: 16px;
+    }
+    @media (max-width: 480px) {
+      .accounts-cards-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+    .account-card {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+      position: relative;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    }
+    .account-card:hover {
+      border-color: rgba(139, 108, 255, 0.4);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 30px rgba(139, 108, 255, 0.1);
+    }
+    .sub-progress-section {
+      background: rgba(139, 108, 255, 0.05);
+      border: 1px solid rgba(139, 108, 255, 0.15);
+      border-radius: 12px;
+      padding: 12px;
+    }
+    .sub-progress-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      font-size: 12px;
+    }
+    .sub-countdown-badge {
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 6px;
+      font-size: 11.5px;
+    }
+    .sub-countdown-active {
+      background: rgba(52, 211, 153, 0.15);
+      color: var(--live);
+      border: 1px solid rgba(52, 211, 153, 0.3);
+    }
+    .sub-countdown-warning {
+      background: rgba(251, 146, 60, 0.15);
+      color: #fb923c;
+      border: 1px solid rgba(251, 146, 60, 0.3);
+    }
+    .sub-countdown-expired {
+      background: rgba(148, 163, 184, 0.15);
+      color: #94a3b8;
+      border: 1px solid rgba(148, 163, 184, 0.3);
+    }
+    .sub-progress-track {
+      height: 7px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 999px;
+      overflow: hidden;
+      margin-bottom: 6px;
+    }
+    .sub-progress-bar {
+      height: 100%;
+      background: linear-gradient(90deg, var(--live), #10b981);
+      border-radius: 999px;
+      transition: width 0.4s ease;
+    }
+    .sub-progress-bar.warning {
+      background: linear-gradient(90deg, #f59e0b, #ef4444);
+    }
+    .sub-progress-bar.expired {
+      background: #64748b;
+    }
+    .sub-progress-bar.refunded {
+      background: #f43f5e;
+    }
+    .credential-box {
+      background: var(--surface-2);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .credential-row {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .credential-header {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .credential-val-group {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      background: rgba(0, 0, 0, 0.25);
+      border: 1px solid rgba(196, 181, 253, 0.1);
+      border-radius: 8px;
+      padding: 6px 10px;
+      min-height: 38px;
+    }
+    .credential-val-text {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 13px;
+      color: var(--ink);
+      word-break: break-all;
+      user-select: text;
+    }
+    .credential-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+    .mini-icon-btn {
+      background: rgba(139, 108, 255, 0.12);
+      border: 1px solid rgba(139, 108, 255, 0.25);
+      color: var(--purple-2);
+      padding: 4px 8px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 11.5px;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      transition: background 0.15s ease;
+    }
+    .mini-icon-btn:hover {
+      background: rgba(139, 108, 255, 0.25);
+      color: #fff;
+    }
   </style>
 </head>
 <body>
@@ -682,7 +840,7 @@
             <div class="stat-sub">Lifetime orders placed (Click to view)</div>
           </div>
 
-          <div class="stat-card">
+          <div class="stat-card" style="cursor: pointer;" onclick="switchTab('accounts')" title="View Granted Accounts">
             <div class="stat-head">
               <span>Active Accounts</span>
               <div class="stat-icon-box">
@@ -690,7 +848,7 @@
               </div>
             </div>
             <div class="stat-value" id="stat-active-accounts">0</div>
-            <div class="stat-sub">Active subscriptions</div>
+            <div class="stat-sub">Active subscriptions (Click to view)</div>
           </div>
 
           <div class="stat-card">
@@ -760,13 +918,32 @@
         <div id="orders-list-container" class="orders-cards-grid" style="margin-top: 16px;"></div>
       </div>
 
+      <!-- Functional Granted Accounts View -->
       <div id="tab-accounts" class="portal-tab-content content-panel" hidden>
-        <div class="placeholder-card">
-          <div class="placeholder-badge">Phase 2 Preview</div>
-          <h2 style="margin: 0;">Granted Accounts</h2>
-          <p class="muted">Manage your active SaaS logins, streaming access, credentials rotation, and auto-renewal subscriptions seamlessly from this view.</p>
-          <button type="button" class="btn btn-primary" onclick="switchTab('dashboard')">Back to Dashboard</button>
+        <div class="panel-head" style="flex-wrap: wrap; gap: 12px;">
+          <div>
+            <h2 style="margin: 0 0 4px 0; font-size: 22px; font-weight: 800;">Granted Accounts</h2>
+            <p class="muted" style="margin: 0; font-size: 13px;">Secure credentials and subscription lifecycle tracking for your purchased services.</p>
+          </div>
+          <button type="button" class="btn btn-whatsapp" onclick="fetchGrantedAccounts(currentAccountsFilter)" style="font-size: 12px; padding: 6px 14px; gap: 6px;">
+            <span>🔄</span> Refresh
+          </button>
         </div>
+
+        <!-- Filter Pills -->
+        <div class="filter-pills" id="accounts-filter-pills">
+          <button type="button" class="filter-pill active" data-filter="all">All Accounts</button>
+          <button type="button" class="filter-pill" data-filter="active">Active</button>
+          <button type="button" class="filter-pill" data-filter="expired">Expired</button>
+          <button type="button" class="filter-pill" data-filter="refunded">Refunded</button>
+          <button type="button" class="filter-pill" data-filter="frozen">Frozen</button>
+        </div>
+
+        <!-- Accounts List Container -->
+        <div id="accounts-list-loading" class="empty-state" style="padding: 40px 16px;" hidden>
+          <p class="muted">Loading granted accounts…</p>
+        </div>
+        <div id="accounts-list-container" class="accounts-cards-grid" style="margin-top: 16px;"></div>
       </div>
 
       <div id="tab-wallet" class="portal-tab-content content-panel" hidden>
@@ -1185,29 +1362,297 @@
           </div>
 
           <div class="hero-actions" style="margin-top: 20px;">
+            ${(order.status === 'completed' || order.status === 'delivered') ? `
+              <button type="button" class="btn btn-primary" onclick="closeOrderDetail(); switchTab('accounts', '${escapeHtml(order.order_code)}');" style="font-size: 13px; gap: 6px;">
+                <span>🔑</span> View Granted Accounts
+              </button>
+            ` : ''}
             <a class="btn btn-whatsapp" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent('Hi SMF SHOP, I need support regarding Order ' + order.order_code)}">
               <span>💬</span> Support on WhatsApp
             </a>
-            <button type="button" class="btn btn-primary" onclick="closeOrderDetail()">Done</button>
+            <button type="button" class="btn" onclick="closeOrderDetail()" style="background: var(--surface-2); border: 1px solid var(--line); color: var(--ink);">Done</button>
           </div>
         `;
       }
 
-      // Filter buttons listener
-      document.querySelectorAll(".filter-pill[data-filter]").forEach((pill) => {
+      // Filter buttons listener for Orders
+      document.querySelectorAll("#order-filter-pills .filter-pill[data-filter]").forEach((pill) => {
         pill.addEventListener("click", () => {
-          document.querySelectorAll(".filter-pill[data-filter]").forEach((p) => p.classList.remove("active"));
+          document.querySelectorAll("#order-filter-pills .filter-pill[data-filter]").forEach((p) => p.classList.remove("active"));
           pill.classList.add("active");
           fetchOrders(pill.dataset.filter);
         });
       });
 
-      // Hook tab switching to fetch orders if navigating to orders tab
+      // Filter buttons listener for Granted Accounts
+      document.querySelectorAll("#accounts-filter-pills .filter-pill[data-filter]").forEach((pill) => {
+        pill.addEventListener("click", () => {
+          document.querySelectorAll("#accounts-filter-pills .filter-pill[data-filter]").forEach((p) => p.classList.remove("active"));
+          pill.classList.add("active");
+          fetchGrantedAccounts(pill.dataset.filter);
+        });
+      });
+
+      // Granted Accounts State & Functions
+      let currentAccountsFilter = "all";
+      let currentAccountsOrderCode = null;
+
+      window.copyCredential = (text, btn) => {
+        if (!navigator.clipboard) {
+          const ta = document.createElement("textarea");
+          ta.value = text;
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand("copy");
+          document.body.removeChild(ta);
+        } else {
+          navigator.clipboard.writeText(text);
+        }
+        if (btn) {
+          const original = btn.innerHTML;
+          btn.innerHTML = `<span>✓</span> Copied!`;
+          btn.style.color = "var(--live)";
+          setTimeout(() => {
+            btn.innerHTML = original;
+            btn.style.color = "";
+          }, 1500);
+        }
+      };
+
+      window.togglePasswordVisibility = (accId, btn) => {
+        const maskedEl = document.getElementById(`pwd-masked-${accId}`);
+        const plainEl = document.getElementById(`pwd-plain-${accId}`);
+        if (!maskedEl || !plainEl) return;
+        const isHidden = plainEl.hidden;
+        if (isHidden) {
+          plainEl.hidden = false;
+          maskedEl.hidden = true;
+          if (btn) btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg> Hide`;
+        } else {
+          plainEl.hidden = true;
+          maskedEl.hidden = false;
+          if (btn) btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg> Show`;
+        }
+      };
+
+      async function fetchGrantedAccounts(filter = "all", orderCode = null) {
+        currentAccountsFilter = filter;
+        currentAccountsOrderCode = orderCode;
+        const loadingEl = document.getElementById("accounts-list-loading");
+        const containerEl = document.getElementById("accounts-list-container");
+        if (!containerEl) return;
+
+        if (loadingEl) loadingEl.hidden = false;
+        containerEl.innerHTML = "";
+
+        try {
+          let url = `/api/web/account/granted-accounts?status_filter=${encodeURIComponent(filter)}`;
+          if (orderCode) url += `&order_code=${encodeURIComponent(orderCode)}`;
+          const res = await fetchJSON(url);
+
+          if (loadingEl) loadingEl.hidden = true;
+
+          // Update active count badge if available
+          if (res.active_count !== undefined) {
+            const statActive = document.getElementById("stat-active-accounts");
+            if (statActive) statActive.textContent = res.active_count;
+          }
+
+          if (!res.accounts || res.accounts.length === 0) {
+            containerEl.innerHTML = `
+              <div class="empty-state" style="grid-column: 1 / -1; padding: 48px 16px;">
+                <div class="empty-icon">🔑</div>
+                <h3 style="margin: 0; font-size: 18px; color: var(--ink);">No granted accounts yet</h3>
+                <p class="muted" style="max-width: 380px; margin: 0 auto 12px auto;">
+                  ${orderCode ? `No digital credentials found for order <code>${escapeHtml(orderCode)}</code>.` : 'When your digital subscription orders are fulfilled, your login credentials and lifecycle tracking will appear here.'}
+                </p>
+                <a href="/mini" class="btn btn-primary" style="font-size: 13px; padding: 9px 18px;">Browse Store</a>
+              </div>
+            `;
+            return;
+          }
+
+          containerEl.innerHTML = res.accounts.map((acc) => renderGrantedAccountCard(acc)).join("");
+        } catch (err) {
+          if (loadingEl) loadingEl.hidden = true;
+          containerEl.innerHTML = `
+            <div class="empty-state" style="grid-column: 1 / -1;">
+              <div class="empty-icon">⚠️</div>
+              <h3 style="margin: 0; color: var(--ink);">Failed to load granted accounts</h3>
+              <p class="muted">${escapeHtml(err.message)}</p>
+              <button type="button" class="btn btn-primary" onclick="fetchGrantedAccounts(currentAccountsFilter)">Retry</button>
+            </div>
+          `;
+        }
+      }
+
+      function renderGrantedAccountCard(acc) {
+        const thumb = acc.image_url
+          ? `<img src="${escapeHtml(acc.image_url)}" alt="">`
+          : (acc.emoji || "🛍️");
+
+        // Countdown pill style
+        let countdownClass = "sub-countdown-active";
+        let countdownText = `${acc.days_remaining} days remaining`;
+        let barClass = "";
+
+        if (acc.is_refunded) {
+          countdownClass = "sub-countdown-expired";
+          countdownText = "Refunded";
+          barClass = "refunded";
+        } else if (acc.is_frozen) {
+          countdownClass = "sub-countdown-warning";
+          countdownText = "Frozen";
+          barClass = "warning";
+        } else if (acc.is_expired) {
+          countdownClass = "sub-countdown-expired";
+          countdownText = "Expired";
+          barClass = "expired";
+        } else if (acc.days_remaining <= 3) {
+          countdownClass = "sub-countdown-warning";
+          barClass = "warning";
+        }
+
+        // Additional fields
+        let extraFieldsHtml = "";
+        if (acc.profile_pin) {
+          extraFieldsHtml += `
+            <div class="credential-row" style="margin-top: 6px;">
+              <div class="credential-header">Profile / PIN</div>
+              <div class="credential-val-group">
+                <span class="credential-val-text">${escapeHtml(acc.profile_pin)}</span>
+                <button type="button" class="mini-icon-btn" onclick="copyCredential('${escapeHtml(acc.profile_pin)}', this)">
+                  Copy PIN
+                </button>
+              </div>
+            </div>
+          `;
+        }
+        if (acc.recovery_info) {
+          extraFieldsHtml += `
+            <div class="credential-row" style="margin-top: 6px;">
+              <div class="credential-header">Recovery Info</div>
+              <div class="credential-val-group">
+                <span class="credential-val-text" style="font-size: 12px;">${escapeHtml(acc.recovery_info)}</span>
+                <button type="button" class="mini-icon-btn" onclick="copyCredential('${escapeHtml(acc.recovery_info)}', this)">
+                  Copy
+                </button>
+              </div>
+            </div>
+          `;
+        }
+        if (acc.custom_instructions || acc.account_note) {
+          extraFieldsHtml += `
+            <div style="background: rgba(139, 108, 255, 0.06); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 12px; margin-top: 6px; color: var(--ink);">
+              <span style="color: var(--purple-2); font-weight: 700; display: block; margin-bottom: 2px;">Notes / Instructions</span>
+              ${escapeHtml(acc.custom_instructions || acc.account_note)}
+            </div>
+          `;
+        }
+
+        return `
+          <div class="account-card" id="account-card-${acc.id}">
+            <!-- Header -->
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+              <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
+                <div class="mission-prod-thumb" style="width: 44px; height: 44px; font-size: 22px;">${thumb}</div>
+                <div style="min-width: 0;">
+                  <h3 style="margin: 0; font-size: 15px; font-weight: 700; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                    ${escapeHtml(acc.product_name)}
+                  </h3>
+                  <div style="display: flex; align-items: center; gap: 6px; margin-top: 3px;">
+                    <span class="mission-code-badge" style="font-size: 11px;">
+                      ${escapeHtml(acc.order_code || 'Order')}
+                      <button type="button" class="copy-icon-btn" onclick="copyOrderCode('${escapeHtml(acc.order_code || '')}', this)" title="Copy Order Code">
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                      </button>
+                    </span>
+                    ${acc.account_index > 0 ? `<span class="placeholder-badge" style="padding: 2px 6px; font-size: 10px;">#${acc.account_index + 1}</span>` : ''}
+                  </div>
+                </div>
+              </div>
+              <span class="status-pill status-${escapeHtml(acc.status_badge || 'completed')}">
+                ${escapeHtml(acc.status_label || acc.status)}
+              </span>
+            </div>
+
+            <!-- Subscription Lifecycle Progress -->
+            <div class="sub-progress-section">
+              <div class="sub-progress-header">
+                <span class="muted" style="font-size: 11.5px; font-weight: 600;">SUBSCRIPTION LIFECYCLE</span>
+                <span class="sub-countdown-badge ${countdownClass}">${countdownText}</span>
+              </div>
+              <div class="sub-progress-track">
+                <div class="sub-progress-bar ${barClass}" style="width: ${acc.progress_percent}%;"></div>
+              </div>
+              <div style="display: flex; align-items: center; justify-content: space-between; font-size: 11px; color: var(--muted); margin-top: 4px;">
+                <span>${acc.days_used} days used / ${acc.total_days} days</span>
+                <span>Expires: <strong>${escapeHtml(acc.expiry_date || '—')}</strong></span>
+              </div>
+            </div>
+
+            <!-- Credentials Box -->
+            <div class="credential-box">
+              <!-- Username / Email -->
+              <div class="credential-row">
+                <div class="credential-header">
+                  <span>Username / Login</span>
+                </div>
+                <div class="credential-val-group">
+                  <span class="credential-val-text" id="user-val-${acc.id}">${escapeHtml(acc.login_email || '—')}</span>
+                  <div class="credential-actions">
+                    <button type="button" class="mini-icon-btn" onclick="copyCredential('${escapeHtml(acc.login_email || '')}', this)">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Password -->
+              <div class="credential-row">
+                <div class="credential-header">
+                  <span>Password</span>
+                </div>
+                <div class="credential-val-group">
+                  <span class="credential-val-text" id="pwd-masked-${acc.id}">••••••••••••</span>
+                  <span class="credential-val-text" id="pwd-plain-${acc.id}" hidden>${escapeHtml(acc.login_password || '—')}</span>
+                  <div class="credential-actions">
+                    <button type="button" class="mini-icon-btn" onclick="togglePasswordVisibility(${acc.id}, this)">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg> Show
+                    </button>
+                    <button type="button" class="mini-icon-btn" onclick="copyCredential('${escapeHtml(acc.login_password || '')}', this)">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              ${extraFieldsHtml}
+            </div>
+
+            <!-- Footer Actions -->
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: auto; padding-top: 4px;">
+              ${acc.order_code ? `
+                <button type="button" class="btn" onclick="openOrderDetail('${escapeHtml(acc.order_code)}')" style="font-size: 12px; padding: 7px 12px; background: var(--surface-2); border: 1px solid var(--line); color: var(--ink);">
+                  📄 View Order
+                </button>
+              ` : '<div></div>'}
+              <a class="btn btn-whatsapp" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent('Hi SMF SHOP, I need help with my granted account for ' + acc.product_name + ' (Order: ' + (acc.order_code || '') + ')')}" style="font-size: 12px; padding: 7px 12px; gap: 5px;">
+                <span>💬</span> WhatsApp
+              </a>
+            </div>
+          </div>
+        `;
+      }
+
+      // Hook tab switching to fetch orders or accounts
       const origSwitchTab = window.switchTab;
-      window.switchTab = (tabName) => {
+      window.switchTab = (tabName, orderFilter = null) => {
         origSwitchTab(tabName);
         if (tabName === "orders") {
           fetchOrders(currentFilter);
+        } else if (tabName === "accounts") {
+          fetchGrantedAccounts(currentAccountsFilter, orderFilter);
         }
       };
 
@@ -1228,10 +1673,18 @@
           const dashboardData = await fetchJSON("/api/web/account/dashboard");
           renderDashboard(dashboardData);
 
-          // If URL hash requests orders tab
+          // URL hash or path routing
           const hash = (location.hash || "").replace(/^#/, "");
           if (hash === "orders" || hash === "/orders" || location.pathname.includes("/orders")) {
             switchTab("orders");
+          } else if (
+            hash === "accounts" ||
+            hash === "/accounts" ||
+            hash === "granted-accounts" ||
+            location.pathname.includes("/accounts") ||
+            location.pathname.includes("/granted-accounts")
+          ) {
+            switchTab("accounts");
           }
         } catch (_err) {
           document.getElementById("section-loading").hidden = true;

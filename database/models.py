@@ -281,6 +281,8 @@ class Service(Base, TimestampMixin):
     require_email: Mapped[bool] = mapped_column(Boolean, default=False)
     # Product availability: "in_stock", "pre_order", "out_of_stock"
     availability: Mapped[str] = mapped_column(String(20), default="in_stock")
+    # Subscription duration in days (optional override; if None, falls back to warranty text parsing)
+    duration_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     provider: Mapped[Provider | None] = relationship(back_populates="services")
     category: Mapped[Category | None] = relationship(back_populates="services")
@@ -459,6 +461,7 @@ class Order(Base):
     user: Mapped[User] = relationship(back_populates="orders")
     service: Mapped[Service] = relationship(back_populates="orders")
     refund_logs: Mapped[list["RefundLog"]] = relationship(back_populates="order")
+    granted_accounts: Mapped[list["GrantedAccount"]] = relationship(back_populates="order")
 
 
 class RefundLog(Base):
@@ -500,6 +503,40 @@ class IssueReport(Base):
 
     order: Mapped[Order] = relationship()
     user: Mapped[User] = relationship()
+
+
+class GrantedAccount(Base, TimestampMixin):
+    """Assigned digital subscription/account credentials for fulfilled customer orders."""
+
+    __tablename__ = "granted_accounts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    order_id: Mapped[int] = mapped_column(ForeignKey("orders.id"), nullable=False, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    service_id: Mapped[int] = mapped_column(ForeignKey("services.id"), nullable=False, index=True)
+    # 0-indexed for quantity > 1 (e.g. 0, 1, 2)
+    account_index: Mapped[int] = mapped_column(Integer, default=0)
+
+    # Credentials
+    login_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    login_password: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    raw_credentials: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Optional account metadata
+    profile_pin: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    recovery_info: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    custom_instructions: Mapped[str | None] = mapped_column(Text, nullable=True)
+    account_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Lifecycle & Subscription tracking
+    status: Mapped[str] = mapped_column(String(40), default="active")  # active | expired | refunded | frozen
+    duration_days: Mapped[int] = mapped_column(Integer, default=30)
+    subscription_start_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    subscription_expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+    order: Mapped[Order] = relationship(back_populates="granted_accounts")
+    user: Mapped[User] = relationship()
+    service: Mapped[Service] = relationship()
 
 
 class Transaction(Base):
@@ -800,6 +837,9 @@ def run_light_migrations() -> None:
         if "availability" not in existing_columns:
             with engine.begin() as connection:
                 connection.execute(text("ALTER TABLE services ADD COLUMN availability VARCHAR(20) DEFAULT 'in_stock'"))
+        if "duration_days" not in existing_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE services ADD COLUMN duration_days INTEGER"))
 
     if "stocks" in table_names:
         existing_columns = {col["name"] for col in inspector.get_columns("stocks")}
@@ -1075,6 +1115,34 @@ def run_light_migrations() -> None:
                 connection.execute(text("ALTER TABLE bot_configs ADD COLUMN sidebar_seen_users_at TIMESTAMP"))
             if "mini_app_url" not in existing_columns:
                 connection.execute(text("ALTER TABLE bot_configs ADD COLUMN mini_app_url VARCHAR(500)"))
+
+    if "granted_accounts" in table_names:
+        existing_columns = {col["name"] for col in inspector.get_columns("granted_accounts")}
+        with engine.begin() as connection:
+            if "profile_pin" not in existing_columns:
+                connection.execute(text("ALTER TABLE granted_accounts ADD COLUMN profile_pin VARCHAR(80)"))
+            if "recovery_info" not in existing_columns:
+                connection.execute(text("ALTER TABLE granted_accounts ADD COLUMN recovery_info VARCHAR(255)"))
+            if "custom_instructions" not in existing_columns:
+                connection.execute(text("ALTER TABLE granted_accounts ADD COLUMN custom_instructions TEXT"))
+            if "account_note" not in existing_columns:
+                connection.execute(text("ALTER TABLE granted_accounts ADD COLUMN account_note TEXT"))
+            if "account_index" not in existing_columns:
+                connection.execute(text("ALTER TABLE granted_accounts ADD COLUMN account_index INTEGER DEFAULT 0"))
+
+        try:
+            indexes = {idx["name"] for idx in inspector.get_indexes("granted_accounts")}
+        except Exception:
+            indexes = set()
+        if "ix_granted_accounts_order_index" not in indexes:
+            try:
+                with engine.begin() as connection:
+                    connection.execute(text(
+                        "CREATE UNIQUE INDEX ix_granted_accounts_order_index "
+                        "ON granted_accounts (order_id, account_index)"
+                    ))
+            except Exception:
+                pass
 
 
 def seed_defaults() -> None:

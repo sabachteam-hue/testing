@@ -98,6 +98,13 @@ def process_waiting_preorders(db: Session, service_id: int) -> List[Order]:
             order.preorder_status = "fulfilled"
             order.note = "Pre-order fulfilled automatically upon restock."
 
+        if order.delivered_info:
+            try:
+                from utils.granted_accounts import sync_granted_accounts_for_order
+                sync_granted_accounts_for_order(db, order)
+            except Exception as exc:
+                logger.warning("[PREORDER-FULFILL] Granted accounts sync error: %s", exc)
+
         db.commit()
         try:
             db.refresh(service)

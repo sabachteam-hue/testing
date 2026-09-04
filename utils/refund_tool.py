@@ -314,6 +314,11 @@ def credit_wallet_refund(
     order.refund_method = "wallet"
     order.refund_amount = float(amount)
     order.refunded_at = datetime.utcnow()
+    try:
+        from utils.granted_accounts import sync_granted_accounts_for_order
+        sync_granted_accounts_for_order(db, order)
+    except Exception:
+        pass
 
     log = RefundLog(
         order_id=order.id,
@@ -355,6 +360,11 @@ def mark_manual_refund(
     order.refund_method = "manual"
     order.refund_amount = float(amount)
     order.refunded_at = datetime.utcnow()
+    try:
+        from utils.granted_accounts import sync_granted_accounts_for_order
+        sync_granted_accounts_for_order(db, order)
+    except Exception:
+        pass
 
     log = RefundLog(
         order_id=order.id,

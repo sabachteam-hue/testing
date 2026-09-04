@@ -1,7 +1,7 @@
 import logging
 import os
 import unittest
-from datetime import datetime
+from datetime import datetime, timedelta
 from unittest.mock import patch
 
 logging.getLogger("httpx").setLevel(logging.WARNING)
@@ -11,7 +11,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from database.models import Base, Order, PaymentMethod, Service, Stock, User, get_db
+from database.models import Base, GrantedAccount, Order, PaymentMethod, Service, Stock, User, get_db
 from main import app
 from utils.rate_limiter import _memory_failures, _memory_lockouts, _memory_windows
 from utils.security import hash_password
@@ -672,6 +672,342 @@ class CustomerOrdersMissionLogsTests(unittest.TestCase):
         self.assertEqual(res_nonexistent.status_code, 404)
 
 
+class CustomerGrantedAccountsTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.engine = create_engine(
+            "sqlite:///:memory:",
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+        )
+        cls.TestingSessionLocal = sessionmaker(bind=cls.engine, autoflush=False, autocommit=False)
+        Base.metadata.create_all(bind=cls.engine)
+
+        db = cls.TestingSessionLocal()
+        try:
+            method = PaymentMethod(
+                name="USDT TRC20",
+                code="TRC20",
+                method_type="crypto",
+                network="Tron (TRC20)",
+                address="TXYZ111122223333",
+                is_active=True,
+            )
+            db.add(method)
+
+            # Service with duration_days
+            svc_chatgpt = Service(
+                sku="CHATGPT-SUB-TEST",
+                name="ChatGPT Plus Subscription",
+                sell_price=20.0,
+                duration_days=30,
+                warranty="30 Days",
+                is_active=True,
+                is_deleted=False,
+            )
+            # Service with warranty text only (1 Year)
+            svc_netflix = Service(
+                sku="NETFLIX-1Y-TEST",
+                name="Netflix Premium 1 Year",
+                sell_price=50.0,
+                warranty="1 Year",
+                is_active=True,
+                is_deleted=False,
+            )
+            db.add_all([svc_chatgpt, svc_netflix])
+            db.flush()
+
+            # Alice
+            alice = User(
+                telegram_id="web:alice_subs@example.com",
+                username="alice_subs",
+                full_name="Alice Subs",
+                email="alice_subs@example.com",
+                password_hash=hash_password("password123"),
+                wallet_usdt=200.0,
+            )
+            # Bob
+            bob = User(
+                telegram_id="web:bob_subs@example.com",
+                username="bob_subs",
+                full_name="Bob Subs",
+                email="bob_subs@example.com",
+                password_hash=hash_password("password456"),
+                wallet_usdt=100.0,
+            )
+            db.add_all([alice, bob])
+            db.flush()
+
+            cls.alice_id = alice.id
+            cls.bob_id = bob.id
+
+            now = datetime.utcnow()
+
+            # Alice Order 1: Active 30-day sub completed 10 days ago (20 days remaining)
+            ord_active = Order(
+                order_code="ORD-ALICE-ACTIVE",
+                user_id=alice.id,
+                service_id=svc_chatgpt.id,
+                link="web_order",
+                quantity=1,
+                amount_usdt=20.0,
+                status="completed",
+                payment_method="TRC20",
+                delivered_info="alice_user@openai.com:SecretPass123",
+                completed_at=now - timedelta(days=10),
+            )
+            # Alice Order 2: Expired 30-day sub completed 40 days ago (0 days remaining)
+            ord_expired = Order(
+                order_code="ORD-ALICE-EXPIRED",
+                user_id=alice.id,
+                service_id=svc_chatgpt.id,
+                link="web_order",
+                quantity=1,
+                amount_usdt=20.0,
+                status="completed",
+                payment_method="TRC20",
+                delivered_info="expired_user:OldPass999",
+                completed_at=now - timedelta(days=40),
+            )
+            # Alice Order 3: Refunded sub
+            ord_refunded = Order(
+                order_code="ORD-ALICE-REFUNDED",
+                user_id=alice.id,
+                service_id=svc_chatgpt.id,
+                link="web_order",
+                quantity=1,
+                amount_usdt=20.0,
+                status="refunded",
+                refund_amount=20.0,
+                refund_method="wallet",
+                refunded_at=now,
+                payment_method="TRC20",
+                delivered_info="refunded_user:RefPass111",
+                completed_at=now - timedelta(days=5),
+            )
+            # Alice Order 4: Multi-quantity sub (quantity=2, 2 account lines)
+            ord_multi = Order(
+                order_code="ORD-ALICE-MULTI",
+                user_id=alice.id,
+                service_id=svc_netflix.id,
+                link="web_order",
+                quantity=2,
+                amount_usdt=100.0,
+                status="completed",
+                payment_method="TRC20",
+                delivered_info="multi_user1@netflix.com:netpass1:PIN:1234\nmulti_user2@netflix.com:netpass2:PIN:5678",
+                completed_at=now - timedelta(days=2),
+            )
+            # Alice Order 5: Pending order (no credentials, pending)
+            ord_pending = Order(
+                order_code="ORD-ALICE-PENDING",
+                user_id=alice.id,
+                service_id=svc_chatgpt.id,
+                link="web_order",
+                quantity=1,
+                amount_usdt=20.0,
+                status="pending",
+                payment_method="TRC20",
+            )
+
+            # Bob Order 1: Completed active sub
+            ord_bob = Order(
+                order_code="ORD-BOB-ACTIVE",
+                user_id=bob.id,
+                service_id=svc_netflix.id,
+                link="web_order",
+                quantity=1,
+                amount_usdt=50.0,
+                status="completed",
+                payment_method="TRC20",
+                delivered_info="bob_user@netflix.com:BobSecret777",
+                completed_at=now - timedelta(days=1),
+            )
+
+            db.add_all([ord_active, ord_expired, ord_refunded, ord_multi, ord_pending, ord_bob])
+            db.commit()
+
+            # Pre-sync granted accounts
+            from utils.granted_accounts import sync_user_granted_accounts
+            sync_user_granted_accounts(db, alice.id)
+            sync_user_granted_accounts(db, bob.id)
+
+            bob_acc = db.query(GrantedAccount).filter(GrantedAccount.user_id == bob.id).first()
+            cls.bob_acc_id = bob_acc.id if bob_acc else 0
+        finally:
+            db.close()
+
+    def setUp(self):
+        _memory_windows.clear()
+        _memory_failures.clear()
+        _memory_lockouts.clear()
+
+        def override_get_db():
+            db = self.TestingSessionLocal()
+            try:
+                yield db
+            finally:
+                db.close()
+
+        app.dependency_overrides[get_db] = override_get_db
+        self.client = TestClient(app)
+
+    def tearDown(self):
+        app.dependency_overrides.clear()
+
+    def _login_alice(self) -> TestClient:
+        client = TestClient(app)
+        res = client.post(
+            "/api/web/login",
+            json={"email": "alice_subs@example.com", "password": "password123"},
+        )
+        self.assertEqual(res.status_code, 200)
+        return client
+
+    def _login_bob(self) -> TestClient:
+        client = TestClient(app)
+        res = client.post(
+            "/api/web/login",
+            json={"email": "bob_subs@example.com", "password": "password456"},
+        )
+        self.assertEqual(res.status_code, 200)
+        return client
+
+    # 1. Unauthenticated customer blocked from accessing granted accounts
+    def test_unauthenticated_blocked(self):
+        client = TestClient(app)
+        res_list = client.get("/api/web/account/granted-accounts")
+        self.assertEqual(res_list.status_code, 401)
+
+        res_detail = client.get("/api/web/account/granted-accounts/1")
+        self.assertEqual(res_detail.status_code, 401)
+
+    # 2. Customer sees only their own accounts
+    def test_customer_sees_only_own_accounts(self):
+        client = self._login_alice()
+        res = client.get("/api/web/account/granted-accounts")
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertTrue(data["ok"])
+        # Alice has 5 accounts: 1 active, 1 expired, 1 refunded, 2 multi
+        self.assertEqual(data["total"], 5)
+
+        emails = [a["login_email"] for a in data["accounts"]]
+        self.assertIn("alice_user@openai.com", emails)
+        self.assertIn("expired_user", emails)
+        self.assertIn("refunded_user", emails)
+        self.assertIn("multi_user1@netflix.com", emails)
+        self.assertIn("multi_user2@netflix.com", emails)
+        # Bob's account must NOT be present
+        self.assertNotIn("bob_user@netflix.com", emails)
+
+    # 3. Bob sees only Bob's accounts
+    def test_other_customer_sees_only_own_accounts(self):
+        client = self._login_bob()
+        res = client.get("/api/web/account/granted-accounts")
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertEqual(data["total"], 1)
+        self.assertEqual(data["accounts"][0]["login_email"], "bob_user@netflix.com")
+        self.assertNotIn("alice_user@openai.com", [a["login_email"] for a in data["accounts"]])
+
+    # 4. Tamper protection: Alice cannot access Bob's account detail
+    def test_tamper_protection_on_account_detail(self):
+        client = self._login_alice()
+        res = client.get(f"/api/web/account/granted-accounts/{self.bob_acc_id}")
+        self.assertEqual(res.status_code, 404)
+
+    # 5. Pending order does not create granted account
+    def test_pending_order_does_not_create_granted_account(self):
+        client = self._login_alice()
+        res = client.get("/api/web/account/granted-accounts?order_code=ORD-ALICE-PENDING")
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json()["total"], 0)
+
+    # 6. Multiple quantity order creates independent accounts with PIN/profile
+    def test_multiple_quantity_creates_independent_accounts(self):
+        client = self._login_alice()
+        res = client.get("/api/web/account/granted-accounts?order_code=ORD-ALICE-MULTI")
+        self.assertEqual(res.status_code, 200)
+        accounts = res.json()["accounts"]
+        self.assertEqual(len(accounts), 2)
+        indices = [a["account_index"] for a in accounts]
+        self.assertIn(0, indices)
+        self.assertIn(1, indices)
+        emails = [a["login_email"] for a in accounts]
+        self.assertIn("multi_user1@netflix.com", emails)
+        self.assertIn("multi_user2@netflix.com", emails)
+
+    # 7. Subscription lifecycle calculations
+    def test_lifecycle_metrics_calculation(self):
+        client = self._login_alice()
+        # Active account: 30 days total, started 10 days ago -> ~20 days remaining
+        res_act = client.get("/api/web/account/granted-accounts?order_code=ORD-ALICE-ACTIVE")
+        act = res_act.json()["accounts"][0]
+        self.assertEqual(act["status"], "active")
+        self.assertEqual(act["total_days"], 30)
+        self.assertGreaterEqual(act["days_remaining"], 19)
+        self.assertLessEqual(act["days_remaining"], 21)
+        self.assertTrue(act["is_active"])
+        self.assertFalse(act["is_expired"])
+
+        # Expired account: 30 days total, started 40 days ago -> 0 days remaining, 100% progress
+        res_exp = client.get("/api/web/account/granted-accounts?order_code=ORD-ALICE-EXPIRED")
+        exp = res_exp.json()["accounts"][0]
+        self.assertEqual(exp["status"], "expired")
+        self.assertEqual(exp["days_remaining"], 0)
+        self.assertEqual(exp["progress_percent"], 100.0)
+        self.assertTrue(exp["is_expired"])
+
+        # Refunded account
+        res_ref = client.get("/api/web/account/granted-accounts?order_code=ORD-ALICE-REFUNDED")
+        ref = res_ref.json()["accounts"][0]
+        self.assertEqual(ref["status"], "refunded")
+        self.assertTrue(ref["is_refunded"])
+
+    # 8. Status filtering on granted accounts
+    def test_status_filtering(self):
+        client = self._login_alice()
+
+        res_active = client.get("/api/web/account/granted-accounts?status_filter=active")
+        self.assertEqual(res_active.status_code, 200)
+        for a in res_active.json()["accounts"]:
+            self.assertEqual(a["status"], "active")
+
+        res_expired = client.get("/api/web/account/granted-accounts?status_filter=expired")
+        self.assertEqual(res_expired.status_code, 200)
+        for a in res_expired.json()["accounts"]:
+            self.assertEqual(a["status"], "expired")
+
+        res_refunded = client.get("/api/web/account/granted-accounts?status_filter=refunded")
+        self.assertEqual(res_refunded.status_code, 200)
+        for a in res_refunded.json()["accounts"]:
+            self.assertEqual(a["status"], "refunded")
+
+    # 9. Idempotency: re-running sync creates 0 duplicate records
+    def test_idempotent_sync_no_duplicates(self):
+        db = self.TestingSessionLocal()
+        try:
+            from utils.granted_accounts import sync_user_granted_accounts
+            count_before = db.query(GrantedAccount).filter(GrantedAccount.user_id == self.alice_id).count()
+            # Run sync again
+            sync_user_granted_accounts(db, self.alice_id)
+            count_after = db.query(GrantedAccount).filter(GrantedAccount.user_id == self.alice_id).count()
+            self.assertEqual(count_before, count_after)
+        finally:
+            db.close()
+
+    # 10. Dashboard active accounts count matches real active count
+    def test_dashboard_active_accounts_count(self):
+        client = self._login_alice()
+        res = client.get("/api/web/account/dashboard")
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        # Alice has 3 active accounts: 1 active chatgpt + 2 active netflix (ORD-ALICE-MULTI)
+        self.assertEqual(data["stats"]["active_accounts"], 3)
+
+
 if __name__ == "__main__":
     unittest.main()
+
 
