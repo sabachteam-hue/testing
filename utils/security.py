@@ -34,8 +34,10 @@ INSECURE_SECRETS = {
 # Supported image extensions and MIME prefixes
 ALLOWED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
 ALLOWED_BULK_STOCK_EXTENSIONS = {".txt", ".csv", ".xlsx", ".xls", ".pdf", ".docx", ".doc"}
+ALLOWED_CLAIM_EVIDENCE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".pdf"}
 MAX_IMAGE_UPLOAD_BYTES = 5 * 1024 * 1024       # 5 MB
 MAX_BULK_STOCK_UPLOAD_BYTES = 10 * 1024 * 1024  # 10 MB
+MAX_CLAIM_EVIDENCE_BYTES = 10 * 1024 * 1024     # 10 MB
 
 
 # =====================================================================
@@ -302,6 +304,34 @@ def validate_bulk_stock_upload(
         return False, f"File extension '{ext}' is not allowed for stock files"
 
     return True, "Valid"
+
+
+def validate_claim_evidence_upload(
+    content: bytes,
+    filename: str,
+    max_bytes: int = MAX_CLAIM_EVIDENCE_BYTES,
+) -> tuple[bool, str]:
+    """Validate customer claim evidence files (PNG, JPG, WEBP, PDF)."""
+    if not content:
+        return False, "Evidence file is empty"
+    if len(content) > max_bytes:
+        return False, f"Evidence file size exceeds limit of {max_bytes // (1024 * 1024)} MB"
+
+    ext = Path(filename or "").suffix.lower()
+    if ext not in ALLOWED_CLAIM_EVIDENCE_EXTENSIONS:
+        return False, f"File extension '{ext}' is not allowed for evidence. Allowed: {', '.join(sorted(ALLOWED_CLAIM_EVIDENCE_EXTENSIONS))}"
+
+    # Disallow executable or dangerous patterns in original filename
+    base_lower = (filename or "").lower()
+    if any(p in base_lower for p in [".exe", ".js", ".html", ".htm", ".php", ".sh", ".bat", ".cmd", ".vbs", ".py", ".pl"]):
+        return False, "Dangerous or executable file types are strictly prohibited"
+
+    if ext == ".pdf":
+        if not content.startswith(b"%PDF-"):
+            return False, "Invalid PDF file structure"
+        return True, "Valid"
+
+    return validate_image_upload(content, filename, max_bytes=max_bytes)
 
 
 # =====================================================================

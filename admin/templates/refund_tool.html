@@ -120,42 +120,172 @@
 </section>
 
 <section class="panel" style="margin-top:18px;">
-  <h3>Reported problems</h3>
-  <div class="table-scroll">
-  <table>
-    <tr>
-      <th>When</th>
-      <th>Order ID</th>
-      <th>Client</th>
-      <th>Message</th>
-      <th>Note</th>
-      <th>Status / Action</th>
-    </tr>
-    {% for report in issue_reports %}
-    <tr>
-      <td>{{ report.created_at }}</td>
-      <td>{{ report.order_code }}</td>
-      <td>{{ report.user.username or report.user.full_name or report.user.telegram_id if report.user else '—' }}</td>
-      <td>{{ report.message }}</td>
-      {% if report.status == "resolved" %}
-      <td>{{ report.admin_note or '—' }}</td>
-      <td><span class="status-pill status-completed">Resolved</span></td>
-      {% else %}
-      <td>
-        <form method="post" action="/admin/refund-tool/report/{{ report.id }}/resolve" class="issue-resolve-form" onsubmit="return confirm('Send this note to the client and mark resolved?');">
-          <input type="text" name="admin_note" placeholder="Note to send the client" required>
-          <button type="submit" class="secondary">Resolve</button>
-        </form>
-      </td>
-      <td><span class="status-pill status-pending">Pending</span></td>
+  <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
+    <h3 style="margin:0;">
+      Customer Claims & Reported Issues
+      {% if open_claims_count %}
+      <span class="nav-badge" style="background:#e06666; color:#fff; font-size:11px; padding:2px 8px; border-radius:12px; margin-left:6px;">{{ open_claims_count }} Open</span>
       {% endif %}
-    </tr>
-    {% else %}
-    <tr><td colspan="6" class="muted">No reported problems yet.</td></tr>
-    {% endfor %}
+    </h3>
+    <div style="display:flex; gap:6px; font-size:12px;">
+      <button type="button" class="secondary" style="padding:4px 10px; font-size:12px;" onclick="filterClaimsTable('all')">All ({{ issue_reports|length }})</button>
+      <button type="button" class="secondary" style="padding:4px 10px; font-size:12px;" onclick="filterClaimsTable('open')">Open ({{ open_claims_count }})</button>
+      <button type="button" class="secondary" style="padding:4px 10px; font-size:12px;" onclick="filterClaimsTable('resolved')">Resolved</button>
+    </div>
+  </div>
+
+  <div class="table-scroll">
+  <table id="claims-management-table">
+    <thead>
+      <tr>
+        <th>Reference & Date</th>
+        <th>Client & Order</th>
+        <th>Product & Account</th>
+        <th>Preference & Issue</th>
+        <th>Evidence</th>
+        <th>Estimate & Status</th>
+        <th style="min-width:220px;">Admin Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for report in issue_reports %}
+      {% set is_open = report.status in ['pending', 'pending_review', 'under_review', 'awaiting_evidence', 'approved', 'replacement_processing', 'refund_processing', 'support_in_progress'] %}
+      <tr class="claim-row" data-status="{% if is_open %}open{% elif report.status == 'resolved' %}resolved{% else %}rejected{% endif %}">
+        <td>
+          <strong>{{ report.claim_code or ('CLM-' ~ report.id) }}</strong>
+          <br><span class="muted" style="font-size:11px;">{{ report.created_at }}</span>
+          {% if report.stopped_working_at %}
+          <br><span style="font-size:11px; color:#c99700;">Stopped: {{ report.stopped_working_at.strftime('%Y-%m-%d') if report.stopped_working_at else '—' }}</span>
+          {% endif %}
+        </td>
+        <td>
+          <a href="/admin/orders?q={{ report.order_code }}" style="font-weight:600;">{{ report.order_code }}</a>
+          <br><span class="muted" style="font-size:11.5px;">{{ report.user.username or report.user.full_name or report.user.telegram_id if report.user else '—' }}</span>
+        </td>
+        <td>
+          {{ report.service.name if report.service else (report.order.service.name if report.order and report.order.service else '—') }}
+          {% if report.granted_account %}
+          <br><span class="muted" style="font-size:11px;">Acc: {{ report.granted_account.login_email or ('#' ~ (report.granted_account.account_index + 1)) }} ({{ report.granted_account.status }})</span>
+          {% endif %}
+        </td>
+        <td>
+          <span style="font-size:11px; font-weight:700; text-transform:uppercase; color:#8b6cff;">{{ report.resolution_preference or 'Support' }}</span>
+          <div style="max-width:240px; font-size:12px; margin-top:3px; word-break:break-word;">
+            {{ report.message }}
+          </div>
+        </td>
+        <td>
+          {% if report.evidence_url %}
+          <a href="{{ report.evidence_url }}" target="_blank" rel="noopener noreferrer" style="font-size:12px; display:inline-block; background:rgba(139,108,255,0.12); padding:3px 8px; border-radius:6px; border:1px solid rgba(139,108,255,0.3); text-decoration:none;">
+            📎 View {{ report.evidence_filename or 'Evidence' }}
+          </a>
+          {% else %}
+          <span class="muted" style="font-size:12px;">None</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if report.refund_estimate and is_open %}
+          <div style="font-size:12px; margin-bottom:4px;">
+            <strong>${{ '%.2f'|format(report.refund_estimate.estimated_refund) }}</strong>
+            <span class="muted" style="font-size:10.5px;">({{ report.refund_estimate.days_remaining }}d left)</span>
+          </div>
+          {% elif report.refund_amount is not none %}
+          <div style="font-size:12px; margin-bottom:4px; color:#147a3f; font-weight:600;">
+            Refund: ${{ '%.2f'|format(report.refund_amount) }} ({{ report.refund_method or 'wallet' }})
+          </div>
+          {% endif %}
+
+          {% if report.status == 'resolved' %}
+          <span class="status-pill status-completed">Resolved</span>
+          {% elif report.status == 'rejected' %}
+          <span class="status-pill status-failed">Rejected</span>
+          {% elif report.status == 'awaiting_evidence' %}
+          <span class="status-pill status-pending" style="background:#ffb74d; color:#000;">Awaiting Evidence</span>
+          {% else %}
+          <span class="status-pill status-pending">{{ report.status.replace('_', ' ').title() }}</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if is_open %}
+          <details style="font-size:12px;">
+            <summary style="cursor:pointer; font-weight:600; color:#8b6cff;">Take Action ▾</summary>
+            <div style="background:#1e1a29; border:1px solid #3d3553; border-radius:8px; padding:10px; margin-top:6px;">
+
+              <!-- Action 1: Replacement -->
+              <form method="post" action="/admin/claims/{{ report.id }}/approve-replacement" style="margin-bottom:10px; padding-bottom:8px; border-bottom:1px solid #2d2640;" onsubmit="return confirm('Approve replacement for claim {{ report.claim_code or report.id }}?');">
+                <div style="font-weight:700; color:#b39ddb; margin-bottom:4px;">⚡ Approve Replacement</div>
+                <label style="font-size:11px; display:flex; align-items:center; gap:6px; margin-bottom:4px;">
+                  <input type="checkbox" name="auto_stock" value="1" checked> Auto-assign from available stock
+                </label>
+                <input type="text" name="replacement_credentials" placeholder="Manual credentials (if no stock)" style="width:100%; font-size:11px; padding:4px 6px; margin-bottom:4px;">
+                <input type="text" name="admin_note" placeholder="Note to customer" style="width:100%; font-size:11px; padding:4px 6px; margin-bottom:6px;">
+                <button type="submit" style="width:100%; padding:4px; font-size:11px;">Issue Replacement</button>
+              </form>
+
+              <!-- Action 2: Refund -->
+              <form method="post" action="/admin/claims/{{ report.id }}/process-refund" style="margin-bottom:10px; padding-bottom:8px; border-bottom:1px solid #2d2640;" onsubmit="return confirm('Process refund for claim {{ report.claim_code or report.id }}?');">
+                <div style="font-weight:700; color:#81c784; margin-bottom:4px;">💰 Process Pro-Rata Refund</div>
+                <div style="display:flex; gap:6px; margin-bottom:4px;">
+                  <select name="refund_method" style="flex:1; font-size:11px; padding:4px;">
+                    <option value="wallet" selected>Wallet Credit</option>
+                    <option value="manual">Manual / Fiat</option>
+                  </select>
+                  <input type="number" step="0.01" name="amount_override" placeholder="Amount (${{ '%.2f'|format(report.refund_estimate.estimated_refund if report.refund_estimate else 0.0) }})" style="flex:1; font-size:11px; padding:4px 6px;">
+                </div>
+                <input type="text" name="admin_note" placeholder="Refund note" style="width:100%; font-size:11px; padding:4px 6px; margin-bottom:6px;">
+                <button type="submit" style="width:100%; padding:4px; font-size:11px; background:#2e7d32;">Process Refund</button>
+              </form>
+
+              <!-- Action 3: Support Fix -->
+              <form method="post" action="/admin/claims/{{ report.id }}/resolve-support" style="margin-bottom:10px; padding-bottom:8px; border-bottom:1px solid #2d2640;" onsubmit="return confirm('Unfreeze account and mark support fixed?');">
+                <div style="font-weight:700; color:#64b5f6; margin-bottom:4px;">🛠️ Support Fix (Restore Account)</div>
+                <input type="text" name="resolution_note" placeholder="Resolution note to customer" required style="width:100%; font-size:11px; padding:4px 6px; margin-bottom:6px;">
+                <button type="submit" class="secondary" style="width:100%; padding:4px; font-size:11px;">Mark Fixed & Unfreeze</button>
+              </form>
+
+              <!-- Action 4: Request Evidence -->
+              <form method="post" action="/admin/claims/{{ report.id }}/request-evidence" style="margin-bottom:10px; padding-bottom:8px; border-bottom:1px solid #2d2640;">
+                <div style="font-weight:700; color:#ffb74d; margin-bottom:4px;">📎 Request More Evidence</div>
+                <input type="text" name="admin_note" placeholder="What evidence is needed?" required style="width:100%; font-size:11px; padding:4px 6px; margin-bottom:6px;">
+                <button type="submit" class="secondary" style="width:100%; padding:4px; font-size:11px;">Request Evidence</button>
+              </form>
+
+              <!-- Action 5: Reject Claim -->
+              <form method="post" action="/admin/claims/{{ report.id }}/reject" onsubmit="return confirm('Reject this claim and unfreeze account?');">
+                <div style="font-weight:700; color:#e57373; margin-bottom:4px;">❌ Reject Claim</div>
+                <input type="text" name="rejection_reason" placeholder="Rejection reason" required style="width:100%; font-size:11px; padding:4px 6px; margin-bottom:6px;">
+                <button type="submit" class="secondary" style="width:100%; padding:4px; font-size:11px; color:#ff8a80; border-color:#ff8a80;">Reject Claim</button>
+              </form>
+
+            </div>
+          </details>
+          {% else %}
+          <div style="font-size:11.5px; color:#aaa;">
+            {{ report.resolution_note or report.admin_note or 'Resolved' }}
+          </div>
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="muted">No warranty claims or reported problems recorded yet.</td></tr>
+      {% endfor %}
+    </tbody>
   </table>
   </div>
 </section>
+
+<script>
+function filterClaimsTable(status) {
+  const rows = document.querySelectorAll('#claims-management-table .claim-row');
+  rows.forEach(r => {
+    if (status === 'all' || r.getAttribute('data-status') === status) {
+      r.style.display = '';
+    } else {
+      r.style.display = 'none';
+    }
+  });
+}
+</script>
 
 <section class="panel" style="margin-top:18px;">
   <h3>Recent refunds</h3>

@@ -36,7 +36,7 @@
       <p class="nav-label">Commerce</p>
       <a href="/admin/sales" class="{% if '/sales' in request.url.path %}active{% endif %}">Sales</a>
       <a href="/admin/user-discounts" class="{% if '/user-discounts' in request.url.path %}active{% endif %}">User Discounts</a>
-      <a href="/admin/refund-tool" class="{% if '/refund-tool' in request.url.path %}active{% endif %}">Refund Tool{% if sidebar_counts and sidebar_counts.refund_tool %}<span class="nav-badge">{{ sidebar_counts.refund_tool }}</span>{% endif %}</a>
+      <a href="/admin/refund-tool" class="{% if '/refund-tool' in request.url.path %}active{% endif %}">Claims & Refunds{% if sidebar_counts and sidebar_counts.refund_tool %}<span class="nav-badge">{{ sidebar_counts.refund_tool }}</span>{% endif %}</a>
       <a href="/admin/orders" class="{% if '/orders' in request.url.path %}active{% endif %}">Orders{% if sidebar_counts and sidebar_counts.orders %}<span class="nav-badge">{{ sidebar_counts.orders }}</span>{% endif %}</a>
       <a href="/admin/sold-accounts" class="{% if '/sold-accounts' in request.url.path %}active{% endif %}">Sold Accounts{% if sidebar_counts and sidebar_counts.sold_accounts %}<span class="nav-badge">{{ sidebar_counts.sold_accounts }}</span>{% endif %}</a>
       <a href="/admin/users" class="{% if '/users' in request.url.path %}active{% endif %}">Users{% if sidebar_counts and sidebar_counts.users %}<span class="nav-badge">{{ sidebar_counts.users }}</span>{% endif %}</a>

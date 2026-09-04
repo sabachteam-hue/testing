@@ -23,8 +23,9 @@ import re
 import time
 from datetime import datetime
 from urllib.parse import urlparse
+from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session, joinedload, selectinload
@@ -32,7 +33,9 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 from database.models import (
     BotConfig,
     Category,
+    Claim,
     GrantedAccount,
+    IssueReport,
     Order,
     PaymentMethod,
     ProductSale,
@@ -43,6 +46,11 @@ from database.models import (
     get_active_payment_methods,
     get_db,
 )
+from utils.claims_workflow import (
+    create_customer_claim,
+    format_claim_payload,
+    get_open_claim_for_account,
+)
 from utils.granted_accounts import (
     calculate_account_refund_estimate,
     format_customer_transaction,
@@ -52,9 +60,15 @@ from utils.granted_accounts import (
 )
 from utils.helpers import generate_order_code, get_mini_app_url, get_public_base_url, parse_icon
 from utils.rate_limiter import check_rate_limit
-from utils.security import hash_password, verify_password
+from utils.security import (
+    hash_password,
+    safe_upload_filename,
+    validate_claim_evidence_upload,
+    verify_password,
+)
 from utils.stock_display import effective_available_qty
 from utils.stock_manager import InsufficientStockError, reserve_stock
+from utils.storage import get_upload_dir
 
 router = APIRouter(prefix="/api/web", tags=["web-catalog"])
 
@@ -726,6 +740,18 @@ def web_account_dashboard(
         .limit(5)
         .all()
     )
+    open_claims_count = (
+        db.query(func.count(IssueReport.id))
+        .filter(
+            IssueReport.user_id == current_user.id,
+            IssueReport.status.in_([
+                "pending_review", "pending", "under_review", "awaiting_evidence",
+                "approved", "replacement_processing", "refund_processing", "support_in_progress"
+            ]),
+        )
+        .scalar()
+        or 0
+    )
     return {
         "ok": True,
         "customer": {
@@ -737,7 +763,7 @@ def web_account_dashboard(
             "total_orders": int(orders_count),
             "active_accounts": int(active_accounts_count),
             "wallet_balance": float(current_user.wallet_usdt or 0.0),
-            "open_claims": 0,
+            "open_claims": int(open_claims_count),
         },
         "recent_orders": [
             {
@@ -940,6 +966,21 @@ def get_customer_order_detail(
                 if getattr(order, "created_at", None)
                 else "—"
             ),
+            "claims": [
+                format_claim_payload(c, request)
+                for c in (
+                    db.query(IssueReport)
+                    .options(
+                        joinedload(IssueReport.service),
+                        joinedload(IssueReport.order),
+                        joinedload(IssueReport.granted_account),
+                        joinedload(IssueReport.replacement_account),
+                    )
+                    .filter(IssueReport.order_id == order.id, IssueReport.user_id == current_user.id)
+                    .order_by(IssueReport.id.desc())
+                    .all()
+                )
+            ],
         },
     }
 
@@ -1145,6 +1186,214 @@ def get_customer_wallet(
         "offset": offset,
         "type_filter": tf,
         "transactions": [format_customer_transaction(tx) for tx in rows],
+    }
+
+
+# =====================================================================
+# CUSTOMER CLAIMS / REPLACEMENT / REFUND ENDPOINTS (PHASE 5)
+# =====================================================================
+
+@router.get("/account/claims")
+def list_customer_claims(
+    request: Request,
+    status_filter: str = Query("all"),
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    current_user: User = Depends(get_current_customer),
+    db: Session = Depends(get_db),
+) -> dict:
+    open_statuses = [
+        "pending_review",
+        "pending",
+        "under_review",
+        "awaiting_evidence",
+        "approved",
+        "replacement_processing",
+        "refund_processing",
+        "support_in_progress",
+    ]
+
+    base_query = (
+        db.query(IssueReport)
+        .options(
+            joinedload(IssueReport.service),
+            joinedload(IssueReport.order),
+            joinedload(IssueReport.granted_account),
+            joinedload(IssueReport.replacement_account),
+        )
+        .filter(IssueReport.user_id == current_user.id)
+    )
+
+    sf = (status_filter or "all").lower().strip()
+    if sf == "open":
+        base_query = base_query.filter(IssueReport.status.in_(open_statuses))
+    elif sf == "resolved":
+        base_query = base_query.filter(IssueReport.status == "resolved")
+    elif sf in ("rejected", "cancelled"):
+        base_query = base_query.filter(IssueReport.status.in_(["rejected", "cancelled"]))
+
+    total_count = base_query.count()
+    open_count = (
+        db.query(func.count(IssueReport.id))
+        .filter(IssueReport.user_id == current_user.id, IssueReport.status.in_(open_statuses))
+        .scalar()
+        or 0
+    )
+
+    rows = (
+        base_query.order_by(IssueReport.id.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+
+    return {
+        "ok": True,
+        "total": total_count,
+        "open_count": int(open_count),
+        "limit": limit,
+        "offset": offset,
+        "claims": [format_claim_payload(c, request) for c in rows],
+    }
+
+
+@router.get("/account/claims/{claim_id}")
+def get_customer_claim_detail(
+    claim_id: int,
+    request: Request,
+    current_user: User = Depends(get_current_customer),
+    db: Session = Depends(get_db),
+) -> dict:
+    claim = (
+        db.query(IssueReport)
+        .options(
+            joinedload(IssueReport.service),
+            joinedload(IssueReport.order),
+            joinedload(IssueReport.granted_account),
+            joinedload(IssueReport.replacement_account),
+        )
+        .filter(IssueReport.id == claim_id)
+        .first()
+    )
+    if not claim or claim.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Claim not found.")
+
+    return {
+        "ok": True,
+        "claim": format_claim_payload(claim, request),
+    }
+
+
+@router.post("/account/claims")
+async def submit_customer_claim(
+    request: Request,
+    current_user: User = Depends(get_current_customer),
+    db: Session = Depends(get_db),
+) -> dict:
+    content_type = (request.headers.get("content-type") or "").lower()
+
+    evidence_file: UploadFile | None = None
+    if "multipart/form-data" in content_type:
+        form_data = await request.form()
+        granted_account_id = form_data.get("granted_account_id")
+        resolution_preference = form_data.get("resolution_preference") or "replacement"
+        stopped_working_at_str = form_data.get("stopped_working_at")
+        problem_description = form_data.get("problem_description") or form_data.get("description") or ""
+        file_field = form_data.get("evidence")
+        if file_field and hasattr(file_field, "filename") and hasattr(file_field, "read"):
+            evidence_file = file_field
+    elif "application/json" in content_type:
+        try:
+            body = await request.json()
+        except Exception:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid JSON body.")
+        granted_account_id = body.get("granted_account_id")
+        resolution_preference = body.get("resolution_preference") or "replacement"
+        stopped_working_at_str = body.get("stopped_working_at")
+        problem_description = body.get("problem_description") or body.get("description") or ""
+    else:
+        # Fallback form data
+        form_data = await request.form()
+        granted_account_id = form_data.get("granted_account_id")
+        resolution_preference = form_data.get("resolution_preference") or "replacement"
+        stopped_working_at_str = form_data.get("stopped_working_at")
+        problem_description = form_data.get("problem_description") or form_data.get("description") or ""
+        file_field = form_data.get("evidence")
+        if file_field and hasattr(file_field, "filename") and hasattr(file_field, "read"):
+            evidence_file = file_field
+
+    if not granted_account_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="granted_account_id is required.")
+    if not stopped_working_at_str:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Date account stopped working is required.")
+    if not problem_description or len(str(problem_description).strip()) < 10:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Problem description must be at least 10 characters.")
+
+    try:
+        acc_id = int(granted_account_id)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid granted_account_id.")
+
+    # Parse date
+    try:
+        date_raw = str(stopped_working_at_str).strip().replace("Z", "+00:00")
+        if "T" in date_raw:
+            parsed_date = datetime.fromisoformat(date_raw)
+        else:
+            parsed_date = datetime.strptime(date_raw[:10], "%Y-%m-%d")
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid date format for stopped_working_at. Expected YYYY-MM-DD or ISO format.",
+        )
+
+    # Validate evidence upload if provided
+    evidence_url = None
+    evidence_filename = None
+    if evidence_file and getattr(evidence_file, "filename", None):
+        content = await evidence_file.read()
+        if content:
+            valid, err = validate_claim_evidence_upload(content, evidence_file.filename)
+            if not valid:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=err)
+            safe_name = safe_upload_filename("claim_evidence", evidence_file.filename)
+            target_path = get_upload_dir("claims") / safe_name
+            with open(target_path, "wb") as f:
+                f.write(content)
+            evidence_url = f"/admin/static/uploads/claims/{safe_name}"
+            evidence_filename = Path(evidence_file.filename).name[:100]
+
+    account = (
+        db.query(GrantedAccount)
+        .options(joinedload(GrantedAccount.order), joinedload(GrantedAccount.service))
+        .filter(GrantedAccount.id == acc_id)
+        .first()
+    )
+    if not account:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account not found.")
+    if account.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You can only file claims on your own accounts.")
+
+    try:
+        claim = create_customer_claim(
+            db,
+            user=current_user,
+            granted_account=account,
+            resolution_preference=str(resolution_preference),
+            stopped_working_at=parsed_date,
+            problem_description=str(problem_description),
+            evidence_url=evidence_url,
+            evidence_filename=evidence_filename,
+        )
+    except ValueError as val_err:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(val_err))
+    except PermissionError as perm_err:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(perm_err))
+
+    return {
+        "ok": True,
+        "message": "Claim submitted successfully.",
+        "claim": format_claim_payload(claim, request),
     }
 
 

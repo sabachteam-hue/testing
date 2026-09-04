@@ -38,7 +38,9 @@ from database.models import (
     AuditLog,
     BotConfig,
     Category,
+    Claim,
     DescriptionTemplate,
+    GrantedAccount,
     IconPreset,
     IssueReport,
     Language,
@@ -67,6 +69,18 @@ from admin.period_stats import (
 )
 from utils.audit import entity_display, log_admin_action
 from utils.background_tasks import credit_referral_for_order, credit_referral_join_bonus
+from utils.claims_workflow import (
+    format_claim_payload,
+    reject_claim,
+    request_claim_evidence,
+    resolve_claim_with_refund,
+    resolve_claim_with_replacement,
+    resolve_claim_with_support_fix,
+)
+from utils.granted_accounts import (
+    calculate_account_refund_estimate,
+    compute_account_lifecycle,
+)
 from utils.helpers import format_commission, generate_api_credentials, get_referral_settings, regenerate_api_credentials
 from utils.notifications import broadcast_to_all_users, notify_channel_order_completed, notify_flash_sale, notify_issue_report_resolved, notify_new_product, notify_price_drop, notify_product_sale, notify_referrer_earning, notify_stock_added, notify_user_balance_change, notify_user_order_completed
 from utils.provider_api import fetch_services
@@ -213,7 +227,9 @@ def _sidebar_badge_counts() -> dict:
     session = SessionLocal()
     try:
         since_24h = datetime.utcnow() - timedelta(hours=24)
-        pending_reports = session.query(IssueReport).filter(IssueReport.status == "pending").count()
+        pending_reports = session.query(IssueReport).filter(
+            IssueReport.status.in_(["pending", "pending_review", "under_review", "awaiting_evidence"])
+        ).count()
         pending_transactions = session.query(Transaction).filter(Transaction.status == "pending").count()
 
         config = session.query(BotConfig).first()
@@ -2285,7 +2301,7 @@ def _find_order_for_refund(db: Session, query: str) -> Order | None:
 
 
 def _refund_tool_base_context(db: Session) -> dict:
-    """Shared 'Recent refunds' + 'Reported problems' data reused by every
+    """Shared 'Recent refunds' + 'Reported problems & Claims' data reused by every
     Refund Tool view (page load, calculate search, order-status lookup)."""
     recent = (
         db.query(RefundLog)
@@ -2295,12 +2311,38 @@ def _refund_tool_base_context(db: Session) -> dict:
     )
     issue_reports = (
         db.query(IssueReport)
-        .options(joinedload(IssueReport.user), joinedload(IssueReport.order))
+        .options(
+            joinedload(IssueReport.user),
+            joinedload(IssueReport.order),
+            joinedload(IssueReport.granted_account),
+            joinedload(IssueReport.service),
+            joinedload(IssueReport.replacement_account),
+        )
         .order_by(IssueReport.created_at.desc())
-        .limit(50)
+        .limit(100)
         .all()
     )
-    return {"recent_logs": recent, "issue_reports": issue_reports}
+    for rep in issue_reports:
+        if rep.granted_account:
+            try:
+                rep.refund_estimate = calculate_account_refund_estimate(rep.granted_account, rep.order)
+                rep.lifecycle = compute_account_lifecycle(rep.granted_account, rep.order)
+            except Exception:
+                rep.refund_estimate = None
+                rep.lifecycle = None
+        else:
+            rep.refund_estimate = None
+            rep.lifecycle = None
+
+    open_claims_count = sum(
+        1 for r in issue_reports
+        if (r.status or "").lower() in ("pending", "pending_review", "under_review", "awaiting_evidence")
+    )
+    return {
+        "recent_logs": recent,
+        "issue_reports": issue_reports,
+        "open_claims_count": open_claims_count,
+    }
 
 
 @router.get("/refund-tool")
@@ -2462,6 +2504,214 @@ async def refund_tool_resolve_report(
         await notify_issue_report_resolved(report.user.telegram_id, report.order_code, note, db=db)
 
     return redirect(f"/admin/refund-tool?success={quote('Report marked resolved and client notified.')}")
+
+
+@router.post("/claims/{claim_id}/approve-replacement")
+async def admin_approve_replacement(
+    claim_id: int,
+    request: Request,
+    auto_stock: Optional[str] = Form(None),
+    replacement_credentials: str = Form(""),
+    admin_note: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    admin_required(request)
+    claim = (
+        db.query(IssueReport)
+        .options(
+            joinedload(IssueReport.granted_account),
+            joinedload(IssueReport.service),
+            joinedload(IssueReport.user),
+        )
+        .filter(IssueReport.id == claim_id)
+        .first()
+    )
+    if not claim:
+        return redirect(f"/admin/refund-tool?error={quote('Claim not found.')}")
+
+    use_auto = auto_stock in ("1", "true", "on", "yes")
+    try:
+        new_acc, method = resolve_claim_with_replacement(
+            db,
+            claim=claim,
+            replacement_credentials=replacement_credentials.strip() or None,
+            auto_from_stock=use_auto,
+            admin_actor=request.session.get("admin_user", "admin"),
+            admin_note=admin_note.strip() or None,
+        )
+        return redirect(f"/admin/refund-tool?success={quote(f'Replacement issued successfully ({method}). Customer notified.')}")
+    except Exception as exc:
+        logger.exception("Approve replacement failed for claim %s", claim_id)
+        return redirect(f"/admin/refund-tool?error={quote(str(exc))}")
+
+
+@router.post("/claims/{claim_id}/process-refund")
+async def admin_process_claim_refund(
+    claim_id: int,
+    request: Request,
+    refund_method: str = Form("wallet"),
+    amount_override: Optional[float] = Form(None),
+    admin_note: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    admin_required(request)
+    claim = (
+        db.query(IssueReport)
+        .options(
+            joinedload(IssueReport.granted_account),
+            joinedload(IssueReport.order),
+            joinedload(IssueReport.user),
+        )
+        .filter(IssueReport.id == claim_id)
+        .first()
+    )
+    if not claim:
+        return redirect(f"/admin/refund-tool?error={quote('Claim not found.')}")
+
+    clean_method = "wallet" if str(refund_method).lower() == "wallet" else "manual"
+    try:
+        res = resolve_claim_with_refund(
+            db,
+            claim=claim,
+            refund_method=clean_method,
+            amount_override=amount_override,
+            admin_actor=request.session.get("admin_user", "admin"),
+            admin_note=admin_note.strip() or None,
+        )
+        amt = res.get("refund_amount", 0.0)
+        return redirect(f"/admin/refund-tool?success={quote(f'Refund of ${amt:.2f} ({clean_method.title()}) processed successfully. Customer notified.')}")
+    except Exception as exc:
+        logger.exception("Process claim refund failed for claim %s", claim_id)
+        return redirect(f"/admin/refund-tool?error={quote(str(exc))}")
+
+
+@router.post("/claims/{claim_id}/resolve-support")
+async def admin_resolve_support(
+    claim_id: int,
+    request: Request,
+    resolution_note: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    admin_required(request)
+    claim = (
+        db.query(IssueReport)
+        .options(
+            joinedload(IssueReport.granted_account),
+            joinedload(IssueReport.user),
+        )
+        .filter(IssueReport.id == claim_id)
+        .first()
+    )
+    if not claim:
+        return redirect(f"/admin/refund-tool?error={quote('Claim not found.')}")
+
+    try:
+        resolve_claim_with_support_fix(
+            db,
+            claim=claim,
+            resolution_note=resolution_note.strip() or None,
+            admin_actor=request.session.get("admin_user", "admin"),
+        )
+        return redirect(f"/admin/refund-tool?success={quote('Claim resolved and account restored. Customer notified.')}")
+    except Exception as exc:
+        logger.exception("Resolve support failed for claim %s", claim_id)
+        return redirect(f"/admin/refund-tool?error={quote(str(exc))}")
+
+
+@router.post("/claims/{claim_id}/request-evidence")
+async def admin_request_evidence(
+    claim_id: int,
+    request: Request,
+    admin_note: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    admin_required(request)
+    note = (admin_note or "").strip()
+    if not note:
+        return redirect(f"/admin/refund-tool?error={quote('Please specify instructions for requested evidence.')}")
+
+    claim = (
+        db.query(IssueReport)
+        .options(
+            joinedload(IssueReport.granted_account),
+            joinedload(IssueReport.user),
+        )
+        .filter(IssueReport.id == claim_id)
+        .first()
+    )
+    if not claim:
+        return redirect(f"/admin/refund-tool?error={quote('Claim not found.')}")
+
+    try:
+        request_claim_evidence(
+            db,
+            claim=claim,
+            note=note,
+            admin_actor=request.session.get("admin_user", "admin"),
+        )
+        return redirect(f"/admin/refund-tool?success={quote('Evidence requested from customer and notified via Telegram.')}")
+    except Exception as exc:
+        logger.exception("Request evidence failed for claim %s", claim_id)
+        return redirect(f"/admin/refund-tool?error={quote(str(exc))}")
+
+
+@router.post("/claims/{claim_id}/reject")
+async def admin_reject_claim(
+    claim_id: int,
+    request: Request,
+    rejection_reason: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    admin_required(request)
+    reason = (rejection_reason or "").strip()
+    if not reason:
+        return redirect(f"/admin/refund-tool?error={quote('Please provide a reason for rejecting the claim.')}")
+
+    claim = (
+        db.query(IssueReport)
+        .options(
+            joinedload(IssueReport.granted_account),
+            joinedload(IssueReport.user),
+        )
+        .filter(IssueReport.id == claim_id)
+        .first()
+    )
+    if not claim:
+        return redirect(f"/admin/refund-tool?error={quote('Claim not found.')}")
+
+    try:
+        reject_claim(
+            db,
+            claim=claim,
+            reason=reason,
+            admin_actor=request.session.get("admin_user", "admin"),
+        )
+        return redirect(f"/admin/refund-tool?success={quote('Claim rejected and account unfrozen. Customer notified.')}")
+    except Exception as exc:
+        logger.exception("Reject claim failed for claim %s", claim_id)
+        return redirect(f"/admin/refund-tool?error={quote(str(exc))}")
+
+
+@router.get("/claims/{claim_id}/estimate")
+def admin_claim_estimate(
+    claim_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> dict:
+    admin_required(request)
+    claim = (
+        db.query(IssueReport)
+        .options(
+            joinedload(IssueReport.granted_account),
+            joinedload(IssueReport.order),
+        )
+        .filter(IssueReport.id == claim_id)
+        .first()
+    )
+    if not claim or not claim.granted_account:
+        raise HTTPException(status_code=404, detail="Claim or granted account not found.")
+    est = calculate_account_refund_estimate(claim.granted_account, claim.order)
+    return {"ok": True, "estimate": est}
 
 
 @router.post("/refund-tool/confirm")

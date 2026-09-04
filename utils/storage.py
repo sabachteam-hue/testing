@@ -69,7 +69,7 @@ def get_upload_dir(category: str) -> Path:
 
 def init_storage() -> None:
     """Initialize all persistent storage subdirectories on startup."""
-    categories = ["services", "categories", "payment_methods", "announcements", "custom_emoji"]
+    categories = ["services", "categories", "payment_methods", "announcements", "custom_emoji", "claims"]
     for cat in categories:
         get_upload_dir(cat)
     if is_persistent_volume_configured():

@@ -485,24 +485,64 @@ class RefundLog(Base):
 
 
 class IssueReport(Base):
-    """Client 'Report a problem' messages (sent from order-detail / post-order
-    buttons). Shown to the admin on the Refund Tool page."""
+    """Client 'Report a problem' messages and warranty claims (sent from customer
+    portal / order-detail / post-order buttons). Shown to admin on Refund & Claims page."""
 
     __tablename__ = "issue_reports"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    order_id: Mapped[int] = mapped_column(ForeignKey("orders.id"), nullable=False)
-    order_code: Mapped[str] = mapped_column(String(20), nullable=False)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    claim_code: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+    order_id: Mapped[int] = mapped_column(ForeignKey("orders.id"), nullable=False, index=True)
+    order_code: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    granted_account_id: Mapped[int | None] = mapped_column(ForeignKey("granted_accounts.id"), nullable=True, index=True)
+    service_id: Mapped[int | None] = mapped_column(ForeignKey("services.id"), nullable=True, index=True)
+
+    # Resolution preference: replacement | refund | support
+    resolution_preference: Mapped[str | None] = mapped_column(String(40), default="replacement")
+    stopped_working_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     message: Mapped[str] = mapped_column(Text, nullable=False)
-    # Admin's reply note (also sent to the client via the Telegram bot on resolve).
+
+    # Evidence upload
+    evidence_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    evidence_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    # Admin resolution
+    # status: pending_review | under_review | awaiting_evidence | approved | replacement_processing | refund_processing | support_in_progress | resolved | rejected | cancelled
+    status: Mapped[str] = mapped_column(String(40), default="pending_review")
     admin_note: Mapped[str | None] = mapped_column(Text, nullable=True)
-    status: Mapped[str] = mapped_column(String(20), default="pending")  # pending | resolved
+    resolution_type: Mapped[str | None] = mapped_column(String(40), nullable=True)  # replacement | refund_wallet | refund_manual | support_fixed | rejected | cancelled
+    resolution_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    refund_amount: Mapped[float | None] = mapped_column(Float, nullable=True)
+    refund_method: Mapped[str | None] = mapped_column(String(20), nullable=True)  # wallet | manual
+    replacement_account_id: Mapped[int | None] = mapped_column(ForeignKey("granted_accounts.id"), nullable=True)
+
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     order: Mapped[Order] = relationship()
     user: Mapped[User] = relationship()
+    service: Mapped[Optional[Service]] = relationship("Service", foreign_keys=[service_id])
+    granted_account: Mapped[Optional["GrantedAccount"]] = relationship("GrantedAccount", foreign_keys=[granted_account_id])
+    replacement_account: Mapped[Optional["GrantedAccount"]] = relationship("GrantedAccount", foreign_keys=[replacement_account_id])
+
+    def __init__(self, **kwargs):
+        if "description" in kwargs and "message" not in kwargs:
+            kwargs["message"] = kwargs.pop("description")
+        super().__init__(**kwargs)
+
+    @property
+    def description(self) -> str:
+        return self.message
+
+    @description.setter
+    def description(self, val: str) -> None:
+        self.message = val
+
+
+# Canonical alias for Phase 5 claims workflow
+Claim = IssueReport
 
 
 class GrantedAccount(Base, TimestampMixin):
@@ -529,10 +569,14 @@ class GrantedAccount(Base, TimestampMixin):
     account_note: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Lifecycle & Subscription tracking
-    status: Mapped[str] = mapped_column(String(40), default="active")  # active | expired | refunded | frozen
+    status: Mapped[str] = mapped_column(String(40), default="active")  # active | expired | refunded | frozen | replaced
     duration_days: Mapped[int] = mapped_column(Integer, default=30)
     subscription_start_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     subscription_expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+    # Replacement linkage
+    replaced_by_account_id: Mapped[int | None] = mapped_column(ForeignKey("granted_accounts.id"), nullable=True)
+    replacement_for_account_id: Mapped[int | None] = mapped_column(ForeignKey("granted_accounts.id"), nullable=True)
 
     order: Mapped[Order] = relationship(back_populates="granted_accounts")
     user: Mapped[User] = relationship()
@@ -955,15 +999,44 @@ def run_light_migrations() -> None:
 
     if "issue_reports" in table_names:
         existing_columns = {col["name"] for col in inspector.get_columns("issue_reports")}
-        if "admin_note" not in existing_columns:
-            with engine.begin() as connection:
+        with engine.begin() as connection:
+            if "admin_note" not in existing_columns:
                 connection.execute(text("ALTER TABLE issue_reports ADD COLUMN admin_note TEXT"))
-        if "status" not in existing_columns:
-            with engine.begin() as connection:
-                connection.execute(text("ALTER TABLE issue_reports ADD COLUMN status VARCHAR(20) DEFAULT 'pending'"))
-        if "resolved_at" not in existing_columns:
-            with engine.begin() as connection:
+            if "status" not in existing_columns:
+                connection.execute(text("ALTER TABLE issue_reports ADD COLUMN status VARCHAR(40) DEFAULT 'pending_review'"))
+            elif engine.dialect.name.startswith("postgresql"):
+                try:
+                    connection.execute(text("ALTER TABLE issue_reports ALTER COLUMN status TYPE VARCHAR(40)"))
+                except Exception:
+                    pass
+            if "resolved_at" not in existing_columns:
                 connection.execute(text("ALTER TABLE issue_reports ADD COLUMN resolved_at TIMESTAMP"))
+            if "claim_code" not in existing_columns:
+                connection.execute(text("ALTER TABLE issue_reports ADD COLUMN claim_code VARCHAR(40)"))
+            if "granted_account_id" not in existing_columns:
+                connection.execute(text("ALTER TABLE issue_reports ADD COLUMN granted_account_id INTEGER"))
+            if "service_id" not in existing_columns:
+                connection.execute(text("ALTER TABLE issue_reports ADD COLUMN service_id INTEGER"))
+            if "resolution_preference" not in existing_columns:
+                connection.execute(text("ALTER TABLE issue_reports ADD COLUMN resolution_preference VARCHAR(40) DEFAULT 'replacement'"))
+            if "stopped_working_at" not in existing_columns:
+                connection.execute(text("ALTER TABLE issue_reports ADD COLUMN stopped_working_at TIMESTAMP"))
+            if "evidence_url" not in existing_columns:
+                connection.execute(text("ALTER TABLE issue_reports ADD COLUMN evidence_url VARCHAR(500)"))
+            if "evidence_filename" not in existing_columns:
+                connection.execute(text("ALTER TABLE issue_reports ADD COLUMN evidence_filename VARCHAR(255)"))
+            if "resolution_type" not in existing_columns:
+                connection.execute(text("ALTER TABLE issue_reports ADD COLUMN resolution_type VARCHAR(40)"))
+            if "resolution_note" not in existing_columns:
+                connection.execute(text("ALTER TABLE issue_reports ADD COLUMN resolution_note TEXT"))
+            if "refund_amount" not in existing_columns:
+                connection.execute(text("ALTER TABLE issue_reports ADD COLUMN refund_amount FLOAT"))
+            if "refund_method" not in existing_columns:
+                connection.execute(text("ALTER TABLE issue_reports ADD COLUMN refund_method VARCHAR(20)"))
+            if "replacement_account_id" not in existing_columns:
+                connection.execute(text("ALTER TABLE issue_reports ADD COLUMN replacement_account_id INTEGER"))
+            if "updated_at" not in existing_columns:
+                connection.execute(text("ALTER TABLE issue_reports ADD COLUMN updated_at TIMESTAMP"))
 
     if "users" in table_names:
         existing_columns = {col["name"] for col in inspector.get_columns("users")}
@@ -1129,6 +1202,10 @@ def run_light_migrations() -> None:
                 connection.execute(text("ALTER TABLE granted_accounts ADD COLUMN account_note TEXT"))
             if "account_index" not in existing_columns:
                 connection.execute(text("ALTER TABLE granted_accounts ADD COLUMN account_index INTEGER DEFAULT 0"))
+            if "replaced_by_account_id" not in existing_columns:
+                connection.execute(text("ALTER TABLE granted_accounts ADD COLUMN replaced_by_account_id INTEGER"))
+            if "replacement_for_account_id" not in existing_columns:
+                connection.execute(text("ALTER TABLE granted_accounts ADD COLUMN replacement_for_account_id INTEGER"))
 
         try:
             indexes = {idx["name"] for idx in inspector.get_indexes("granted_accounts")}

@@ -193,7 +193,7 @@ class AdminCSRFMiddleware(BaseHTTPMiddleware):
         if path.startswith("/admin") and request.method in ("POST", "PUT", "PATCH", "DELETE"):
             # Exclude /admin/login from CSRF (login has dedicated rate-limiting and lockout protection)
             if path != "/admin/login":
-                expected_token = request.session.get("csrf_token")
+                expected_token = request.session.get("csrf_token") if "session" in request.scope else None
                 submitted_token = request.headers.get("x-csrf-token")
                 if not submitted_token:
                     try:

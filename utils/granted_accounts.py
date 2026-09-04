@@ -273,6 +273,10 @@ def compute_account_lifecycle(
         effective_status = "refunded"
         status_label = "Refunded"
         status_badge = "refunded"
+    elif (account.status or "").lower() in ("replaced", "replaced_closed"):
+        effective_status = "replaced"
+        status_label = "Replaced"
+        status_badge = "cancelled"
     elif account_frozen:
         effective_status = "frozen"
         status_label = "Frozen (Claim in Review)"
@@ -300,6 +304,7 @@ def compute_account_lifecycle(
         "is_expired": effective_status == "expired",
         "is_refunded": effective_status == "refunded",
         "is_frozen": effective_status == "frozen",
+        "is_replaced": effective_status == "replaced",
     }
 
 
@@ -371,8 +376,39 @@ def calculate_account_refund_estimate(
             },
         }
 
+    # Check replaced
+    if lifecycle.get("is_replaced"):
+        return {
+            "account_id": account.id,
+            "order_id": account.order_id,
+            "order_code": ord_obj.order_code if ord_obj else None,
+            "product_name": service_name,
+            "currency": "USDT",
+            "amount_paid": float(unit_paid),
+            "total_order_amount": float(total_order_amount),
+            "order_quantity": qty,
+            "subscription_start_at": (account.subscription_start_at or account.created_at).isoformat() if (account.subscription_start_at or account.created_at) else None,
+            "current_time": now.isoformat(),
+            "subscription_expires_at": account.subscription_expires_at.isoformat() if account.subscription_expires_at else None,
+            "total_days": total_days,
+            "days_used": total_days,
+            "days_remaining": 0,
+            "progress_percent": 100.0,
+            "daily_rate": 0.0,
+            "estimated_refund": 0.0,
+            "is_eligible": False,
+            "effective_status": "replaced",
+            "status_label": "Replaced",
+            "already_refunded": False,
+            "message": "This account was already replaced with a new credential.",
+            "historical_refund": None,
+        }
+
     # Check frozen
     if lifecycle["is_frozen"]:
+        daily_rate = (unit_paid / Decimal(str(total_days))).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+        refund_amount = (daily_rate * Decimal(str(days_remaining))).quantize(CENT, rounding=ROUND_HALF_UP)
+        refund_amount = min(unit_paid, max(ZERO, refund_amount))
         return {
             "account_id": account.id,
             "order_id": account.order_id,
@@ -389,9 +425,9 @@ def calculate_account_refund_estimate(
             "days_used": days_used,
             "days_remaining": days_remaining,
             "progress_percent": lifecycle["progress_percent"],
-            "daily_rate": 0.0,
-            "estimated_refund": 0.0,
-            "is_eligible": False,
+            "daily_rate": float(daily_rate),
+            "estimated_refund": float(refund_amount),
+            "is_eligible": days_remaining > 0,
             "effective_status": "frozen",
             "status_label": "Frozen (Claim in Review)",
             "already_refunded": False,
@@ -673,6 +709,48 @@ def format_granted_account_payload(
     start_dt = account.subscription_start_at
     expires_dt = account.subscription_expires_at
 
+    # Check for open claim on this account
+    has_open_claim = False
+    open_claim_code = None
+    open_claim_id = None
+    try:
+        from database.models import IssueReport, SessionLocal
+        sess = Session.object_session(account)
+        close_sess = False
+        if not sess:
+            sess = SessionLocal()
+            close_sess = True
+        try:
+            claim_row = (
+                sess.query(IssueReport)
+                .filter(
+                    IssueReport.granted_account_id == account.id,
+                    IssueReport.status.in_([
+                        "pending_review", "pending", "under_review", "awaiting_evidence",
+                        "approved", "replacement_processing", "refund_processing", "support_in_progress"
+                    ]),
+                )
+                .order_by(IssueReport.id.desc())
+                .first()
+            )
+            if claim_row:
+                has_open_claim = True
+                open_claim_code = claim_row.claim_code or f"CLM-{claim_row.id}"
+                open_claim_id = claim_row.id
+        finally:
+            if close_sess:
+                sess.close()
+    except Exception:
+        pass
+
+    can_submit_claim = (
+        lifecycle["is_active"]
+        and not has_open_claim
+        and not lifecycle["is_refunded"]
+        and not lifecycle["is_frozen"]
+        and lifecycle["effective_status"] != "replaced"
+    )
+
     return {
         "id": account.id,
         "order_id": account.order_id,
@@ -701,6 +779,13 @@ def format_granted_account_payload(
         "is_expired": lifecycle["is_expired"],
         "is_refunded": lifecycle["is_refunded"],
         "is_frozen": lifecycle["is_frozen"],
+        "is_replaced": lifecycle.get("is_replaced", False),
+        "replaced_by_account_id": getattr(account, "replaced_by_account_id", None),
+        "replacement_for_account_id": getattr(account, "replacement_for_account_id", None),
+        "has_open_claim": has_open_claim,
+        "open_claim_code": open_claim_code,
+        "open_claim_id": open_claim_id,
+        "can_submit_claim": can_submit_claim,
         "start_date": start_dt.strftime("%b %d, %Y") if start_dt else "—",
         "start_date_iso": start_dt.isoformat() if start_dt else None,
         "expiry_date": expires_dt.strftime("%b %d, %Y") if expires_dt else "—",

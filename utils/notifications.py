@@ -103,6 +103,216 @@ async def notify_issue_report_resolved(telegram_id: str, order_code: str, note: 
     await send_user_message(telegram_id, text, parse_mode="HTML")
 
 
+async def notify_claim_submitted(
+    telegram_id: str,
+    claim_code: str,
+    product_name: str,
+    resolution_preference: str,
+    db=None,
+) -> None:
+    """Notify customer that their claim was submitted and is pending review."""
+    if not telegram_id:
+        return
+    from database.models import SessionLocal
+    from utils.ui_icons import label_icons
+
+    own_session = db is None
+    session = db or SessionLocal()
+    try:
+        icons = label_icons(session)
+    finally:
+        if own_session:
+            session.close()
+
+    pref_display = {
+        "replacement": "Replacement",
+        "refund": "Pro-Rata Refund",
+        "support": "Support & Fix",
+    }.get(resolution_preference.lower(), resolution_preference.title())
+
+    text = (
+        f"🛡️ <b>Warranty Claim Submitted</b>\n\n"
+        f"Claim ID: <code>{html.escape(claim_code)}</code>\n"
+        f"Product: {html.escape(product_name)}\n"
+        f"Requested Resolution: <b>{html.escape(pref_display)}</b>\n"
+        f"Status: <i>Pending Review</i>\n\n"
+        f"Your account credentials have been temporarily frozen while our support team reviews your claim. "
+        f"You can track status in the Customer Portal."
+    )
+    await send_user_message(telegram_id, text, parse_mode="HTML")
+
+
+async def notify_claim_approved_replacement(
+    telegram_id: str,
+    claim_code: str,
+    product_name: str,
+    db=None,
+) -> None:
+    """Notify customer that a replacement credential was issued."""
+    if not telegram_id:
+        return
+    from database.models import SessionLocal
+    from utils.ui_icons import label_icons
+
+    own_session = db is None
+    session = db or SessionLocal()
+    try:
+        icons = label_icons(session)
+    finally:
+        if own_session:
+            session.close()
+
+    text = (
+        f"{icons.get('tick', '✅')} <b>Claim Approved — Replacement Issued</b>\n\n"
+        f"Claim ID: <code>{html.escape(claim_code)}</code>\n"
+        f"Product: {html.escape(product_name)}\n\n"
+        f"A replacement account credential has been assigned to your subscription with the same remaining duration. "
+        f"Please open <b>Granted Accounts</b> in your Customer Portal to view your new login details."
+    )
+    await send_user_message(telegram_id, text, parse_mode="HTML")
+
+
+async def notify_claim_refunded(
+    telegram_id: str,
+    claim_code: str,
+    order_code: str,
+    refund_amount: float,
+    refund_method: str,
+    new_wallet_balance: float | None = None,
+    note: str | None = None,
+    db=None,
+) -> None:
+    """Notify customer that pro-rata refund was completed."""
+    if not telegram_id:
+        return
+    from database.models import SessionLocal
+    from utils.ui_icons import label_icons
+
+    own_session = db is None
+    session = db or SessionLocal()
+    try:
+        icons = label_icons(session)
+    finally:
+        if own_session:
+            session.close()
+
+    method_str = "Customer Wallet" if refund_method == "wallet" else "Manual / Fiat"
+    note_line = f"\nNote: {html.escape(note.strip())}\n" if note and note.strip() else ""
+    wallet_line = f"New Wallet Balance: <b>${new_wallet_balance:.2f}</b>\n" if new_wallet_balance is not None else ""
+
+    text = (
+        f"{icons.get('tick', '✅')} <b>Claim Resolved — Refund Processed</b>\n\n"
+        f"Claim ID: <code>{html.escape(claim_code)}</code>\n"
+        f"Order: {html.escape(order_code)}\n"
+        f"Refund Amount: <b>${refund_amount:.2f}</b>\n"
+        f"Refund Method: {html.escape(method_str)}\n"
+        f"{wallet_line}"
+        f"{note_line}\n"
+        f"Your refund has been completed. Details are available in your Customer Portal Wallet ledger."
+    )
+    await send_user_message(telegram_id, text, parse_mode="HTML")
+
+
+async def notify_claim_resolved_support(
+    telegram_id: str,
+    claim_code: str,
+    product_name: str,
+    note: str | None = None,
+    db=None,
+) -> None:
+    """Notify customer that support has resolved and unfrozen their account."""
+    if not telegram_id:
+        return
+    from database.models import SessionLocal
+    from utils.ui_icons import label_icons
+
+    own_session = db is None
+    session = db or SessionLocal()
+    try:
+        icons = label_icons(session)
+    finally:
+        if own_session:
+            session.close()
+
+    note_line = f"\nResolution Note: {html.escape(note.strip())}\n" if note and note.strip() else ""
+
+    text = (
+        f"{icons.get('tick', '✅')} <b>Claim Resolved — Account Restored</b>\n\n"
+        f"Claim ID: <code>{html.escape(claim_code)}</code>\n"
+        f"Product: {html.escape(product_name)}\n"
+        f"{note_line}\n"
+        f"Your account issue has been addressed and your credential is active. You may now continue using your subscription."
+    )
+    await send_user_message(telegram_id, text, parse_mode="HTML")
+
+
+async def notify_claim_rejected(
+    telegram_id: str,
+    claim_code: str,
+    product_name: str,
+    reason: str | None = None,
+    db=None,
+) -> None:
+    """Notify customer that claim was rejected."""
+    if not telegram_id:
+        return
+    from database.models import SessionLocal
+    from utils.ui_icons import label_icons
+
+    own_session = db is None
+    session = db or SessionLocal()
+    try:
+        icons = label_icons(session)
+    finally:
+        if own_session:
+            session.close()
+
+    reason_line = f"\nReason: {html.escape(reason.strip())}\n" if reason and reason.strip() else ""
+
+    text = (
+        f"ℹ️ <b>Claim Review Decision</b>\n\n"
+        f"Claim ID: <code>{html.escape(claim_code)}</code>\n"
+        f"Product: {html.escape(product_name)}\n"
+        f"Status: <b>Rejected</b>\n"
+        f"{reason_line}\n"
+        f"Your account credential has been unfrozen. Check your Customer Portal Claims tab for complete details."
+    )
+    await send_user_message(telegram_id, text, parse_mode="HTML")
+
+
+async def notify_claim_evidence_requested(
+    telegram_id: str,
+    claim_code: str,
+    product_name: str,
+    note: str | None = None,
+    db=None,
+) -> None:
+    """Notify customer that additional evidence is requested."""
+    if not telegram_id:
+        return
+    from database.models import SessionLocal
+    from utils.ui_icons import label_icons
+
+    own_session = db is None
+    session = db or SessionLocal()
+    try:
+        icons = label_icons(session)
+    finally:
+        if own_session:
+            session.close()
+
+    note_line = f"\nInstructions: {html.escape(note.strip())}\n" if note and note.strip() else ""
+
+    text = (
+        f"⚠️ <b>Action Required: Evidence Requested</b>\n\n"
+        f"Claim ID: <code>{html.escape(claim_code)}</code>\n"
+        f"Product: {html.escape(product_name)}\n"
+        f"{note_line}\n"
+        f"Please visit your Customer Portal Claims tab to submit the requested information or screenshots."
+    )
+    await send_user_message(telegram_id, text, parse_mode="HTML")
+
+
 async def broadcast_to_all_users(
     text: str,
     db=None,
