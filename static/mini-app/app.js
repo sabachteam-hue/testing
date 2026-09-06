@@ -250,10 +250,29 @@
       });
     }
     const signed = Boolean(state.user && state.user.email);
+    const balanceWidget = document.getElementById("btn-balance-link");
+    const currencyDd = document.getElementById("currency-dd");
+    const languageDd = document.getElementById("language-dd");
     const accountBtn = document.getElementById("btn-account");
-    if (accountBtn) accountBtn.href = signed ? "/account" : "#/signup";
     const accountLabel = document.getElementById("account-pill-label");
-    if (accountLabel) accountLabel.textContent = signed ? (state.user.name || "VIP") : "VIP";
+
+    // When logged in: show Live Balance. When logged out: hide Live Balance, show currency dropdown
+    if (balanceWidget) {
+      balanceWidget.style.display = signed ? "inline-flex" : "none";
+    }
+    if (currencyDd) {
+      currencyDd.style.display = signed ? "none" : "inline-block";
+    }
+    if (languageDd) {
+      languageDd.style.display = signed ? "none" : "inline-block";
+    }
+
+    if (accountBtn) {
+      accountBtn.href = signed ? "/account" : "#/signup";
+      if (accountLabel) {
+        accountLabel.textContent = signed ? (state.user.name || "VIP") : "Sign In";
+      }
+    }
     const balanceDisplay = document.getElementById("topbar-balance-display");
     if (balanceDisplay) {
       const bal = state.user && state.user.wallet_balance != null ? `$${Number(state.user.wallet_balance).toFixed(2)}` : "$148.50";
@@ -268,6 +287,15 @@
         (isHome && state.route === "/") || href === `#${state.route}`
       );
     });
+
+    const activeRoute = (state.route || "").replace(/^#/, "");
+    const hotBtn = document.getElementById("nav-hot-deals");
+    const stockBtn = document.getElementById("nav-live-stock");
+    const prodsBtn = document.getElementById("nav-all-products");
+    if (hotBtn) hotBtn.classList.toggle("active", activeRoute === "/hot-deals" || activeRoute === "/deals");
+    if (stockBtn) stockBtn.classList.toggle("active", activeRoute === "/live-stock" || activeRoute === "/stock");
+    if (prodsBtn) prodsBtn.classList.toggle("active", activeRoute === "/products" || activeRoute === "/all-products");
+
     renderMenus();
     renderCartCount();
   }
@@ -346,6 +374,16 @@
     return state.products.filter((product) => {
       if (kind === "subscription" && product.is_free) return false;
       if (kind === "freebies" && !product.is_free) return false;
+      if (kind === "hot-deals") {
+        const isDiscounted = (product.original_price && Number(product.original_price) > Number(product.sell_price)) || (product.discount_percent && Number(product.discount_percent) > 0);
+        const isHot = (state.featured && state.featured.hot && state.featured.hot.some((h) => h.sku === product.sku)) || (state.featured && state.featured.best_seller && state.featured.best_seller.some((b) => b.sku === product.sku));
+        if (!isDiscounted && !isHot) return false;
+      }
+      if (kind === "live-stock") {
+        const hasStock = Boolean(product.in_stock && product.availability !== "out_of_stock" && (product.stock == null || Number(product.stock) > 0));
+        if (!hasStock) return false;
+      }
+      // "products" returns all products (both in-stock and out-of-stock)
       if (kind === "home" && state.categoryId && product.category_id !== state.categoryId) return false;
       if (!q) return true;
       const hay = `${product.name} ${product.sku} ${product.category || ""} ${product.description || ""}`.toLowerCase();
@@ -535,20 +573,40 @@
   }
 
   function renderCollection(kind) {
-    const isFree = kind === "freebies";
     const badgeEl = document.getElementById("collection-badge");
     const titleEl = document.getElementById("collection-title");
     const subEl = document.getElementById("collection-sub");
 
-    if (badgeEl) badgeEl.textContent = isFree ? "🎁 COMMUNITY DROPS" : "💎 PREMIUM SUBSCRIPTIONS";
-    if (titleEl) titleEl.textContent = isFree ? "Freebies & Promo Drops" : "Active Subscription Plans";
-    if (subEl) {
-      subEl.textContent = isFree
-        ? "Free tools, giveaway accounts, and starter access from the live SMF SHOP catalog."
-        : "Paid plans, streaming accounts, and AI tool licenses with instant auto-delivery.";
-    }
-
-    if (isFree) {
+    if (kind === "hot-deals" || kind === "deals") {
+      if (badgeEl) badgeEl.textContent = "🔥 EXCLUSIVE SALES & FLASH DEALS";
+      if (titleEl) titleEl.textContent = "Hot Deals & Special Sales";
+      if (subEl) subEl.textContent = "Limited-time discounts, promotional sales, and exclusive price cuts on verified accounts.";
+      let items = filteredProducts("hot-deals");
+      if (!items.length) {
+        items = (state.featured && state.featured.hot && state.featured.hot.length)
+          ? state.featured.hot
+          : state.products.slice(0, 12);
+      }
+      els.collectionGrid.innerHTML = productCards(items);
+    } else if (kind === "live-stock" || kind === "stock") {
+      if (badgeEl) badgeEl.textContent = "⚡ INSTANT 1-CLICK DISPATCH";
+      if (titleEl) titleEl.textContent = "Live Stock In-Stock Products";
+      if (subEl) subEl.textContent = "All currently in-stock digital licenses available for immediate instant delivery.";
+      let items = filteredProducts("live-stock");
+      if (!items.length) {
+        items = state.products.filter((p) => p.in_stock);
+      }
+      els.collectionGrid.innerHTML = productCards(items);
+    } else if (kind === "products" || kind === "all-products" || kind === "catalog") {
+      if (badgeEl) badgeEl.textContent = "📦 ALL PRODUCTS CATALOG";
+      if (titleEl) titleEl.textContent = "Complete Products Directory";
+      if (subEl) subEl.textContent = "All products, streaming subscriptions, AI tools, and licenses (both in-stock & pre-order).";
+      const items = filteredProducts("products");
+      els.collectionGrid.innerHTML = productCards(items.length ? items : state.products);
+    } else if (kind === "freebies") {
+      if (badgeEl) badgeEl.textContent = "🎁 COMMUNITY DROPS";
+      if (titleEl) titleEl.textContent = "Freebies & Promo Drops";
+      if (subEl) subEl.textContent = "Free tools, giveaway accounts, and starter access from the live SMF SHOP catalog.";
       const items = filteredProducts("freebies");
       if (!items.length) {
         els.collectionGrid.innerHTML = `
@@ -573,6 +631,9 @@
       }
     } else {
       // Subscriptions
+      if (badgeEl) badgeEl.textContent = "💎 PREMIUM SUBSCRIPTIONS";
+      if (titleEl) titleEl.textContent = "Active Subscription Plans";
+      if (subEl) subEl.textContent = "Paid plans, streaming accounts, and AI tool licenses with instant auto-delivery.";
       if (!state.products.length) {
         els.collectionGrid.innerHTML = Array(6).fill(0).map(() => `<div class="skeleton-card"></div>`).join("");
       } else {
@@ -693,7 +754,10 @@
       window.location.href = "/account";
       return;
     }
-    if (state.route === "/subscription" || state.route === "/subscriptions") renderCollection("subscription");
+    if (state.route === "/hot-deals" || state.route === "/deals") renderCollection("hot-deals");
+    else if (state.route === "/live-stock" || state.route === "/stock") renderCollection("live-stock");
+    else if (state.route === "/products" || state.route === "/all-products") renderCollection("products");
+    else if (state.route === "/subscription" || state.route === "/subscriptions") renderCollection("subscription");
     else if (state.route === "/freebies") renderCollection("freebies");
     else if (state.route === "/signup" || state.route === "/login") renderAuth();
     else if (state.route === "/checkout") renderCheckout();
