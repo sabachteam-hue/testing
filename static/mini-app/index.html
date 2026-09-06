@@ -16,74 +16,84 @@
 
   <header class="topbar">
     <div class="topbar-desktop-wrapper">
-      <div class="topbar-row brand-row">
-        <a class="brand" href="/mini" id="brand-home">
-          <img class="brand-mark" src="/static/mini-app/brand/smf-logo.svg" width="40" height="40" alt="">
-          <span class="brand-name">SMF SHOP</span>
+      <div class="topbar-row brand-row" style="gap: 16px;">
+        <a class="brand brand-neon-logo" href="/mini" id="brand-home">
+          <span style="font-size: 26px;">⚡</span>
+          <span>SMF SHOP</span>
         </a>
-        <nav class="nav-links" aria-label="Shop">
-          <a class="nav-link" href="/mini" id="nav-home">Home</a>
-          <a class="nav-link" href="#/subscription" id="nav-subscription">Subscriptions</a>
-          <a class="nav-link" href="#/freebies" id="nav-freebies">Freebies</a>
+        <nav class="nav-capsule-group" aria-label="Shop">
+          <button type="button" class="nav-capsule-btn active" data-filter="all" id="nav-categories">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/></svg>
+            <span>Categorys</span>
+          </button>
+          <button type="button" class="nav-capsule-btn" data-filter="brands" id="nav-brands">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/></svg>
+            <span>Brands</span>
+          </button>
+          <button type="button" class="nav-capsule-btn" data-filter="products" id="nav-products">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+            <span>Products</span>
+          </button>
         </nav>
-      </div>
-      <div class="topbar-row tools-row">
-        <label class="search">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15Zm11 3-5.2-5.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-          <input id="search-input" type="search" placeholder="Search premium tools..." autocomplete="off">
-          <button type="button" class="search-submit-btn" id="search-submit-btn" aria-label="Search">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35"/></svg>
-          </button>
+
+        <label class="search-pill-modern" style="margin-left: auto;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35"/></svg>
+          <input id="search-input" type="search" placeholder="Live Search..." autocomplete="off">
+          <span class="kbd-badge">Keyboard Sst ⌘K</span>
         </label>
+
         <div class="tool-cluster">
-          <div class="dropdown" id="currency-dd">
-            <button type="button" class="chip" id="currency-btn" aria-haspopup="listbox" aria-expanded="false">
-              <img class="flag-img" src="/static/mini-app/flags/us.svg" alt="" width="20" height="14"> USD ($)
-            </button>
-            <div class="menu" role="listbox" hidden></div>
-          </div>
-          <div class="dropdown" id="language-dd">
-            <button type="button" class="chip" id="language-btn" aria-haspopup="listbox" aria-expanded="false">
-              <img class="flag-img" src="/static/mini-app/flags/gb.svg" alt="" width="20" height="14"> English
-            </button>
-            <div class="menu" role="listbox" hidden></div>
-          </div>
-          <button type="button" class="icon-btn" id="btn-cart" aria-label="Cart">
+          <a class="live-balance-widget" id="btn-balance-link" href="/account#wallet" title="Vault Live Balance">
+            <div class="balance-icon-circle">$</div>
+            <div class="balance-labels-col">
+              <span class="balance-tiny-title">Live Balance</span>
+              <span class="balance-bold-val" id="topbar-balance-display">$148.50</span>
+            </div>
+          </a>
+
+          <button type="button" class="icon-btn" id="btn-cart" aria-label="Cart" style="position: relative;">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 7h15l-1.4 8.2a2 2 0 0 1-2 1.8H9.2a2 2 0 0 1-2-1.7L5.2 4H3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="9" cy="20" r="1.2" fill="currentColor"/><circle cx="18" cy="20" r="1.2" fill="currentColor"/></svg>
-            <span class="badge" id="cart-count" hidden>0</span>
+            <span class="badge" id="cart-count" style="background: #8b5cf6;">0</span>
           </button>
-          <a class="btn-login-pill" id="btn-account" href="#/signup" aria-label="Account">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm0 2c-4.2 0-8 2.1-8 5v1h16v-1c0-2.9-3.8-5-8-5Z"/></svg>
-            <span id="account-pill-label">Sign In</span>
+
+          <a class="vip-user-widget" id="btn-account" href="#/signup">
+            <img class="vip-user-avatar" id="topbar-user-avatar" src="/static/mini-app/brand/smf-logo.svg" alt="">
+            <span id="account-pill-label">VIP</span>
+            <span class="vip-gold-pill">VIP</span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m6 9 6 6 6-6"/></svg>
           </a>
         </div>
       </div>
     </div>
   </header>
 
-  <main class="page">
+  <main class="page" style="max-width: 1280px; padding: 24px 20px 60px;">
     <section id="view-home">
-      <!-- Luxury 3D Storefront Hero Banner -->
-      <div class="store-hero-banner">
-        <div class="hero-brand-card">
-          <h1 class="hero-brand-title" id="shop-headline">SMF SHOP</h1>
-          <div class="hero-brand-sub" id="shop-eyebrow">PREMIUM DIGITAL ACCOUNTS</div>
-          <p class="hero-brand-desc" id="shop-tagline">Instant, Secure SaaS Subscriptions. Verified digital licenses, AI tools, and streaming accounts delivered instantly.</p>
-          <div class="hero-actions">
-            <a class="btn btn-primary" href="#catalog" id="btn-explore">Explore Products</a>
-            <a class="btn btn-whatsapp" id="btn-whatsapp" href="#" target="_blank" rel="noopener">Order on WhatsApp</a>
+      <!-- Cinematic 3D Storefront Hero Showcase (Matching Mockup) -->
+      <div class="cinematic-hero-wrap">
+        <div class="hero-side-tiles" aria-hidden="true">
+          <div class="hero-glass-tile" style="color: #e50914; font-weight: 900;">N</div>
+          <div class="hero-glass-tile" style="background: rgba(139, 92, 246, 0.25); color: #c084fc;">🟣</div>
+          <div class="hero-glass-tile" style="background: rgba(236, 72, 153, 0.25); color: #f472b6;">💎</div>
+          <div class="hero-glass-tile" style="background: rgba(0, 242, 254, 0.25); color: #00f2fe;">🤖</div>
+        </div>
+
+        <div class="hero-center-content">
+          <div class="hero-eyebrow-luxury" id="shop-eyebrow">Digital Premium Subscriptions</div>
+          <h1 class="hero-showcase-title" id="shop-headline">
+            Netflix 4K • ChatGPT Plus<br>Canva Pro • Spotify Premium
+          </h1>
+          <div class="hero-guarantee-pill-luxury">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="#00f2fe"><path d="M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4Zm-2 16-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8Z"/></svg>
+            <span>Instant 1-Click Delivery Guarantee</span>
           </div>
         </div>
-        <div class="hero-3d-visual" aria-hidden="true">
-          <div class="floating-icons-grid">
-            <div class="float-brand-icon icon-n">N</div>
-            <div class="float-brand-icon icon-ai">🤖</div>
-            <div class="float-brand-icon icon-yt">▶️</div>
-            <div class="float-brand-icon icon-cv">🎨</div>
-          </div>
-          <div class="seal-guarantee">
-            <span>⚡</span> INSTANT DELIVERY GUARANTEE
-          </div>
+
+        <div class="hero-side-tiles" aria-hidden="true">
+          <div class="hero-glass-tile" style="background: rgba(16, 185, 129, 0.25); color: #10b981;">⚡</div>
+          <div class="hero-glass-tile" style="background: rgba(0, 196, 204, 0.25); color: #00c4cc;">🎨</div>
+          <div class="hero-glass-tile" style="background: rgba(29, 185, 84, 0.25); color: #1db954;">🎵</div>
+          <div class="hero-glass-tile" style="background: rgba(37, 99, 235, 0.25); color: #3b82f6;">🔊</div>
         </div>
       </div>
 
@@ -118,13 +128,13 @@
       <section class="catalog" id="catalog">
         <div class="catalog-head">
           <div>
-            <h2 id="catalog-title">Explore products</h2>
-            <p class="muted" id="catalog-sub">Same catalog and prices as the Telegram shop.</p>
+            <h2 id="catalog-title" style="font-size: 24px; font-weight: 900; letter-spacing: -0.02em;">Digital License Catalog</h2>
+            <p class="muted" id="catalog-sub">Instant delivery licenses, verified accounts, and warranty protection.</p>
           </div>
           <a class="btn btn-whatsapp" id="btn-whatsapp-catalog" href="#" target="_blank" rel="noopener">Order on WhatsApp</a>
         </div>
         <div class="pills" id="category-pills"></div>
-        <div class="grid" id="product-grid"></div>
+        <div class="showcase-product-grid-4col" id="product-grid"></div>
       </section>
     </section>
 
@@ -134,7 +144,7 @@
         <h1 class="collection-header-title" id="collection-title">Subscriptions</h1>
         <p class="collection-header-sub" id="collection-sub">Paid plans and premium accounts with instant delivery guarantee.</p>
       </div>
-      <div class="grid" id="collection-grid"></div>
+      <div class="showcase-product-grid-4col" id="collection-grid"></div>
     </section>
 
     <section id="view-auth" hidden>
@@ -239,6 +249,26 @@
       </div>
     </div>
   </div>
+
+  <!-- Floating Frosted Bottom Dock (Telegram Mini App Storefront) -->
+  <nav class="mobile-bottom-dock" aria-label="Mobile navigation">
+    <a class="mobile-dock-btn active" href="/mini" id="mob-nav-home">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      <span>Home</span>
+    </a>
+    <a class="mobile-dock-btn" href="/mini#catalog" id="mob-nav-catalog">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/></svg>
+      <span>Catalog</span>
+    </a>
+    <a class="mobile-dock-btn" href="/account#orders" id="mob-nav-orders">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+      <span>Orders</span>
+    </a>
+    <a class="mobile-dock-btn" href="/account#wallet" id="mob-nav-wallet">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+      <span>Wallet</span>
+    </a>
+  </nav>
 
   <div id="toast-container" class="toast-container" aria-live="polite"></div>
 

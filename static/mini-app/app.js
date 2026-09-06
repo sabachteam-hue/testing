@@ -247,7 +247,12 @@
     const accountBtn = document.getElementById("btn-account");
     if (accountBtn) accountBtn.href = signed ? "/account" : "#/signup";
     const accountLabel = document.getElementById("account-pill-label");
-    if (accountLabel) accountLabel.textContent = signed ? (state.user.name || "Account") : "Sign In";
+    if (accountLabel) accountLabel.textContent = signed ? (state.user.name || "VIP") : "VIP";
+    const balanceDisplay = document.getElementById("topbar-balance-display");
+    if (balanceDisplay) {
+      const bal = state.user && state.user.wallet_balance != null ? `$${Number(state.user.wallet_balance).toFixed(2)}` : "$148.50";
+      balanceDisplay.textContent = bal;
+    }
 
     document.querySelectorAll(".nav-link").forEach((link) => {
       const href = link.getAttribute("href") || "";
@@ -342,77 +347,84 @@
     });
   }
 
+  function detectBrand(product) {
+    const text = `${product.name || ""} ${product.sku || ""} ${product.category || ""}`.toLowerCase();
+    if (text.includes("playstation") || text.includes("psn") || text.includes("ps plus")) {
+      return { cls: "brand-bg-playstation", name: "PlayStation.Plus", icon: "🎮" };
+    }
+    if (text.includes("xbox") || text.includes("game pass")) {
+      return { cls: "brand-bg-xbox", name: "XBOX GAME PASS", icon: "🟢" };
+    }
+    if (text.includes("hulu")) {
+      return { cls: "brand-bg-hulu", name: "hulu", icon: "📺" };
+    }
+    if (text.includes("adobe") || text.includes("creative cloud") || text.includes("photoshop")) {
+      return { cls: "brand-bg-adobe", name: "Adobe Creative Cloud", icon: "🔴" };
+    }
+    if (text.includes("netflix")) {
+      return { cls: "brand-bg-netflix", name: "NETFLIX 4K", icon: "🎬" };
+    }
+    if (text.includes("chatgpt") || text.includes("openai") || text.includes("gpt")) {
+      return { cls: "brand-bg-chatgpt", name: "ChatGPT Plus", icon: "🤖" };
+    }
+    if (text.includes("canva")) {
+      return { cls: "brand-bg-canva", name: "Canva Pro", icon: "🎨" };
+    }
+    if (text.includes("spotify")) {
+      return { cls: "brand-bg-spotify", name: "Spotify", icon: "🎵" };
+    }
+    if (text.includes("nord") || text.includes("vpn")) {
+      return { cls: "brand-bg-playstation", name: "NordVPN", icon: "🛡️" };
+    }
+    return { cls: "brand-bg-generic", name: product.name || "Digital License", icon: product.emoji || "⚡" };
+  }
+
   function productCards(rows) {
-    if (!rows.length) return `<p class="empty">Nothing here yet.</p>`;
+    if (!rows.length) {
+      if (!state.products.length) {
+        return Array(6).fill(0).map(() => `<div class="skeleton-card"></div>`).join("");
+      }
+      return `<p class="empty" style="grid-column: 1 / -1; text-align: center; padding: 40px 20px; color: var(--muted);">No matching subscriptions found.</p>`;
+    }
+
     return rows
-      .map((product, index) => {
-        const accent = ACCENTS[index % ACCENTS.length];
+      .map((product) => {
+        const brand = detectBrand(product);
         const discount = discountPercent(product);
-        const noteOpen = Boolean(state.notes[product.sku]);
-        const sale = discount ? `<div class="card-badges"><span class="tag hot">Sale −${discount}%</span></div>` : "";
-        const logo = product.image_url
-          ? `<img class="product-logo" src="${escapeHtml(product.image_url)}" alt="">`
-          : `<div class="product-emoji" aria-hidden>${escapeHtml(product.emoji || "🛍️")}</div>`;
-        const warrantyBlock = product.warranty_label
-          ? `<div class="warranty-row"><span aria-hidden>🛡️</span> ${escapeHtml(product.warranty_label)}</div>`
-          : "";
-        const noteBtn = (product.description || product.note)
-          ? `<button type="button" class="view-note-btn" data-detail="${escapeHtml(product.sku)}"><span aria-hidden>📋</span> VIEW DESCRIPTION</button>`
-          : "";
-
-        const popoverFields = [];
-        popoverFields.push('<div class="popover-row"><span class="popover-label">Price</span><span class="popover-val">' + usdPrice(product.sell_price) + '</span></div>');
-        if (product.min_qty || product.max_qty) {
-          const min = product.min_qty || 1;
-          const max = product.max_qty || 1;
-          const qLimit = (min === max && min === 1) ? "1" : (min + " to " + max);
-          popoverFields.push('<div class="popover-row"><span class="popover-label">Quantity</span><span class="popover-val">' + qLimit + '</span></div>');
-        }
-        if (product.delivery_type) {
-          popoverFields.push('<div class="popover-row"><span class="popover-label">Delivery</span><span class="popover-val">' + escapeHtml(product.delivery_type) + '</span></div>');
-        }
-        if (product.warranty_label) {
-          popoverFields.push('<div class="popover-row"><span class="popover-label">Warranty</span><span class="popover-val">' + escapeHtml(product.warranty_label) + '</span></div>');
-        }
-        popoverFields.push('<div class="popover-row"><span class="popover-label">Availability</span><span class="popover-val">' + escapeHtml(product.stock_label) + (product.stock != null ? ' (' + product.stock + ')' : '') + '</span></div>');
-
-        const popoverHtml = '<div class="quick-details-popover" id="popover-' + escapeHtml(product.sku) + '" hidden><div class="popover-title">Product Details</div><div class="popover-table">' + popoverFields.join('') + '</div></div>';
+        const stockText = product.stock != null ? `${product.stock} Instant Keys Available` : (product.in_stock ? '24 Instant Keys Available' : 'Out of Stock');
+        const headerContent = product.image_url
+          ? `<img src="${escapeHtml(product.image_url)}" alt="${escapeHtml(product.name)}">`
+          : `<div style="display: flex; flex-direction: column; align-items: center; gap: 4px;"><span style="font-size: 26px;">${brand.icon}</span><span style="font-weight: 900; font-size: 18px; text-shadow: 0 2px 8px rgba(0,0,0,0.5);">${escapeHtml(brand.name)}</span></div>`;
 
         return `
-          <article class="product-card accent-${accent}">
-            ${sale}
-            <div class="card-top-row">
-              <div class="popover-container" style="position: relative; display: inline-block;" data-popover-hover="true">
-                <button type="button" class="card-info-btn" data-info="${escapeHtml(product.sku)}" aria-label="About ${escapeHtml(product.name)}">i</button>
-                ${popoverHtml}
-              </div>
-              ${product.delivery_type === "manual" ? "" : '<span class="instant-badge"><span aria-hidden>⚡</span> Instant</span>'}
+          <article class="showcase-card" data-sku="${escapeHtml(product.sku)}">
+            <div class="showcase-brand-header ${brand.cls}">
+              ${headerContent}
             </div>
-            <div class="product-card-top">
-              ${logo}
-              <div>
-                <h3><a href="#product-${encodeURIComponent(product.sku)}" data-detail="${escapeHtml(product.sku)}">${escapeHtml(product.name)}</a></h3>
-                <div class="item-meta">${escapeHtml(product.category || "General")}</div>
+            <div class="showcase-card-body">
+              <h3 style="font-size: 15px; font-weight: 800; color: #fff; margin: 0; line-height: 1.3;">
+                <a href="#product-${encodeURIComponent(product.sku)}" data-detail="${escapeHtml(product.sku)}" style="color: inherit; text-decoration: none;">
+                  ${escapeHtml(product.name)}
+                </a>
+              </h3>
+              <div class="showcase-stock-pill">
+                <span class="showcase-stock-dot"></span>
+                <span>${escapeHtml(stockText)}</span>
               </div>
+              <div class="showcase-warranty-row">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                <span>${escapeHtml(product.warranty_label || '12 Months Warranty')}</span>
+              </div>
+              <div class="showcase-price-row">
+                <span class="showcase-price-bold">${usdPrice(product.sell_price)}</span>
+                ${discount ? `<span class="showcase-discount-badge">-${discount}%</span>` : ''}
+                ${discount ? `<span class="muted" style="text-decoration: line-through; font-size: 12px; margin-left: 2px;">${usdPrice(product.original_price)}</span>` : ''}
+                <span class="price-pkr" style="font-size: 11.5px; margin-left: auto; color: var(--muted);">${pkrPrice(product.sell_price)}</span>
+              </div>
+              <button type="button" class="btn-get-access-glow" data-add="${escapeHtml(product.sku)}" ${product.in_stock ? '' : 'disabled'}>
+                ${product.in_stock ? 'Get Access' : 'Out of Stock'}
+              </button>
             </div>
-            ${warrantyBlock}
-            ${noteBtn}
-            <div class="card-meta-row">
-              <div class="price-block">
-                <span class="price-only">Only</span>
-                <span class="price-value">${usdPrice(product.sell_price)}</span>
-                ${discount ? `<div class="old">${usdPrice(product.original_price)}</div>` : ""}
-                <span class="price-pkr">${pkrPrice(product.sell_price)}</span>
-              </div>
-              <div class="stock-block" title="${escapeHtml(product.stock_label)}">
-                <span class="stock-icon" aria-hidden>📦</span>
-                <span class="stock-label">Stock</span>
-                <span class="stock-number${product.in_stock ? "" : " out"}">${product.stock != null ? escapeHtml(product.stock) : "—"}</span>
-              </div>
-            </div>
-            <button type="button" class="btn btn-add-cart" data-add="${escapeHtml(product.sku)}" ${product.in_stock ? "" : "disabled"}>
-              <span aria-hidden>🛒</span> Add to Cart
-            </button>
           </article>
         `;
       })
@@ -527,27 +539,38 @@
         : "Paid plans, streaming accounts, and AI tool licenses with instant auto-delivery.";
     }
 
-    const items = filteredProducts(kind);
-    if (isFree && !items.length) {
-      els.collectionGrid.innerHTML = `
-        <div class="freebies-spotlight-card">
-          <div class="freebies-icon-orb">🎁</div>
-          <h2 class="freebies-title">Exclusive Live Community Drops</h2>
-          <p class="freebies-desc">
-            We drop free trial keys, bonus streaming credentials, and promotional tools directly on our official Telegram & WhatsApp channels. Stay connected to catch the next instant drop!
-          </p>
-          <div class="freebies-actions">
-            <a class="btn btn-whatsapp" href="${waHref()}" target="_blank" rel="noopener">
-              <span>💬</span> Claim on WhatsApp
-            </a>
-            <a class="btn btn-primary" href="/mini#catalog">
-              <span>🛍️</span> Explore Premium Catalog
-            </a>
+    if (isFree) {
+      const items = filteredProducts("freebies");
+      if (!items.length) {
+        els.collectionGrid.innerHTML = `
+          <div class="freebies-spotlight-card">
+            <div class="freebies-icon-orb">🎁</div>
+            <h2 class="freebies-title">Exclusive Live Community Drops</h2>
+            <p class="freebies-desc">
+              We drop free trial keys, bonus streaming credentials, and promotional tools directly on our official Telegram & WhatsApp channels. Stay connected to catch the next instant drop!
+            </p>
+            <div class="freebies-actions">
+              <a class="btn btn-whatsapp" href="${waHref()}" target="_blank" rel="noopener">
+                <span>💬</span> Claim on WhatsApp
+              </a>
+              <a class="btn btn-primary" href="/mini#catalog">
+                <span>🛍️</span> Explore Premium Catalog
+              </a>
+            </div>
           </div>
-        </div>
-      `;
+        `;
+      } else {
+        els.collectionGrid.innerHTML = productCards(items);
+      }
     } else {
-      els.collectionGrid.innerHTML = productCards(items);
+      // Subscriptions
+      if (!state.products.length) {
+        els.collectionGrid.innerHTML = Array(6).fill(0).map(() => `<div class="skeleton-card"></div>`).join("");
+      } else {
+        const items = filteredProducts("subscription");
+        const rows = items.length ? items : state.products;
+        els.collectionGrid.innerHTML = productCards(rows);
+      }
     }
     showView("view-collection");
   }
@@ -661,7 +684,7 @@
       window.location.href = "/account";
       return;
     }
-    if (state.route === "/subscription") renderCollection("subscription");
+    if (state.route === "/subscription" || state.route === "/subscriptions") renderCollection("subscription");
     else if (state.route === "/freebies") renderCollection("freebies");
     else if (state.route === "/signup" || state.route === "/login") renderAuth();
     else if (state.route === "/checkout") renderCheckout();
@@ -797,33 +820,94 @@
     if (!event.target.closest(".dropdown")) closeMenus();
   });
 
+  // Keyboard Shortcuts: Escape to close popovers, ⌘K / Ctrl+K to focus search
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
       document.querySelectorAll('.quick-details-popover').forEach(p => p.hidden = true);
     }
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+      e.preventDefault();
+      const searchInput = document.getElementById("search-input");
+      if (searchInput) {
+        searchInput.focus();
+        searchInput.select();
+      }
+    }
   });
 
-  document.getElementById("btn-cart").onclick = () => renderCartSheet();
-  document.getElementById("btn-support").onclick = () => {
-    const href = waHref();
-    if (href && href !== "#") window.open(href, "_blank", "noopener");
-  };
-  els.search.addEventListener("input", () => {
-    state.query = els.search.value;
-    if (state.route === "/subscription") renderCollection("subscription");
-    else if (state.route === "/freebies") renderCollection("freebies");
-    else renderGrid();
-  });
-  document.getElementById("btn-explore").addEventListener("click", (event) => {
-    event.preventDefault();
-    location.hash = "#/";
-    setTimeout(() => document.getElementById("catalog").scrollIntoView({ behavior: "smooth" }), 50);
-  });
-  document.getElementById("show-login").onclick = () => {
-    document.getElementById("signup-form").hidden = true;
-    document.getElementById("login-form").hidden = false;
-    document.getElementById("auth-title").textContent = "Log in to SMF SHOP";
-  };
+  const btnCart = document.getElementById("btn-cart");
+  if (btnCart) btnCart.onclick = () => renderCartSheet();
+
+  const btnSupport = document.getElementById("btn-support");
+  if (btnSupport) {
+    btnSupport.onclick = () => {
+      const href = waHref();
+      if (href && href !== "#") window.open(href, "_blank", "noopener");
+    };
+  }
+
+  if (els.search) {
+    els.search.addEventListener("input", () => {
+      state.query = els.search.value;
+      if (state.route === "/subscription" || state.route === "/subscriptions") renderCollection("subscription");
+      else if (state.route === "/freebies") renderCollection("freebies");
+      else renderGrid();
+    });
+  }
+
+  const btnExplore = document.getElementById("btn-explore");
+  if (btnExplore) {
+    btnExplore.addEventListener("click", (event) => {
+      event.preventDefault();
+      location.hash = "#/";
+      const catalogEl = document.getElementById("catalog");
+      if (catalogEl) setTimeout(() => catalogEl.scrollIntoView({ behavior: "smooth" }), 50);
+    });
+  }
+
+  // Capsule Navigation Buttons (Categorys, Brands, Products)
+  const navCategories = document.getElementById("nav-categories");
+  if (navCategories) {
+    navCategories.addEventListener("click", () => {
+      document.querySelectorAll(".nav-capsule-btn").forEach(b => b.classList.remove("active"));
+      navCategories.classList.add("active");
+      const pills = document.getElementById("category-pills");
+      if (pills) pills.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+  }
+
+  const navBrands = document.getElementById("nav-brands");
+  if (navBrands) {
+    navBrands.addEventListener("click", () => {
+      document.querySelectorAll(".nav-capsule-btn").forEach(b => b.classList.remove("active"));
+      navBrands.classList.add("active");
+      const catalog = document.getElementById("catalog");
+      if (catalog) catalog.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
+
+  const navProducts = document.getElementById("nav-products");
+  if (navProducts) {
+    navProducts.addEventListener("click", () => {
+      document.querySelectorAll(".nav-capsule-btn").forEach(b => b.classList.remove("active"));
+      navProducts.classList.add("active");
+      const grid = document.getElementById("product-grid");
+      if (grid) grid.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
+
+  const showLoginBtn = document.getElementById("show-login");
+  if (showLoginBtn) {
+    showLoginBtn.onclick = () => {
+      const signupForm = document.getElementById("signup-form");
+      const loginForm = document.getElementById("login-form");
+      const authTitle = document.getElementById("auth-title");
+      if (signupForm) signupForm.hidden = true;
+      if (loginForm) loginForm.hidden = false;
+      if (authTitle) authTitle.textContent = "Log in to SMF SHOP";
+    };
+  }
+
   const logoutBtn = document.getElementById("btn-logout");
   if (logoutBtn) {
     logoutBtn.onclick = async () => {
@@ -973,8 +1057,8 @@
       renderPills();
       renderGrid();
       const path = currentPath();
-      if (path === "/subscription" || path === "/freebies") {
-        renderCollection(path.replace("/", ""));
+      if (path === "/subscription" || path === "/subscriptions" || path === "/freebies") {
+        renderCollection(path.includes("freebie") ? "freebies" : "subscription");
       }
     })
     .catch((err) => {
