@@ -234,9 +234,15 @@
     }
     const signed = Boolean(state.user && state.user.email);
     const signBtn = document.getElementById("btn-signin");
-    signBtn.textContent = signed ? state.user.name || "Account" : "Sign up";
-    signBtn.href = signed ? "/account" : "#/signup";
-    document.getElementById("btn-account").href = signed ? "/account" : "#/signup";
+    if (signBtn) {
+      signBtn.textContent = signed ? state.user.name || "Account" : "Sign up";
+      signBtn.href = signed ? "/account" : "#/signup";
+    }
+    const accountBtn = document.getElementById("btn-account");
+    if (accountBtn) accountBtn.href = signed ? "/account" : "#/signup";
+    const accountLabel = document.getElementById("account-pill-label");
+    if (accountLabel) accountLabel.textContent = signed ? (state.user.name || "Account") : "Login";
+
     document.querySelectorAll(".nav-link").forEach((link) => {
       const href = link.getAttribute("href") || "";
       const isHome = link.id === "nav-home" || href === "/mini" || href === "#/";
@@ -662,6 +668,19 @@
       closeMenus();
       els.languageMenu.hidden = !open;
       els.languageBtn.setAttribute("aria-expanded", String(open));
+      return;
+    }
+    if (event.target.closest("#btn-close-perks")) {
+      const perks = document.getElementById("floating-perks-widget");
+      if (perks) perks.classList.add("minimized");
+      return;
+    }
+    if (event.target.closest("#search-submit-btn")) {
+      const input = document.getElementById("search-input");
+      if (input) {
+        state.query = input.value.trim();
+        renderGrid();
+      }
       return;
     }
 

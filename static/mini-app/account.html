@@ -13,68 +13,79 @@
   <style>
     /* Portal specific layout and components matching Mini App design system */
     :root {
-      --sidebar-w: 240px;
+      --sidebar-w: auto;
     }
     .portal-layout {
       display: flex;
+      flex-direction: column;
       min-height: calc(100vh - 70px);
-      max-width: 1200px;
+      max-width: 1240px;
       margin: 0 auto;
-      padding: 16px;
+      padding: 20px 20px 60px;
       gap: 20px;
       position: relative;
     }
     .portal-sidebar {
-      width: var(--sidebar-w);
+      width: auto;
       flex-shrink: 0;
-      background: var(--surface);
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      padding: 18px 12px;
+      background: rgba(18, 12, 34, 0.88);
+      border: 1px solid rgba(139, 92, 246, 0.28);
+      border-radius: 999px;
+      padding: 6px 12px;
       display: flex;
-      flex-direction: column;
+      flex-direction: row;
+      align-items: center;
+      justify-content: center;
       gap: 6px;
-      backdrop-filter: blur(18px);
-      height: fit-content;
+      backdrop-filter: blur(24px);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 0 24px rgba(139, 92, 246, 0.15);
       position: sticky;
-      top: 82px;
+      top: 76px;
+      z-index: 35;
+      margin: 0 auto 8px auto;
+      max-width: fit-content;
+    }
+    .portal-sidebar-title {
+      display: none;
     }
     .portal-nav-item {
-      display: flex;
+      display: inline-flex;
       align-items: center;
-      gap: 12px;
-      padding: 10px 14px;
-      border-radius: 12px;
+      gap: 8px;
+      padding: 8px 16px;
+      border-radius: 999px;
       color: var(--muted);
-      font-weight: 600;
-      font-size: 14px;
+      font-weight: 700;
+      font-size: 13.5px;
       border: 0;
       background: none;
-      width: 100%;
-      text-align: left;
+      width: auto;
+      text-align: center;
       cursor: pointer;
-      transition: all 0.18s ease;
+      white-space: nowrap;
+      transition: all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
     }
     .portal-nav-item svg {
-      width: 18px;
-      height: 18px;
+      width: 17px;
+      height: 17px;
       flex-shrink: 0;
-      stroke-width: 1.9;
+      stroke-width: 2;
     }
     .portal-nav-item:hover {
-      color: var(--ink);
-      background: rgba(139, 108, 255, 0.12);
+      color: #fff;
+      background: rgba(139, 92, 246, 0.18);
     }
     .portal-nav-item.active {
       color: #fff;
-      background: linear-gradient(135deg, rgba(139, 108, 255, 0.32), rgba(109, 77, 255, 0.22));
-      border: 1px solid rgba(196, 181, 253, 0.28);
-      box-shadow: 0 4px 16px rgba(139, 108, 255, 0.2);
+      background: linear-gradient(135deg, rgba(139, 92, 246, 0.45), rgba(6, 182, 212, 0.35));
+      border: 1px solid rgba(0, 242, 254, 0.45);
+      box-shadow: 0 4px 18px rgba(139, 92, 246, 0.35);
     }
     .portal-nav-divider {
-      height: 1px;
+      width: 1px;
+      height: 20px;
       background: var(--line);
-      margin: 8px 6px;
+      margin: 0 4px;
     }
     .portal-main {
       flex: 1;
@@ -84,35 +95,37 @@
       gap: 20px;
     }
     .welcome-card {
-      background: linear-gradient(135deg, rgba(30, 22, 54, 0.85) 0%, rgba(18, 12, 32, 0.85) 100%);
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      padding: 24px;
+      background: linear-gradient(135deg, rgba(28, 18, 54, 0.95) 0%, rgba(14, 9, 28, 0.95) 100%);
+      border: 1px solid rgba(139, 92, 246, 0.35);
+      border-radius: 20px;
+      padding: 24px 28px;
       display: flex;
       justify-content: space-between;
       align-items: center;
-      gap: 16px;
+      gap: 20px;
       flex-wrap: wrap;
-      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.35);
+      box-shadow: 0 14px 40px rgba(0, 0, 0, 0.45), 0 0 30px rgba(139, 92, 246, 0.15);
       position: relative;
       overflow: hidden;
     }
     .welcome-card::after {
       content: "";
       position: absolute;
-      right: -20px;
-      top: -20px;
-      width: 160px;
-      height: 160px;
-      background: radial-gradient(circle, rgba(139, 108, 255, 0.25) 0%, transparent 70%);
+      right: -30px;
+      top: -30px;
+      width: 220px;
+      height: 220px;
+      background: radial-gradient(circle, rgba(0, 242, 254, 0.2) 0%, rgba(139, 92, 246, 0.15) 50%, transparent 70%);
       pointer-events: none;
     }
     .welcome-title {
-      font-size: 24px;
+      font-size: 26px;
       font-weight: 800;
       letter-spacing: -0.02em;
       margin: 0 0 6px 0;
-      color: var(--ink);
+      background: linear-gradient(180deg, #ffffff 0%, #d8b4fe 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
     }
     .welcome-meta {
       display: flex;
@@ -126,15 +139,15 @@
       display: inline-flex;
       align-items: center;
       gap: 5px;
-      background: rgba(52, 211, 153, 0.15);
-      color: var(--live);
-      border: 1px solid rgba(52, 211, 153, 0.35);
-      padding: 2px 8px;
+      background: rgba(16, 185, 129, 0.16);
+      color: #10b981;
+      border: 1px solid rgba(16, 185, 129, 0.4);
+      padding: 3px 10px;
       border-radius: 999px;
       font-size: 11px;
-      font-weight: 700;
+      font-weight: 800;
       text-transform: uppercase;
-      letter-spacing: 0.04em;
+      letter-spacing: 0.05em;
     }
     .stats-grid {
       display: grid;
@@ -142,18 +155,20 @@
       gap: 14px;
     }
     .stat-card {
-      background: var(--surface);
-      border: 1px solid var(--line);
+      background: rgba(20, 14, 38, 0.85);
+      border: 1px solid rgba(139, 92, 246, 0.22);
       border-radius: var(--radius-sm);
-      padding: 18px;
+      padding: 20px;
       display: flex;
       flex-direction: column;
       gap: 8px;
-      transition: transform 0.2s ease, border-color 0.2s ease;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+      transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
     }
     .stat-card:hover {
-      border-color: rgba(139, 108, 255, 0.4);
+      border-color: rgba(0, 242, 254, 0.45);
       transform: translateY(-2px);
+      box-shadow: 0 12px 32px rgba(0, 242, 254, 0.15);
     }
     .stat-head {
       display: flex;
@@ -164,13 +179,14 @@
       font-weight: 650;
     }
     .stat-icon-box {
-      width: 34px;
-      height: 34px;
+      width: 36px;
+      height: 36px;
       border-radius: 10px;
       display: grid;
       place-items: center;
-      background: rgba(139, 108, 255, 0.14);
-      color: var(--purple-2);
+      background: rgba(139, 92, 246, 0.18);
+      color: var(--cyan);
+      box-shadow: 0 0 12px rgba(139, 92, 246, 0.25);
     }
     .stat-icon-box svg {
       width: 18px;
@@ -314,41 +330,67 @@
       font-size: 11px;
       font-weight: 800;
     }
-    @media (max-width: 768px) {
+    @media (max-width: 899px) {
       .portal-layout {
-        padding: 12px 10px;
-        gap: 12px;
+        padding: 12px 12px 88px 12px;
+        gap: 16px;
       }
       .mobile-nav-toggle {
-        display: grid;
+        display: none !important;
       }
       .portal-sidebar {
-        position: fixed;
-        top: 0;
-        bottom: 0;
-        left: -280px;
-        width: 260px;
-        z-index: 95;
-        border-radius: 0 20px 20px 0;
-        background: #141022;
-        padding-top: calc(20px + var(--safe-top));
-        padding-bottom: calc(20px + var(--safe-bottom));
-        transition: left 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
-        box-shadow: 10px 0 30px rgba(0, 0, 0, 0.6);
+        position: fixed !important;
+        top: auto !important;
+        bottom: calc(10px + var(--safe-bottom)) !important;
+        left: 10px !important;
+        right: 10px !important;
+        width: auto !important;
+        height: 62px !important;
+        border-radius: 20px !important;
+        background: rgba(14, 9, 26, 0.94) !important;
+        border: 1px solid rgba(139, 92, 246, 0.3) !important;
+        backdrop-filter: blur(24px) !important;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7), 0 0 20px rgba(139, 92, 246, 0.15) !important;
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: space-around !important;
+        padding: 4px 6px !important;
+        z-index: 95 !important;
+        margin: 0 !important;
       }
-      .portal-sidebar.sidebar-open {
-        left: 0;
+      .portal-sidebar-title, .portal-nav-divider, .portal-back-store {
+        display: none !important;
+      }
+      .portal-nav-item {
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 3px !important;
+        padding: 4px 4px !important;
+        border-radius: 12px !important;
+        font-size: 9.5px !important;
+        font-weight: 700 !important;
+        color: var(--muted) !important;
+        width: auto !important;
+        flex: 1 !important;
+        text-align: center !important;
+        border: none !important;
+        background: none !important;
+      }
+      .portal-nav-item svg {
+        width: 18px !important;
+        height: 18px !important;
+      }
+      .portal-nav-item.active {
+        color: #00f2fe !important;
+        background: rgba(0, 242, 254, 0.12) !important;
+        border: 1px solid rgba(0, 242, 254, 0.25) !important;
+        box-shadow: 0 0 12px rgba(0, 242, 254, 0.2) !important;
       }
       .sidebar-overlay {
-        position: fixed;
-        inset: 0;
-        background: rgba(0, 0, 0, 0.65);
-        z-index: 90;
-        backdrop-filter: blur(4px);
-        display: none;
-      }
-      .sidebar-overlay.active {
-        display: block;
+        display: none !important;
       }
       .user-badge-btn .badge-text {
         max-width: 90px;
@@ -1644,23 +1686,23 @@
 
   <!-- Main Portal Shell -->
   <div class="portal-layout">
-    <!-- Navigation Sidebar -->
+    <!-- Top Floating Island Dock (Zero-Sidebar on Desktop, Frosted Bottom Bar on Mobile) -->
     <aside class="portal-sidebar" id="portal-sidebar">
-      <div style="padding: 0 6px 12px 6px; display: flex; align-items: center; justify-content: space-between;">
+      <div style="padding: 0 6px 12px 6px; display: flex; align-items: center; justify-content: space-between;" class="portal-sidebar-title">
         <span style="font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted);">Customer Area</span>
         <button type="button" class="sheet-close" id="btn-close-sidebar" style="position: static; width: 28px; height: 28px; font-size: 16px; display: none;" aria-label="Close menu">×</button>
       </div>
       <button type="button" class="portal-nav-item active" data-tab="dashboard">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/></svg>
-        <span>Dashboard</span>
+        <span>Overview</span>
       </button>
       <button type="button" class="portal-nav-item" data-tab="orders">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
-        <span>My Orders</span>
+        <span>Orders</span>
       </button>
       <button type="button" class="portal-nav-item" data-tab="accounts">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
-        <span>Granted Accounts</span>
+        <span>Vault</span>
       </button>
       <button type="button" class="portal-nav-item" data-tab="wallet">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
@@ -1680,9 +1722,9 @@
         <span>Settings</span>
       </button>
       <div class="portal-nav-divider"></div>
-      <a href="/mini" class="portal-nav-item" style="color: var(--whatsapp);">
+      <a href="/mini" class="portal-nav-item portal-back-store" style="color: var(--whatsapp);" title="Back to Storefront">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="m15 18-6-6 6-6"/></svg>
-        <span>Back to Storefront</span>
+        <span>Store</span>
       </a>
     </aside>
 
@@ -3107,18 +3149,32 @@
               </span>
             </div>
 
-            <!-- Subscription Lifecycle Progress -->
+            <!-- Subscription Lifecycle Progress with Circular Dial -->
             <div class="sub-progress-section">
-              <div class="sub-progress-header">
-                <span class="muted" style="font-size: 11.5px; font-weight: 600;">SUBSCRIPTION LIFECYCLE</span>
-                <span class="sub-countdown-badge ${countdownClass}">${countdownText}</span>
-              </div>
-              <div class="sub-progress-track">
-                <div class="sub-progress-bar ${barClass}" style="width: ${acc.progress_percent}%;"></div>
-              </div>
-              <div style="display: flex; align-items: center; justify-content: space-between; font-size: 11px; color: var(--muted); margin-top: 4px;">
-                <span>${acc.days_used} days used / ${acc.total_days} days</span>
-                <span>Expires: <strong>${escapeHtml(acc.expiry_date || '—')}</strong></span>
+              <div class="sub-lifecycle-flex">
+                <div class="circular-dial-wrap" title="${acc.days_remaining != null ? acc.days_remaining + ' days remaining' : ''}">
+                  <svg class="circular-dial-svg" viewBox="0 0 36 36">
+                    <path class="circle-dial-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                    <path class="circle-dial-bar ${barClass}" stroke-dasharray="${acc.progress_percent || 0}, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                  </svg>
+                  <div class="circular-dial-content">
+                    <span class="circular-dial-num">${acc.days_remaining != null ? acc.days_remaining : '—'}</span>
+                    <span class="circular-dial-sub">days</span>
+                  </div>
+                </div>
+                <div class="sub-lifecycle-details">
+                  <div class="sub-progress-header">
+                    <span class="muted" style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">LIFECYCLE TRACKER</span>
+                    <span class="sub-countdown-badge ${countdownClass}">${countdownText}</span>
+                  </div>
+                  <div class="sub-progress-track">
+                    <div class="sub-progress-bar ${barClass}" style="width: ${acc.progress_percent}%;"></div>
+                  </div>
+                  <div style="display: flex; align-items: center; justify-content: space-between; font-size: 11px; color: var(--muted); margin-top: 4px;">
+                    <span>${acc.days_used}d used / ${acc.total_days}d</span>
+                    <span>Expires: <strong style="color: var(--ink);">${escapeHtml(acc.expiry_date || '—')}</strong></span>
+                  </div>
+                </div>
               </div>
             </div>
 
