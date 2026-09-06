@@ -1,13 +1,13 @@
 :root {
-  --bg: #06040c;
-  --bg-2: #0c0818;
-  --surface: rgba(18, 12, 36, 0.9);
-  --surface-2: #140d28;
-  --surface-card: rgba(22, 14, 44, 0.92);
-  --ink: #fbfaff;
-  --muted: #a39bbd;
-  --line: rgba(139, 92, 246, 0.28);
-  --line-blue: rgba(37, 99, 235, 0.32);
+  --bg: #0c0824;
+  --bg-2: #140d34;
+  --surface: rgba(20, 14, 44, 0.82);
+  --surface-2: #1b123c;
+  --surface-card: rgba(24, 16, 50, 0.88);
+  --ink: #fcfbff;
+  --muted: #a59cc0;
+  --line: rgba(139, 92, 246, 0.30);
+  --line-blue: rgba(59, 130, 246, 0.32);
   --line-glow: rgba(0, 242, 254, 0.45);
   --purple: #8b5cf6;
   --purple-dark: #6d28d9;
@@ -27,28 +27,33 @@
   --danger: #ef4444;
   --radius: 18px;
   --radius-sm: 12px;
-  --shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+  --shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
   --font: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --cursor-x: 50vw;
+  --cursor-y: 35vh;
 }
 
 * { box-sizing: border-box; }
 
 [hidden] { display: none !important; }
 
-html, body {
+html {
   margin: 0;
   min-height: 100%;
   background: var(--bg);
+}
+
+body {
+  margin: 0;
+  min-height: 100%;
+  background: transparent;
   color: var(--ink);
   font-family: var(--font);
   font-size: 15px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
-}
-
-body {
   padding-bottom: calc(28px + var(--safe-bottom));
 }
 
@@ -58,39 +63,101 @@ button, input {
 
 a { color: inherit; text-decoration: none; }
 
-/* Modern High-Performance Cyber Grid Background (Dark Purple & Deep Blue on Obsidian Black) */
+/* Authentic SMF SHOP Vibrant Cyber Blue & Violet Grid Background */
 .bg {
   position: fixed;
   inset: 0;
-  z-index: -1;
-  background:
-    radial-gradient(1200px 700px at 15% 10%, rgba(124, 58, 237, 0.38), transparent 60%),
-    radial-gradient(1000px 600px at 85% 20%, rgba(37, 99, 235, 0.32), transparent 55%),
-    radial-gradient(900px 700px at 50% 85%, rgba(109, 40, 217, 0.24), transparent 65%),
-    linear-gradient(180deg, #090514 0%, var(--bg) 100%);
+  width: 100vw;
+  height: 100vh;
+  z-index: 0;
   overflow: hidden;
+  pointer-events: none;
+  /* Rich royal/deep blue, indigo and violet radial gradients with enough brightness to keep background visible */
+  background:
+    radial-gradient(1100px 750px at 8% 14%, rgba(139, 92, 246, 0.48), rgba(124, 58, 237, 0.35) 45%, transparent 72%),
+    radial-gradient(1100px 750px at 92% 16%, rgba(37, 99, 235, 0.46), rgba(59, 130, 246, 0.34) 45%, transparent 72%),
+    radial-gradient(950px 650px at 50% 88%, rgba(124, 58, 237, 0.40), transparent 68%),
+    radial-gradient(1200px 800px at 50% 45%, rgba(79, 70, 229, 0.30), transparent 75%),
+    linear-gradient(180deg, #160e3a 0%, #110a2c 50%, #0d0724 100%);
 }
 
+/* Layer 1: Full-viewport visible blue-purple cyber grid (always visible across entire page) */
+.bg-grid,
 .bg::before {
   content: "";
   position: absolute;
   inset: 0;
+  width: 100%;
+  height: 100%;
   background-image:
-    linear-gradient(to right, rgba(139, 92, 246, 0.18) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(37, 99, 235, 0.18) 1px, transparent 1px);
+    linear-gradient(to right, rgba(139, 92, 246, 0.36) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(59, 130, 246, 0.36) 1px, transparent 1px);
   background-size: 38px 38px;
   background-position: center center;
   pointer-events: none;
+  z-index: 1;
 }
 
-.bg::after {
-  content: "";
+/* Layer 2: Interactive cursor spotlight (blue -> cyan-blue -> violet/purple illuminating from underneath) */
+.bg-spotlight {
   position: absolute;
   inset: 0;
-  background:
-    radial-gradient(ellipse 90% 60% at 50% 15%, rgba(0, 242, 254, 0.09), transparent 75%),
-    radial-gradient(ellipse 70% 50% at 50% 90%, rgba(139, 92, 246, 0.15), transparent 70%);
+  width: 100%;
+  height: 100%;
   pointer-events: none;
+  z-index: 2;
+  background: radial-gradient(
+    650px circle at var(--cursor-x, 50%) var(--cursor-y, 35%),
+    rgba(0, 242, 254, 0.30) 0%,
+    rgba(37, 99, 235, 0.42) 28%,
+    rgba(139, 92, 246, 0.34) 55%,
+    rgba(124, 58, 237, 0.16) 75%,
+    transparent 100%
+  );
+  mix-blend-mode: screen;
+  transition: opacity 0.3s ease;
+}
+
+/* Layer 3: Brighter illuminated grid lines centered directly around the cursor */
+.bg-grid-glow {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 3;
+  background-image:
+    linear-gradient(to right, rgba(0, 242, 254, 0.75) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(168, 85, 247, 0.75) 1px, transparent 1px);
+  background-size: 38px 38px;
+  background-position: center center;
+  -webkit-mask-image: radial-gradient(460px circle at var(--cursor-x, 50%) var(--cursor-y, 35%), black 0%, rgba(0, 0, 0, 0.4) 60%, transparent 100%);
+  mask-image: radial-gradient(460px circle at var(--cursor-x, 50%) var(--cursor-y, 35%), black 0%, rgba(0, 0, 0, 0.4) 60%, transparent 100%);
+  pointer-events: none;
+}
+
+/* Mobile & Touch: Ambient Soft Illumination Moving Across Grid */
+@media (pointer: coarse), (hover: none), (max-width: 768px) {
+  .bg-spotlight {
+    animation: mobile-ambient-drift 22s cubic-bezier(0.4, 0, 0.2, 1) infinite alternate;
+  }
+  .bg-grid-glow {
+    animation: mobile-ambient-mask 22s cubic-bezier(0.4, 0, 0.2, 1) infinite alternate;
+  }
+}
+
+@keyframes mobile-ambient-drift {
+  0% { transform: translate(-4%, -4%) scale(1.02); }
+  33% { transform: translate(5%, -2%) scale(0.98); }
+  66% { transform: translate(3%, 5%) scale(1.04); }
+  100% { transform: translate(-3%, 3%) scale(1); }
+}
+
+@keyframes mobile-ambient-mask {
+  0% { -webkit-mask-position: 20% 25%; mask-position: 20% 25%; }
+  33% { -webkit-mask-position: 80% 35%; mask-position: 80% 35%; }
+  66% { -webkit-mask-position: 60% 75%; mask-position: 60% 75%; }
+  100% { -webkit-mask-position: 25% 65%; mask-position: 25% 65%; }
 }
 
 .topbar {
@@ -98,7 +165,7 @@ a { color: inherit; text-decoration: none; }
   top: 0;
   z-index: 40;
   padding: calc(10px + var(--safe-top)) 16px 12px;
-  background: rgba(7, 5, 13, 0.85);
+  background: rgba(14, 10, 36, 0.78);
   backdrop-filter: blur(20px);
   border-bottom: 1px solid var(--line);
 }
@@ -382,6 +449,8 @@ a { color: inherit; text-decoration: none; }
 .menu button:hover { background: rgba(139, 108, 255, 0.14); }
 
 .page {
+  position: relative;
+  z-index: 10;
   max-width: 1120px;
   margin: 0 auto;
   padding: 22px 16px 40px;
@@ -1911,7 +1980,8 @@ legend {
 
 /* Cinematic 3D Storefront Hero Showcase */
 .cinematic-hero-wrap {
-  background: linear-gradient(135deg, rgba(28, 16, 56, 0.95) 0%, rgba(14, 9, 30, 0.95) 100%);
+  background: linear-gradient(135deg, rgba(28, 16, 56, 0.78) 0%, rgba(14, 9, 32, 0.82) 100%);
+  backdrop-filter: blur(20px);
   border: 1px solid rgba(139, 92, 246, 0.4);
   border-radius: 24px;
   padding: 40px 32px;

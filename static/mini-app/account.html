@@ -1652,7 +1652,11 @@
   </style>
 </head>
 <body>
-  <div class="bg" aria-hidden="true"></div>
+  <div class="bg" id="ambient-bg" aria-hidden="true">
+    <div class="bg-grid"></div>
+    <div class="bg-spotlight"></div>
+    <div class="bg-grid-glow"></div>
+  </div>
 
   <!-- High-Contrast Luxury Header & Top Glass Island Dock -->
   <header class="topbar" style="border-bottom: 0; background: transparent; padding-top: 16px;">
@@ -4969,5 +4973,6 @@
       <span>Wallet</span>
     </button>
   </nav>
+  <script src="/static/mini-app/cursor-light.js?v=site9"></script>
 </body>
 </html>

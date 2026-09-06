@@ -12,7 +12,11 @@
   <link rel="stylesheet" href="/static/mini-app/styles.css?v=site8">
 </head>
 <body>
-  <div class="bg" aria-hidden="true"></div>
+  <div class="bg" id="ambient-bg" aria-hidden="true">
+    <div class="bg-grid"></div>
+    <div class="bg-spotlight"></div>
+    <div class="bg-grid-glow"></div>
+  </div>
 
   <header class="topbar">
     <div class="topbar-desktop-wrapper">
@@ -306,6 +310,7 @@
 
   <div id="toast-container" class="toast-container" aria-live="polite"></div>
 
+  <script src="/static/mini-app/cursor-light.js?v=site9"></script>
   <script src="/static/mini-app/app.js?v=site7"></script>
 </body>
 </html>
