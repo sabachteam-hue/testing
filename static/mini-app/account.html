@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <link rel="stylesheet" href="/static/mini-app/styles.css?v=site6">
+  <link rel="stylesheet" href="/static/mini-app/styles.css?v=site7">
   <style>
     /* Portal specific layout and components matching Mini App design system */
     :root {
@@ -1688,10 +1688,6 @@
   <div class="portal-layout">
     <!-- Top Floating Island Dock (Zero-Sidebar on Desktop, Frosted Bottom Bar on Mobile) -->
     <aside class="portal-sidebar" id="portal-sidebar">
-      <div style="padding: 0 6px 12px 6px; display: flex; align-items: center; justify-content: space-between;" class="portal-sidebar-title">
-        <span style="font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted);">Customer Area</span>
-        <button type="button" class="sheet-close" id="btn-close-sidebar" style="position: static; width: 28px; height: 28px; font-size: 16px; display: none;" aria-label="Close menu">×</button>
-      </div>
       <button type="button" class="portal-nav-item active" data-tab="dashboard">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/></svg>
         <span>Overview</span>
@@ -4567,7 +4563,20 @@
         }
       };
 
-      // Check session on load
+      // Check session on load with instant cache hydration
+      let cachedCustomer = null;
+      let cachedDashboard = null;
+      try {
+        cachedCustomer = JSON.parse(localStorage.getItem("smf_user") || "null");
+        cachedDashboard = JSON.parse(localStorage.getItem("smf_cache_dashboard") || "null");
+      } catch (_) {}
+
+      if (cachedCustomer && cachedDashboard) {
+        currentCustomer = cachedCustomer;
+        document.getElementById("section-loading").hidden = true;
+        renderDashboard(cachedDashboard);
+      }
+
       async function loadPortal() {
         try {
           const authRes = await fetchJSON("/api/web/me");
@@ -4577,11 +4586,14 @@
             document.getElementById("tab-dashboard").hidden = true;
             document.getElementById("user-pill").hidden = true;
             document.getElementById("btn-logout").hidden = true;
+            try { localStorage.removeItem("smf_cache_dashboard"); } catch (_) {}
             return;
           }
 
           currentCustomer = authRes.user;
+          try { localStorage.setItem("smf_user", JSON.stringify(authRes.user)); } catch (_) {}
           const dashboardData = await fetchJSON("/api/web/account/dashboard");
+          try { localStorage.setItem("smf_cache_dashboard", JSON.stringify(dashboardData)); } catch (_) {}
           renderDashboard(dashboardData);
 
           // Phase 7: Fetch unread notifications count on load

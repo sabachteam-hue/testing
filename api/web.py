@@ -84,9 +84,9 @@ _DEV_ORIGINS = (
     "http://127.0.0.1:3000",
 )
 _SHOP_NAME = "SMF SHOP"
-_SHOP_EYEBROW = "Live premium catalog"
-_SHOP_HEADLINE = "Premium plans, without the wait."
-_SHOP_TAGLINE = "AI tools, streaming, and SaaS accounts — live stock, Telegram prices."
+_SHOP_EYEBROW = "PREMIUM DIGITAL ACCOUNTS"
+_SHOP_HEADLINE = "SMF SHOP"
+_SHOP_TAGLINE = "Instant, Secure SaaS Subscriptions. Verified digital licenses, AI tools, and streaming accounts delivered instantly."
 _FEATURED_LIMIT = 4
 _LANG_FLAG_ISO = {
     "en": "gb",

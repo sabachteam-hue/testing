@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <link rel="stylesheet" href="/static/mini-app/styles.css?v=site6">
+  <link rel="stylesheet" href="/static/mini-app/styles.css?v=site7">
 </head>
 <body>
   <div class="bg" aria-hidden="true"></div>
@@ -23,9 +23,8 @@
         </a>
         <nav class="nav-links" aria-label="Shop">
           <a class="nav-link" href="/mini" id="nav-home">Home</a>
-          <a class="nav-link" href="#/subscription" id="nav-subscription">Subscription</a>
+          <a class="nav-link" href="#/subscription" id="nav-subscription">Subscriptions</a>
           <a class="nav-link" href="#/freebies" id="nav-freebies">Freebies</a>
-          <a class="nav-link nav-signin" href="#/signup" id="btn-signin">Sign up</a>
         </nav>
       </div>
       <div class="topbar-row tools-row">
@@ -49,16 +48,13 @@
             </button>
             <div class="menu" role="listbox" hidden></div>
           </div>
-          <div class="chip balance-pill" id="topbar-balance-pill" title="Live Wallet Balance">
-            <span class="balance-icon">💎</span> <span id="topbar-balance-val">$148.50</span>
-          </div>
           <button type="button" class="icon-btn" id="btn-cart" aria-label="Cart">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 7h15l-1.4 8.2a2 2 0 0 1-2 1.8H9.2a2 2 0 0 1-2-1.7L5.2 4H3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="9" cy="20" r="1.2" fill="currentColor"/><circle cx="18" cy="20" r="1.2" fill="currentColor"/></svg>
             <span class="badge" id="cart-count" hidden>0</span>
           </button>
           <a class="btn-login-pill" id="btn-account" href="#/signup" aria-label="Account">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm0 2c-4.2 0-8 2.1-8 5v1h16v-1c0-2.9-3.8-5-8-5Z"/></svg>
-            <span id="account-pill-label">Login</span>
+            <span id="account-pill-label">Sign In</span>
           </a>
         </div>
       </div>
@@ -133,9 +129,11 @@
     </section>
 
     <section id="view-collection" hidden>
-      <p class="eyebrow" id="collection-eyebrow">Catalog</p>
-      <h1 id="collection-title">Subscription</h1>
-      <p class="lede" id="collection-sub">Paid plans and premium accounts.</p>
+      <div class="collection-header-card">
+        <div class="collection-badge-tag" id="collection-badge">💎 PREMIUM CATALOG</div>
+        <h1 class="collection-header-title" id="collection-title">Subscriptions</h1>
+        <p class="collection-header-sub" id="collection-sub">Paid plans and premium accounts with instant delivery guarantee.</p>
+      </div>
       <div class="grid" id="collection-grid"></div>
     </section>
 
@@ -244,6 +242,6 @@
 
   <div id="toast-container" class="toast-container" aria-live="polite"></div>
 
-  <script src="/static/mini-app/app.js?v=site6"></script>
+  <script src="/static/mini-app/app.js?v=site7"></script>
 </body>
 </html>

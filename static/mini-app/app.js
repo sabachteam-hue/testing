@@ -31,11 +31,22 @@
     ur: "pk",
   };
 
+  let cachedProds = [];
+  let cachedCats = [];
+  let cachedFeat = { live: [], hot: [], best_seller: [] };
+  let cachedShop = null;
+  try {
+    cachedProds = JSON.parse(localStorage.getItem("smf_cache_products") || "[]");
+    cachedCats = JSON.parse(localStorage.getItem("smf_cache_categories") || "[]");
+    cachedFeat = JSON.parse(localStorage.getItem("smf_cache_featured") || '{"live":[],"hot":[],"best_seller":[]}');
+    cachedShop = JSON.parse(localStorage.getItem("smf_cache_shop") || "null");
+  } catch (_e) {}
+
   const state = {
-    shop: null,
-    products: [],
-    featured: { live: [], hot: [], best_seller: [] },
-    categories: [],
+    shop: cachedShop,
+    products: cachedProds,
+    featured: cachedFeat,
+    categories: cachedCats,
     methods: [],
     currency: localStorage.getItem("smf_currency") || "USD",
     language: localStorage.getItem("smf_language") || "en",
@@ -222,9 +233,9 @@
 
   function renderChrome() {
     if (state.shop) {
-      els.eyebrow.textContent = state.shop.eyebrow;
-      els.headline.textContent = state.shop.headline;
-      els.tagline.textContent = state.shop.tagline;
+      if (els.eyebrow && state.shop.eyebrow) els.eyebrow.textContent = state.shop.eyebrow;
+      if (els.headline && state.shop.headline) els.headline.textContent = state.shop.headline;
+      if (els.tagline && state.shop.tagline) els.tagline.textContent = state.shop.tagline;
       [els.whatsapp, els.whatsappCatalog, els.whatsappCheckout].forEach((node) => {
         if (!node) return;
         node.href = waHref();
@@ -233,15 +244,10 @@
       });
     }
     const signed = Boolean(state.user && state.user.email);
-    const signBtn = document.getElementById("btn-signin");
-    if (signBtn) {
-      signBtn.textContent = signed ? state.user.name || "Account" : "Sign up";
-      signBtn.href = signed ? "/account" : "#/signup";
-    }
     const accountBtn = document.getElementById("btn-account");
     if (accountBtn) accountBtn.href = signed ? "/account" : "#/signup";
     const accountLabel = document.getElementById("account-pill-label");
-    if (accountLabel) accountLabel.textContent = signed ? (state.user.name || "Account") : "Login";
+    if (accountLabel) accountLabel.textContent = signed ? (state.user.name || "Account") : "Sign In";
 
     document.querySelectorAll(".nav-link").forEach((link) => {
       const href = link.getAttribute("href") || "";
@@ -508,12 +514,41 @@
   }
 
   function renderCollection(kind) {
-    const title = kind === "freebies" ? "Freebies" : "Subscription";
-    document.getElementById("collection-eyebrow").textContent = "SMF SHOP";
-    document.getElementById("collection-title").textContent = title;
-    document.getElementById("collection-sub").textContent =
-      kind === "freebies" ? "Free tools and starter access from the live catalog." : "Paid plans and premium accounts.";
-    els.collectionGrid.innerHTML = productCards(filteredProducts(kind));
+    const isFree = kind === "freebies";
+    const badgeEl = document.getElementById("collection-badge");
+    const titleEl = document.getElementById("collection-title");
+    const subEl = document.getElementById("collection-sub");
+
+    if (badgeEl) badgeEl.textContent = isFree ? "🎁 COMMUNITY DROPS" : "💎 PREMIUM SUBSCRIPTIONS";
+    if (titleEl) titleEl.textContent = isFree ? "Freebies & Promo Drops" : "Active Subscription Plans";
+    if (subEl) {
+      subEl.textContent = isFree
+        ? "Free tools, giveaway accounts, and starter access from the live SMF SHOP catalog."
+        : "Paid plans, streaming accounts, and AI tool licenses with instant auto-delivery.";
+    }
+
+    const items = filteredProducts(kind);
+    if (isFree && !items.length) {
+      els.collectionGrid.innerHTML = `
+        <div class="freebies-spotlight-card">
+          <div class="freebies-icon-orb">🎁</div>
+          <h2 class="freebies-title">Exclusive Live Community Drops</h2>
+          <p class="freebies-desc">
+            We drop free trial keys, bonus streaming credentials, and promotional tools directly on our official Telegram & WhatsApp channels. Stay connected to catch the next instant drop!
+          </p>
+          <div class="freebies-actions">
+            <a class="btn btn-whatsapp" href="${waHref()}" target="_blank" rel="noopener">
+              <span>💬</span> Claim on WhatsApp
+            </a>
+            <a class="btn btn-primary" href="/mini#catalog">
+              <span>🛍️</span> Explore Premium Catalog
+            </a>
+          </div>
+        </div>
+      `;
+    } else {
+      els.collectionGrid.innerHTML = productCards(items);
+    }
     showView("view-collection");
   }
 
@@ -876,28 +911,81 @@
 
   window.addEventListener("hashchange", applyRoute);
 
-  Promise.all([
-    getJSON("/api/web/shop"),
-    getJSON("/api/web/products"),
-    getJSON("/api/web/featured"),
-    getJSON("/api/web/categories"),
-    getJSON("/api/web/payment-methods").catch(() => []),
-    getJSON("/api/web/me").catch(() => ({ authenticated: false })),
-  ])
-    .then(([shop, products, featured, categories, methods, authRes]) => {
+  // Instant 0ms Paint: render immediately from cache or display skeletons
+  renderChrome();
+  if (state.products.length) {
+    renderFeatured();
+    renderPills();
+    applyRoute();
+  } else {
+    // Render high-tech skeleton placeholders so page is never blank
+    els.grid.innerHTML = Array.from({ length: 6 })
+      .map(
+        () => `
+        <div class="skeleton-card">
+          <div class="skeleton-shimmer"></div>
+        </div>
+      `
+      )
+      .join("");
+    applyRoute();
+  }
+
+  // Progressive Non-Blocking Asynchronous Data Hydration:
+  getJSON("/api/web/shop")
+    .then((shop) => {
       state.shop = shop;
-      state.products = products;
-      state.featured = featured;
-      state.categories = categories;
-      state.methods = methods;
+      try { localStorage.setItem("smf_cache_shop", JSON.stringify(shop)); } catch (_) {}
+      renderChrome();
+    })
+    .catch(() => {});
+
+  getJSON("/api/web/me")
+    .then((authRes) => {
       if (authRes && authRes.authenticated && authRes.user) {
         saveUser(authRes.user);
       } else {
         saveUser(null);
       }
-      applyRoute();
+    })
+    .catch(() => {});
+
+  getJSON("/api/web/categories")
+    .then((categories) => {
+      state.categories = categories;
+      try { localStorage.setItem("smf_cache_categories", JSON.stringify(categories)); } catch (_) {}
+      renderPills();
+    })
+    .catch(() => {});
+
+  getJSON("/api/web/featured")
+    .then((featured) => {
+      state.featured = featured;
+      try { localStorage.setItem("smf_cache_featured", JSON.stringify(featured)); } catch (_) {}
+      renderFeatured();
+    })
+    .catch(() => {});
+
+  getJSON("/api/web/products")
+    .then((products) => {
+      state.products = products;
+      try { localStorage.setItem("smf_cache_products", JSON.stringify(products)); } catch (_) {}
+      renderPills();
+      renderGrid();
+      const path = currentPath();
+      if (path === "/subscription" || path === "/freebies") {
+        renderCollection(path.replace("/", ""));
+      }
     })
     .catch((err) => {
-      els.grid.innerHTML = `<p class="empty">Could not load shop (${escapeHtml(err.message)}).</p>`;
+      if (!state.products.length) {
+        els.grid.innerHTML = `<p class="empty">Could not load catalog (${escapeHtml(err.message)}).</p>`;
+      }
     });
+
+  getJSON("/api/web/payment-methods")
+    .then((methods) => {
+      state.methods = methods;
+    })
+    .catch(() => []);
 })();
