@@ -63,9 +63,11 @@
       <td>
         <a class="btn secondary add-entry-btn" href="/admin/services/{{ service.id }}/edit">Edit</a>
         <form method="post" action="/admin/services/{{ service.id }}/toggle" style="display:inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
           <button type="submit">{{ "Deactivate" if service.is_active else "Activate" }}</button>
         </form>
         <form method="post" action="/admin/services/{{ service.id }}/delete" style="display:inline" onsubmit="return confirm('Delete {{ service.name|admin_plain|e }}?');">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
           <button type="submit">Delete</button>
         </form>
       </td>

@@ -6,6 +6,7 @@
 {% if message %}<div class="alert alert-success">{{ message }}</div>{% endif %}
 
 <form class="panel provider-add-card" method="post" action="/admin/services/{{ service.id }}/edit" enctype="multipart/form-data">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
   <div class="provider-add-head">
     <div class="provider-add-icon" aria-hidden="true">🛒</div>
     <div>

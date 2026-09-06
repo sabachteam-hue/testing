@@ -8,8 +8,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <link rel="stylesheet" href="/static/mini-app/styles.css?v=site7">
+  <script defer src="https://telegram.org/js/telegram-web-app.js"></script>
+  <link rel="stylesheet" href="/static/mini-app/styles.css?v=site8">
 </head>
 <body>
   <div class="bg" aria-hidden="true"></div>
@@ -22,9 +22,21 @@
           <span>SMF SHOP</span>
         </a>
         <nav class="nav-capsule-group" aria-label="Shop">
-          <button type="button" class="nav-capsule-btn active" data-filter="all" id="nav-categories">
+          <a class="nav-capsule-btn active" href="/mini" id="nav-home">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+            <span>Home</span>
+          </a>
+          <a class="nav-capsule-btn" href="#/subscription" id="nav-subscription">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+            <span>Subscription</span>
+          </a>
+          <a class="nav-capsule-btn" href="#/freebies" id="nav-freebies">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+            <span>Freebies</span>
+          </a>
+          <button type="button" class="nav-capsule-btn" data-filter="all" id="nav-categories">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/></svg>
-            <span>Categorys</span>
+            <span>Categories</span>
           </button>
           <button type="button" class="nav-capsule-btn" data-filter="brands" id="nav-brands">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/></svg>
@@ -43,6 +55,27 @@
         </label>
 
         <div class="tool-cluster">
+          <div class="dd" id="currency-dd">
+            <button type="button" class="btn-dd" id="currency-btn" aria-haspopup="true" aria-expanded="false">
+              <span class="flag-icon" id="currency-flag"><img class="flag-img" src="/static/mini-app/flags/us.svg" alt="" width="20" height="14"></span>
+              <span id="currency-label">USD</span>
+            </button>
+            <div class="menu" role="menu">
+              <button type="button" role="menuitem" data-currency="USD"><img class="flag-img" src="/static/mini-app/flags/us.svg" alt="" width="20" height="14"> USD ($)</button>
+              <button type="button" role="menuitem" data-currency="PKR"><img class="flag-img" src="/static/mini-app/flags/pk.svg" alt="" width="20" height="14"> PKR (Rs)</button>
+            </div>
+          </div>
+          <div class="dd" id="language-dd">
+            <button type="button" class="btn-dd" id="language-btn" aria-haspopup="true" aria-expanded="false">
+              <span class="flag-icon" id="language-flag"><img class="flag-img" src="/static/mini-app/flags/gb.svg" alt="" width="20" height="14"></span>
+              <span id="language-label">EN</span>
+            </button>
+            <div class="menu" role="menu">
+              <button type="button" role="menuitem" data-lang="en"><img class="flag-img" src="/static/mini-app/flags/gb.svg" alt="" width="20" height="14"> English</button>
+              <button type="button" role="menuitem" data-lang="ur"><img class="flag-img" src="/static/mini-app/flags/pk.svg" alt="" width="20" height="14"> اردو</button>
+            </div>
+          </div>
+
           <a class="live-balance-widget" id="btn-balance-link" href="/account#wallet" title="Vault Live Balance">
             <div class="balance-icon-circle">$</div>
             <div class="balance-labels-col">
@@ -86,6 +119,10 @@
           <div class="hero-guarantee-pill-luxury">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="#00f2fe"><path d="M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4Zm-2 16-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8Z"/></svg>
             <span>Instant 1-Click Delivery Guarantee</span>
+          </div>
+          <div class="hero-actions" style="margin-top: 14px; display: flex; gap: 12px; justify-content: center;">
+            <a class="btn btn-primary" href="#catalog" id="btn-explore">Explore Products</a>
+            <a class="btn btn-whatsapp" id="btn-whatsapp" href="#" target="_blank" rel="noopener">Order on WhatsApp</a>
           </div>
         </div>
 

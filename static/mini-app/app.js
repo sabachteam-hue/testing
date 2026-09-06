@@ -1,14 +1,20 @@
 (() => {
-  const tg = window.Telegram && window.Telegram.WebApp;
-  if (tg) {
-    tg.ready();
-    tg.expand();
-    try {
-      tg.setHeaderColor("#09070f");
-      tg.setBackgroundColor("#09070f");
-    } catch (_err) {
-      /* older clients */
+  function initTelegram() {
+    const tg = window.Telegram && window.Telegram.WebApp;
+    if (tg && typeof tg.ready === "function") {
+      try {
+        tg.ready();
+        tg.expand();
+        tg.setHeaderColor("#09070f");
+        tg.setBackgroundColor("#09070f");
+      } catch (_err) {
+        /* older clients */
+      }
     }
+  }
+  initTelegram();
+  if (!window.Telegram || !window.Telegram.WebApp) {
+    window.addEventListener("load", initTelegram, { once: true });
   }
 
   const ACCENTS = ["violet", "teal", "green", "rose"];
@@ -397,7 +403,7 @@
           : `<div style="display: flex; flex-direction: column; align-items: center; gap: 4px;"><span style="font-size: 26px;">${brand.icon}</span><span style="font-weight: 900; font-size: 18px; text-shadow: 0 2px 8px rgba(0,0,0,0.5);">${escapeHtml(brand.name)}</span></div>`;
 
         return `
-          <article class="showcase-card" data-sku="${escapeHtml(product.sku)}">
+          <article class="showcase-card product-card" data-sku="${escapeHtml(product.sku)}">
             <div class="showcase-brand-header ${brand.cls}">
               ${headerContent}
             </div>
@@ -407,7 +413,10 @@
                   ${escapeHtml(product.name)}
                 </a>
               </h3>
-              <div class="showcase-stock-pill">
+              <a href="#product-${encodeURIComponent(product.sku)}" data-detail="${escapeHtml(product.sku)}" class="view-desc-link" style="color: var(--cyan); font-size: 11px; font-weight: 700; text-decoration: none; display: inline-flex; align-items: center; gap: 3px; margin-top: 4px;">
+                <span>VIEW DESCRIPTION</span> →
+              </a>
+              <div class="showcase-stock-pill" style="margin-top: 6px;">
                 <span class="showcase-stock-dot"></span>
                 <span>${escapeHtml(stockText)}</span>
               </div>
@@ -421,8 +430,8 @@
                 ${discount ? `<span class="muted" style="text-decoration: line-through; font-size: 12px; margin-left: 2px;">${usdPrice(product.original_price)}</span>` : ''}
                 <span class="price-pkr" style="font-size: 11.5px; margin-left: auto; color: var(--muted);">${pkrPrice(product.sell_price)}</span>
               </div>
-              <button type="button" class="btn-get-access-glow" data-add="${escapeHtml(product.sku)}" ${product.in_stock ? '' : 'disabled'}>
-                ${product.in_stock ? 'Get Access' : 'Out of Stock'}
+              <button type="button" class="btn-get-access-glow btn-add-cart" data-add="${escapeHtml(product.sku)}" ${product.in_stock ? '' : 'disabled'}>
+                ${product.in_stock ? '⚡ Get Access · Add to Cart' : 'Out of Stock'}
               </button>
             </div>
           </article>
