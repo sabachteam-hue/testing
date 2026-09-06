@@ -1,6 +1,9 @@
+from __future__ import annotations
+
 import logging
 import os
 from datetime import datetime
+from typing import Any, Optional
 
 from sqlalchemy import (
     Boolean,
@@ -528,9 +531,9 @@ class IssueReport(Base):
 
     order: Mapped[Order] = relationship()
     user: Mapped[User] = relationship()
-    service: Mapped[Optional[Service]] = relationship("Service", foreign_keys=[service_id])
-    granted_account: Mapped[Optional["GrantedAccount"]] = relationship("GrantedAccount", foreign_keys=[granted_account_id])
-    replacement_account: Mapped[Optional["GrantedAccount"]] = relationship("GrantedAccount", foreign_keys=[replacement_account_id])
+    service: Mapped[Service | None] = relationship("Service", foreign_keys=[service_id])
+    granted_account: Mapped[GrantedAccount | None] = relationship("GrantedAccount", foreign_keys=[granted_account_id])
+    replacement_account: Mapped[GrantedAccount | None] = relationship("GrantedAccount", foreign_keys=[replacement_account_id])
 
     def __init__(self, **kwargs):
         if "description" in kwargs and "message" not in kwargs:

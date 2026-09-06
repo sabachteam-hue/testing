@@ -1,5 +1,8 @@
+from __future__ import annotations
+
 import logging
 import os
+from typing import Any, Optional
 import re
 import shutil
 import html
@@ -2510,7 +2513,7 @@ async def refund_tool_resolve_report(
 async def admin_approve_replacement(
     claim_id: int,
     request: Request,
-    auto_stock: Optional[str] = Form(None),
+    auto_stock: str | None = Form(None),
     replacement_credentials: str = Form(""),
     admin_note: str = Form(""),
     db: Session = Depends(get_db),
@@ -2550,7 +2553,7 @@ async def admin_process_claim_refund(
     claim_id: int,
     request: Request,
     refund_method: str = Form("wallet"),
-    amount_override: Optional[float] = Form(None),
+    amount_override: float | None = Form(None),
     admin_note: str = Form(""),
     db: Session = Depends(get_db),
 ):
