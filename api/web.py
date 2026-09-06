@@ -255,16 +255,39 @@ def category_payload(category: Category) -> dict:
     }
 
 
-def product_payload(service: Service, request: Request | None = None) -> dict:
+def product_payload(
+    service: Service,
+    request: Request | None = None,
+    user: User | None = None,
+    db: Session | None = None,
+) -> dict:
+    from utils.pricing import resolve_unit_price
+
     available = effective_available_qty(service)
     in_stock = available > 0
     sale = _active_sale(service)
-    sell_price = float(service.sell_price or 0)
+    base_sell_price = float(service.sell_price or 0)
     original_price = None
     if sale and sale.original_price is not None:
         original = float(sale.original_price)
-        if original > sell_price:
+        if original > base_sell_price:
             original_price = original
+
+    sell_price = base_sell_price
+    discount_pct = None
+    discount_source = None
+    loyalty_badge = None
+
+    if user and db:
+        quote = resolve_unit_price(db, service, user)
+        if quote.has_discount:
+            sell_price = round(quote.unit_price, 2)
+            if original_price is None:
+                original_price = base_sell_price
+            discount_pct = round(quote.discount_pct, 1)
+            discount_source = quote.discount_source
+            loyalty_badge = quote.discount_label
+
     warranty = _plain_text(service.warranty) or None
     description = _plain_text(service.description)
     name = _plain_text(service.name) or service.name
@@ -285,6 +308,9 @@ def product_payload(service: Service, request: Request | None = None) -> dict:
         "description": description or None,
         "sell_price": sell_price,
         "original_price": original_price,
+        "discount_pct": discount_pct,
+        "discount_source": discount_source,
+        "loyalty_badge": loyalty_badge,
         "is_free": is_free,
         "category_id": category.id if category else None,
         "category": (_plain_text(category.name) or category.name) if category else None,
@@ -388,9 +414,10 @@ def build_featured(
     db: Session,
     request: Request | None = None,
     limit: int = _FEATURED_LIMIT,
+    user: User | None = None,
 ) -> dict:
     """Three separate Mini App carts: Live, Hot, Best Seller."""
-    products = [product_payload(service, request) for service in services]
+    products = [product_payload(service, request, user=user, db=db) for service in services]
     live = [item for item in products if item["in_stock"]][:limit]
     hot = [item for item in products if "hot" in (item.get("badges") or [])][:limit]
     by_id = {item["id"]: item for item in products}
@@ -427,6 +454,7 @@ def list_products(
     category_id: int | None = Query(None),
     q: str | None = Query(None),
 ) -> list[dict]:
+    user = get_optional_customer(request, db)
     query = _active_products_query(db)
     if category_id is not None:
         query = query.filter(Service.category_id == category_id)
@@ -442,7 +470,7 @@ def list_products(
             )
         )
     rows = query.order_by(Service.sort_order.asc(), Service.name.asc()).all()
-    return [product_payload(row, request) for row in rows]
+    return [product_payload(row, request, user=user, db=db) for row in rows]
 
 
 @router.get("/products/{sku}")
@@ -454,7 +482,8 @@ def get_product(sku: str, request: Request, db: Session = Depends(get_db)) -> di
     )
     if not service:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
-    return product_payload(service, request)
+    user = get_optional_customer(request, db)
+    return product_payload(service, request, user=user, db=db)
 
 
 @router.get("/shop")
@@ -465,7 +494,8 @@ def shop_info(db: Session = Depends(get_db)) -> dict:
 @router.get("/featured")
 def featured_products(request: Request, db: Session = Depends(get_db)) -> dict:
     rows = _active_products_query(db).order_by(Service.sort_order.asc(), Service.name.asc()).all()
-    return build_featured(rows, db, request)
+    user = get_optional_customer(request, db)
+    return build_featured(rows, db, request, user=user)
 
 
 @router.get("/stats")
@@ -571,12 +601,19 @@ def get_optional_customer(request: Request, db: Session = Depends(get_db)) -> Us
     return user
 
 
-def _public_user(user: User) -> dict:
+def _public_user(user: User, db: Session | None = None) -> dict:
+    from utils.loyalty import compute_customer_loyalty
+
+    loyalty_data = None
+    if db is not None:
+        loyalty_data = compute_customer_loyalty(db, user)
+
     return {
         "id": user.id,
         "name": user.full_name or "",
         "email": user.email or "",
         "wallet_balance": float(user.wallet_usdt or 0.0),
+        "loyalty": loyalty_data,
     }
 
 
@@ -703,7 +740,7 @@ def web_me(request: Request, db: Session = Depends(get_db)) -> dict:
     return {
         "ok": True,
         "authenticated": True,
-        "user": _public_user(user),
+        "user": _public_user(user, db=db),
     }
 
 
@@ -712,6 +749,8 @@ def web_account_dashboard(
     current_user: User = Depends(get_current_customer),
     db: Session = Depends(get_db),
 ) -> dict:
+    from utils.loyalty import compute_customer_loyalty
+
     # Ensure all user's fulfilled orders are registered as granted accounts
     sync_user_granted_accounts(db, current_user.id)
 
@@ -740,18 +779,89 @@ def web_account_dashboard(
         .limit(5)
         .all()
     )
+    open_statuses = [
+        "pending_review", "pending", "under_review", "awaiting_evidence",
+        "approved", "replacement_processing", "refund_processing", "support_in_progress"
+    ]
     open_claims_count = (
         db.query(func.count(IssueReport.id))
         .filter(
             IssueReport.user_id == current_user.id,
-            IssueReport.status.in_([
-                "pending_review", "pending", "under_review", "awaiting_evidence",
-                "approved", "replacement_processing", "refund_processing", "support_in_progress"
-            ]),
+            IssueReport.status.in_(open_statuses),
         )
         .scalar()
         or 0
     )
+
+    # 1. Authoritative loyalty metrics & tier
+    loyalty = compute_customer_loyalty(db, current_user)
+
+    # 2. Active accounts preview (Top 3 active, NO credentials exposed)
+    active_accounts = (
+        db.query(GrantedAccount)
+        .options(joinedload(GrantedAccount.service))
+        .filter(
+            GrantedAccount.user_id == current_user.id,
+            GrantedAccount.status == "active",
+            GrantedAccount.subscription_expires_at > now,
+        )
+        .order_by(GrantedAccount.subscription_expires_at.asc())
+        .limit(3)
+        .all()
+    )
+    active_preview = []
+    for acc in active_accounts:
+        delta = acc.subscription_expires_at - now
+        days_rem = max(0, delta.days)
+        hours_rem = max(0, int(delta.total_seconds() // 3600))
+        time_label = f"{days_rem}d remaining" if days_rem > 0 else f"{hours_rem}h remaining"
+        active_preview.append({
+            "id": acc.id,
+            "product_name": _plain_text(acc.service.name) if acc.service else "Subscription",
+            "emoji": _display_emoji(acc.service.emoji if acc.service else None, "📦"),
+            "days_remaining": days_rem,
+            "time_label": time_label,
+            "status": acc.status,
+            "expires_at": acc.subscription_expires_at.strftime("%b %d, %Y"),
+        })
+
+    # 3. Open claims preview (Top 3 open)
+    open_claims = (
+        db.query(IssueReport)
+        .options(joinedload(IssueReport.service))
+        .filter(
+            IssueReport.user_id == current_user.id,
+            IssueReport.status.in_(open_statuses),
+        )
+        .order_by(IssueReport.id.desc())
+        .limit(3)
+        .all()
+    )
+    claims_preview = []
+    for clm in open_claims:
+        claims_preview.append({
+            "id": clm.id,
+            "claim_code": clm.claim_code or f"CLM-{clm.id}",
+            "product_name": _plain_text(clm.service.name) if clm.service else "Service Issue",
+            "emoji": _display_emoji(clm.service.emoji if clm.service else None, "🛡️"),
+            "status": clm.status,
+            "status_label": clm.status.replace("_", " ").title(),
+            "created_at": clm.created_at.strftime("%b %d, %Y") if clm.created_at else "—",
+        })
+
+    # 4. Wallet preview: balance & latest transaction
+    last_tx = (
+        db.query(Transaction)
+        .filter(Transaction.user_id == current_user.id)
+        .order_by(Transaction.id.desc())
+        .first()
+    )
+    wallet_preview = {
+        "balance": float(current_user.wallet_usdt or 0.0),
+        "currency": "USDT",
+        "last_transaction": format_customer_transaction(last_tx) if last_tx else None,
+    }
+
     return {
         "ok": True,
         "customer": {
@@ -764,7 +874,10 @@ def web_account_dashboard(
             "active_accounts": int(active_accounts_count),
             "wallet_balance": float(current_user.wallet_usdt or 0.0),
             "open_claims": int(open_claims_count),
+            "completed_orders": int(loyalty["completed_orders"]),
+            "lifetime_spend": float(loyalty["lifetime_spend"]),
         },
+        "loyalty": loyalty,
         "recent_orders": [
             {
                 "order_code": o.order_code,
@@ -779,6 +892,9 @@ def web_account_dashboard(
             }
             for o in recent_orders
         ],
+        "active_accounts_preview": active_preview,
+        "open_claims_preview": claims_preview,
+        "wallet_preview": wallet_preview,
     }
 
 
@@ -1434,8 +1550,14 @@ def web_checkout(
             )
             if not service:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Product not found: {item.sku}")
-            unit = float(service.sell_price or 0)
-            total = unit * item.qty
+
+            # Authoritative server-side price & discount resolution
+            from utils.pricing import resolve_unit_price
+
+            quote = resolve_unit_price(db, service, user)
+            unit = float(quote.unit_price)
+            total = round(unit * item.qty, 2)
+
             reserve_stock(db, service.id, item.qty)
             order = Order(
                 order_code=generate_order_code(db),
@@ -1448,7 +1570,9 @@ def web_checkout(
                 order_type="manual",
                 payment_method=method.code,
                 customer_email=user.email,
-                note=f"Web Mini App checkout via {method.name}",
+                applied_discount_pct=float(quote.discount_pct),
+                discount_source=quote.discount_source,
+                note=f"Web Mini App checkout via {method.name}" + (f" ({quote.discount_label})" if quote.has_discount else ""),
             )
             db.add(order)
             db.flush()
@@ -1459,7 +1583,10 @@ def web_checkout(
                     "name": _plain_text(service.name) or service.name,
                     "qty": item.qty,
                     "amount": total,
+                    "unit_price": unit,
                     "status": order.status,
+                    "discount_pct": float(quote.discount_pct),
+                    "discount_source": quote.discount_source,
                 }
             )
     except InsufficientStockError as exc:

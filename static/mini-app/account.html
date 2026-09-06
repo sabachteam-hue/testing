@@ -1076,6 +1076,256 @@
       color: #fda4af;
       border: 1px solid rgba(244, 63, 94, 0.35);
     }
+
+    /* Phase 6 Loyalty Tiers & Rewards Card */
+    .loyalty-card {
+      background: linear-gradient(135deg, rgba(30, 20, 56, 0.92) 0%, rgba(18, 12, 34, 0.95) 100%);
+      border: 1px solid rgba(139, 108, 255, 0.32);
+      border-radius: var(--radius);
+      padding: 22px 24px;
+      margin-top: 18px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35), 0 0 20px rgba(139, 108, 255, 0.1);
+    }
+    .loyalty-card-glow {
+      position: absolute;
+      top: -30px;
+      right: -30px;
+      width: 140px;
+      height: 140px;
+      background: radial-gradient(circle, rgba(139, 108, 255, 0.25) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .loyalty-top-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+      position: relative;
+      z-index: 1;
+    }
+    .loyalty-identity {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .loyalty-icon-badge {
+      width: 48px;
+      height: 48px;
+      border-radius: 14px;
+      display: grid;
+      place-items: center;
+      font-size: 24px;
+      background: rgba(139, 108, 255, 0.16);
+      border: 1px solid rgba(139, 108, 255, 0.35);
+      flex-shrink: 0;
+      box-shadow: 0 4px 14px rgba(139, 108, 255, 0.15);
+    }
+    .loyalty-tier-title-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .loyalty-tier-title {
+      font-size: 20px;
+      font-weight: 800;
+      margin: 0;
+      letter-spacing: -0.01em;
+      color: var(--ink);
+    }
+    .loyalty-discount-pill {
+      font-size: 11.5px;
+      font-weight: 700;
+      padding: 3px 9px;
+      border-radius: 999px;
+      background: rgba(52, 211, 153, 0.16);
+      color: var(--live);
+      border: 1px solid rgba(52, 211, 153, 0.35);
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    .loyalty-override-pill {
+      font-size: 10.5px;
+      font-weight: 800;
+      padding: 2px 7px;
+      border-radius: 6px;
+      background: rgba(251, 191, 36, 0.18);
+      color: #fbbf24;
+      border: 1px solid rgba(251, 191, 36, 0.4);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .loyalty-tier-subtitle {
+      margin: 4px 0 0 0;
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .btn-loyalty-perks {
+      background: rgba(139, 108, 255, 0.15);
+      border: 1px solid rgba(139, 108, 255, 0.35);
+      color: var(--purple-2);
+      font-size: 12.5px;
+      font-weight: 650;
+      padding: 7px 14px;
+      border-radius: 10px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+    }
+    .btn-loyalty-perks:hover {
+      background: rgba(139, 108, 255, 0.28);
+      color: #fff;
+      transform: translateY(-1px);
+    }
+    .loyalty-progress-container {
+      background: rgba(0, 0, 0, 0.28);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 14px;
+      padding: 14px 16px;
+      position: relative;
+      z-index: 1;
+    }
+    .loyalty-progress-labels {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12.5px;
+      color: var(--muted);
+      margin-bottom: 8px;
+      font-weight: 600;
+    }
+    .loyalty-progress-pct {
+      font-weight: 800;
+      color: var(--purple-2);
+      font-family: ui-monospace, monospace;
+    }
+    .loyalty-progress-track {
+      height: 9px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 999px;
+      overflow: hidden;
+      position: relative;
+    }
+    .loyalty-progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--purple-1), var(--live));
+      border-radius: 999px;
+      transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .loyalty-progress-sub {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 10px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .loyalty-progress-sub strong {
+      color: var(--ink);
+    }
+
+    /* Dashboard 2-column Quick Previews Grid */
+    .dashboard-previews-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 16px;
+      margin-top: 20px;
+    }
+    .dashboard-preview-card {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+    }
+    .dashboard-preview-card .preview-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      padding-bottom: 10px;
+    }
+    .dashboard-preview-card .preview-head h4 {
+      margin: 0;
+      font-size: 14.5px;
+      font-weight: 700;
+      color: var(--ink);
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+    .dashboard-preview-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    /* Tier Perks Modal List */
+    .tier-perk-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 14px;
+      border-radius: 12px;
+      background: var(--surface-2);
+      border: 1px solid var(--line);
+      gap: 12px;
+      transition: border-color 0.15s ease;
+    }
+    .tier-perk-row.current-tier {
+      border-color: rgba(139, 108, 255, 0.6);
+      background: rgba(139, 108, 255, 0.12);
+      box-shadow: 0 0 16px rgba(139, 108, 255, 0.15);
+    }
+    .tier-perk-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .tier-perk-icon {
+      font-size: 24px;
+      width: 38px;
+      height: 38px;
+      display: grid;
+      place-items: center;
+      background: rgba(0, 0, 0, 0.25);
+      border-radius: 10px;
+    }
+    .tier-perk-name {
+      font-weight: 700;
+      font-size: 14px;
+      color: var(--ink);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .tier-perk-req {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+    .tier-perk-disc {
+      font-size: 14px;
+      font-weight: 800;
+      font-family: ui-monospace, monospace;
+      color: var(--live);
+      padding: 4px 10px;
+      border-radius: 8px;
+      background: rgba(52, 211, 153, 0.12);
+      border: 1px solid rgba(52, 211, 153, 0.25);
+      white-space: nowrap;
+    }
   </style>
 </head>
 <body>
@@ -1197,6 +1447,43 @@
           <a class="btn btn-primary" href="/mini" style="font-size: 13px; padding: 10px 18px;">Browse Products</a>
         </div>
 
+        <!-- Phase 6 Loyalty Tier & Rewards Card -->
+        <div class="loyalty-card" id="loyalty-tier-card">
+          <div class="loyalty-card-glow"></div>
+          <div class="loyalty-top-row">
+            <div class="loyalty-identity">
+              <div class="loyalty-icon-badge" id="loyalty-icon-badge">🌱</div>
+              <div>
+                <div class="loyalty-tier-title-row">
+                  <h2 class="loyalty-tier-title" id="loyalty-tier-title">Starter Member</h2>
+                  <span class="loyalty-discount-pill" id="loyalty-discount-pill">0% OFF</span>
+                  <span class="loyalty-override-pill" id="loyalty-override-pill" hidden>ADMIN TIER</span>
+                </div>
+                <p class="loyalty-tier-subtitle" id="loyalty-tier-subtitle">Standard member pricing on all products</p>
+              </div>
+            </div>
+            <button type="button" class="btn btn-loyalty-perks" onclick="openLoyaltyPerksModal()">
+              <span>🎁</span> View Perks
+            </button>
+          </div>
+
+          <!-- Progress Bar & Milestone Status -->
+          <div class="loyalty-progress-container" id="loyalty-progress-container">
+            <div class="loyalty-progress-labels">
+              <span id="loyalty-progress-summary">0 / 3 completed orders to reach Bronze</span>
+              <span class="loyalty-progress-pct" id="loyalty-progress-pct">0%</span>
+            </div>
+            <div class="loyalty-progress-track">
+              <div class="loyalty-progress-fill" id="loyalty-progress-fill" style="width: 0%;"></div>
+            </div>
+            <div class="loyalty-progress-sub">
+              <span>Completed: <strong id="loyalty-completed-count">0</strong></span>
+              <span>Net Spend: <strong id="loyalty-spend-amount">$0.00</strong></span>
+              <span id="loyalty-next-tier-hint">Next milestone: <strong>Bronze (2% Off)</strong></span>
+            </div>
+          </div>
+        </div>
+
         <!-- 4 KPI Stat Cards -->
         <div class="stats-grid" style="margin-top: 20px;">
           <div class="stat-card" style="cursor: pointer;" onclick="switchTab('orders')" title="View Mission Logs">
@@ -1241,6 +1528,31 @@
             </div>
             <div class="stat-value" id="stat-open-claims">0</div>
             <div class="stat-sub">Warranty & support claims (Click to view)</div>
+          </div>
+        </div>
+
+        <!-- Dashboard 2-column Quick Previews Grid -->
+        <div class="dashboard-previews-grid">
+          <!-- Active Subscriptions Preview Card -->
+          <div class="dashboard-preview-card">
+            <div class="preview-head">
+              <h4><span>📦</span> Active Subscriptions</h4>
+              <button type="button" class="linkish" onclick="switchTab('accounts')" style="font-size: 12px; background: none; border: 0; color: var(--purple-2); cursor: pointer;">View all →</button>
+            </div>
+            <div class="dashboard-preview-list" id="dashboard-active-accounts-preview">
+              <div style="font-size: 12.5px; color: var(--muted); padding: 8px 0;">No active subscriptions.</div>
+            </div>
+          </div>
+
+          <!-- Open Claims Preview Card -->
+          <div class="dashboard-preview-card">
+            <div class="preview-head">
+              <h4><span>🛡️</span> Warranty & Claims</h4>
+              <button type="button" class="linkish" onclick="switchTab('claims')" style="font-size: 12px; background: none; border: 0; color: var(--purple-2); cursor: pointer;">View all →</button>
+            </div>
+            <div class="dashboard-preview-list" id="dashboard-open-claims-preview">
+              <div style="font-size: 12.5px; color: var(--muted); padding: 8px 0;">No active claims.</div>
+            </div>
           </div>
         </div>
 
@@ -1464,6 +1776,14 @@
     </div>
   </div>
 
+  <!-- Phase 6 Loyalty Perks Slide-up Sheet Modal -->
+  <div class="sheet" id="loyalty-perks-sheet" hidden>
+    <div class="sheet-card" style="max-width: 580px; width: 100%;">
+      <button type="button" class="sheet-close" id="btn-close-loyalty-perks-sheet" aria-label="Close">×</button>
+      <div id="loyalty-perks-sheet-body"></div>
+    </div>
+  </div>
+
   <script>
     (() => {
       // Telegram WebApp setup
@@ -1537,20 +1857,152 @@
 
         const customer = data.customer || {};
         const stats = data.stats || {};
+        const loyalty = data.loyalty || {
+          level: 1,
+          id: "starter",
+          name: "Level 1 — Starter",
+          short_name: "Starter",
+          discount_pct: 0.0,
+          badge_color: "#94a3b8",
+          icon: "🌱",
+          description: "Standard member pricing on all products.",
+          completed_orders: stats.completed_orders || 0,
+          lifetime_spend: stats.lifetime_spend || 0.0,
+          is_override: false,
+          is_highest: false,
+          progress_percent: 0.0,
+          summary_text: "0 / 3 completed orders to reach Bronze",
+        };
         const name = customer.name || customer.email || "Customer";
 
         document.getElementById("welcome-heading").textContent = `Welcome, ${name}`;
         document.getElementById("welcome-email").textContent = customer.email || "";
-        document.getElementById("user-name-display").textContent = name;
+        document.getElementById("user-name-display").innerHTML = `<span style="margin-right: 4px;">${escapeHtml(loyalty.icon || '🌱')}</span> ${escapeHtml(name)}`;
         document.getElementById("user-avatar-initial").textContent = (name[0] || "U").toUpperCase();
         document.getElementById("user-pill").hidden = false;
         document.getElementById("btn-logout").hidden = false;
 
+        // KPI Stat Cards
         document.getElementById("stat-total-orders").textContent = String(stats.total_orders || 0);
         document.getElementById("stat-active-accounts").textContent = String(stats.active_accounts || 0);
         document.getElementById("stat-wallet-balance").textContent = `$${Number(stats.wallet_balance || 0).toFixed(2)}`;
         document.getElementById("stat-open-claims").textContent = String(stats.open_claims || 0);
 
+        // Phase 6: Populate Loyalty Card & Progress Bar
+        const iconEl = document.getElementById("loyalty-icon-badge");
+        if (iconEl) {
+          iconEl.textContent = loyalty.icon || "🌱";
+          iconEl.style.borderColor = loyalty.badge_color ? `${loyalty.badge_color}66` : "rgba(139, 108, 255, 0.35)";
+        }
+
+        const titleEl = document.getElementById("loyalty-tier-title");
+        if (titleEl) {
+          titleEl.textContent = `${loyalty.short_name} Member`;
+          titleEl.style.color = loyalty.badge_color || "var(--ink)";
+        }
+
+        const discPill = document.getElementById("loyalty-discount-pill");
+        if (discPill) {
+          if (loyalty.discount_pct > 0) {
+            discPill.textContent = `${loyalty.discount_pct}% STORE DISCOUNT`;
+            discPill.style.background = "rgba(52, 211, 153, 0.18)";
+            discPill.style.color = "var(--live)";
+            discPill.style.borderColor = "rgba(52, 211, 153, 0.4)";
+          } else {
+            discPill.textContent = "0% STANDARD";
+            discPill.style.background = "rgba(148, 163, 184, 0.16)";
+            discPill.style.color = "#94a3b8";
+            discPill.style.borderColor = "rgba(148, 163, 184, 0.3)";
+          }
+        }
+
+        const overridePill = document.getElementById("loyalty-override-pill");
+        if (overridePill) {
+          overridePill.hidden = !loyalty.is_override;
+        }
+
+        const subEl = document.getElementById("loyalty-tier-subtitle");
+        if (subEl) subEl.textContent = loyalty.description || "Earn automatic discounts as you complete orders.";
+
+        const progSummary = document.getElementById("loyalty-progress-summary");
+        if (progSummary) progSummary.textContent = loyalty.summary_text || "";
+
+        const progPct = document.getElementById("loyalty-progress-pct");
+        if (progPct) progPct.textContent = `${loyalty.progress_percent}%`;
+
+        const progFill = document.getElementById("loyalty-progress-fill");
+        if (progFill) progFill.style.width = `${Math.min(100, Math.max(0, loyalty.progress_percent))}%`;
+
+        const completedCount = document.getElementById("loyalty-completed-count");
+        if (completedCount) completedCount.textContent = String(loyalty.completed_orders || 0);
+
+        const spendAmt = document.getElementById("loyalty-spend-amount");
+        if (spendAmt) spendAmt.textContent = `$${Number(loyalty.lifetime_spend || 0).toFixed(2)}`;
+
+        const nextHint = document.getElementById("loyalty-next-tier-hint");
+        if (nextHint) {
+          if (loyalty.is_highest) {
+            nextHint.innerHTML = `Status: <strong style="color: #c084fc;">Top Tier VIP Achieved 💎</strong>`;
+          } else if (loyalty.next_tier_name) {
+            nextHint.innerHTML = `Next milestone: <strong>${escapeHtml(loyalty.next_tier_name)} (${loyalty.orders_to_next_tier} more orders)</strong>`;
+          }
+        }
+
+        // Dashboard Quick Previews: Active Subscriptions
+        const activeContainer = document.getElementById("dashboard-active-accounts-preview");
+        if (activeContainer) {
+          const activeList = data.active_accounts_preview || [];
+          if (!activeList.length) {
+            activeContainer.innerHTML = `
+              <div style="font-size: 12.5px; color: var(--muted); padding: 10px 0; text-align: center;">
+                No active subscriptions currently.
+                <div style="margin-top: 6px;"><a href="/mini" class="linkish" style="color: var(--purple-2); font-size: 12px;">Browse Storefront →</a></div>
+              </div>
+            `;
+          } else {
+            activeContainer.innerHTML = activeList.map(acc => `
+              <div onclick="switchTab('accounts')" style="display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 9px 12px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; font-size: 12.5px; cursor: pointer; transition: border-color 0.15s ease;" onmouseover="this.style.borderColor='rgba(139,108,255,0.4)'" onmouseout="this.style.borderColor='var(--line)'">
+                <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
+                  <span style="font-size: 16px;">${escapeHtml(acc.emoji || '📦')}</span>
+                  <span style="font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(acc.product_name)}</span>
+                </div>
+                <span style="font-size: 11px; font-weight: 700; color: var(--live); background: rgba(52, 211, 153, 0.15); padding: 2px 7px; border-radius: 4px; white-space: nowrap;">
+                  ${escapeHtml(acc.time_label)}
+                </span>
+              </div>
+            `).join("");
+          }
+        }
+
+        // Dashboard Quick Previews: Open Claims
+        const claimsContainer = document.getElementById("dashboard-open-claims-preview");
+        if (claimsContainer) {
+          const claimsList = data.open_claims_preview || [];
+          if (!claimsList.length) {
+            claimsContainer.innerHTML = `
+              <div style="font-size: 12.5px; color: var(--muted); padding: 10px 0; text-align: center;">
+                All services running smoothly. No open claims.
+              </div>
+            `;
+          } else {
+            claimsContainer.innerHTML = claimsList.map(clm => `
+              <div onclick="openClaimDetailSheet(${clm.id})" style="display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 9px 12px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; font-size: 12.5px; cursor: pointer; transition: border-color 0.15s ease;" onmouseover="this.style.borderColor='rgba(139,108,255,0.4)'" onmouseout="this.style.borderColor='var(--line)'">
+                <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
+                  <span style="font-size: 16px;">${escapeHtml(clm.emoji || '🛡️')}</span>
+                  <div style="min-width: 0;">
+                    <div style="font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(clm.product_name)}</div>
+                    <div style="font-size: 11px; color: var(--muted); font-family: monospace;">${escapeHtml(clm.claim_code)}</div>
+                  </div>
+                </div>
+                <span class="status-pill status-${escapeHtml(clm.status)}" style="font-size: 10px; padding: 2px 6px; white-space: nowrap;">
+                  ${escapeHtml(clm.status_label)}
+                </span>
+              </div>
+            `).join("");
+          }
+        }
+
+        // Recent Orders
         const ordersContainer = document.getElementById("recent-orders-container");
         const orders = data.recent_orders || [];
         if (!orders.length) {
@@ -1593,7 +2045,88 @@
             </div>
           `;
         }
+
+        // Store active loyalty info for modal view
+        window._currentLoyaltyInfo = loyalty;
       }
+
+      // Loyalty Perks Modal Handlers
+      const loyaltySheet = document.getElementById("loyalty-perks-sheet");
+      const loyaltyBody = document.getElementById("loyalty-perks-sheet-body");
+      const btnCloseLoyalty = document.getElementById("btn-close-loyalty-perks-sheet");
+
+      function closeLoyaltyPerksModal() {
+        if (loyaltySheet) {
+          loyaltySheet.classList.remove("sheet-open");
+          setTimeout(() => { loyaltySheet.hidden = true; }, 250);
+        }
+      }
+      window.closeLoyaltyPerksModal = closeLoyaltyPerksModal;
+      if (btnCloseLoyalty) btnCloseLoyalty.addEventListener("click", closeLoyaltyPerksModal);
+      if (loyaltySheet) {
+        loyaltySheet.addEventListener("click", (e) => {
+          if (e.target === loyaltySheet) closeLoyaltyPerksModal();
+        });
+      }
+
+      window.openLoyaltyPerksModal = () => {
+        if (!loyaltySheet || !loyaltyBody) return;
+        loyaltySheet.hidden = false;
+        loyaltySheet.classList.add("sheet-open");
+
+        const currentLoyalty = window._currentLoyaltyInfo || { level: 1, id: "starter" };
+        const tiers = [
+          { level: 1, id: "starter", name: "Level 1 — Starter", icon: "🌱", req: "0–2 completed orders", disc: "0%", desc: "Standard member pricing on all products." },
+          { level: 2, id: "bronze", name: "Level 2 — Bronze", icon: "🥉", req: "3–5 completed orders", disc: "2% OFF", desc: "Automatic 2% instant discount on every purchase." },
+          { level: 3, id: "silver", name: "Level 3 — Silver", icon: "🥈", req: "6–10 completed orders", disc: "4% OFF", desc: "Automatic 4% instant discount on every purchase." },
+          { level: 4, id: "gold", name: "Level 4 — Gold", icon: "🥇", req: "11–20 completed orders", disc: "6% OFF", desc: "Automatic 6% discount + priority customer queue." },
+          { level: 5, id: "platinum", name: "Level 5 — Platinum", icon: "💎", req: "21+ completed orders", disc: "8% VIP", desc: "Maximum 8% VIP discount + VIP replacement priority." }
+        ];
+
+        loyaltyBody.innerHTML = `
+          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+            <div style="width: 48px; height: 48px; border-radius: 14px; background: rgba(139, 108, 255, 0.16); border: 1px solid rgba(139, 108, 255, 0.35); display: grid; place-items: center; font-size: 24px;">👑</div>
+            <div>
+              <h2 style="margin: 0; font-size: 18px; color: var(--ink);">Loyalty Tiers & Rewards</h2>
+              <p class="muted" style="margin: 2px 0 0 0; font-size: 12px;">Automatic lifetime discounts applied directly to your checkout</p>
+            </div>
+          </div>
+
+          <div style="background: rgba(139, 108, 255, 0.07); border: 1px solid rgba(139, 108, 255, 0.2); border-radius: 12px; padding: 12px; margin-bottom: 14px; font-size: 12.5px; color: var(--ink); line-height: 1.5;">
+            💡 <strong>How it works:</strong> Every completed order moves you closer to the next tier. Your discount applies automatically to every product in the catalog with no coupons needed!
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 10px;">
+            ${tiers.map(t => {
+              const isCurrent = t.id === currentLoyalty.id;
+              return `
+                <div class="tier-perk-row ${isCurrent ? 'current-tier' : ''}">
+                  <div class="tier-perk-left">
+                    <div class="tier-perk-icon">${t.icon}</div>
+                    <div>
+                      <div class="tier-perk-name">
+                        ${escapeHtml(t.name)}
+                        ${isCurrent ? '<span style="font-size: 10px; background: var(--purple-2); color: #fff; padding: 1px 6px; border-radius: 4px; font-weight: 800;">YOUR CURRENT TIER</span>' : ''}
+                      </div>
+                      <div class="tier-perk-req">${escapeHtml(t.req)} • <span style="color: var(--muted);">${escapeHtml(t.desc)}</span></div>
+                    </div>
+                  </div>
+                  <div class="tier-perk-disc">${escapeHtml(t.disc)}</div>
+                </div>
+              `;
+            }).join("")}
+          </div>
+
+          <div class="hero-actions" style="margin-top: 20px;">
+            <a href="/mini" class="btn btn-primary" style="flex: 1; padding: 10px; font-size: 13px;">
+              🛍️ Shop with Your Discount
+            </a>
+            <button type="button" class="btn" onclick="closeLoyaltyPerksModal()" style="background: var(--surface-2); border: 1px solid var(--line); color: var(--ink); padding: 10px 18px;">
+              Close
+            </button>
+          </div>
+        `;
+      };
 
       function escapeHtml(val) {
         return String(val || "")

@@ -18,18 +18,52 @@
 </form>
 <div class="table-scroll">
 <table>
-  <tr><th>User</th><th>Telegram ID</th><th>Balance</th><th>Referral</th><th>Orders</th><th>Status</th><th>Actions</th></tr>
+  <tr><th>User</th><th>Telegram ID</th><th>Loyalty Tier</th><th>Balance</th><th>Orders</th><th>Status</th><th>Actions</th></tr>
   {% for user in users %}
   <tr>
-    <td>{{ user.full_name or user.username or "-" }}</td><td>{{ user.telegram_id }}</td><td>{{ "%.2f"|format(user.wallet_usdt) }}</td><td>{{ "%.2f"|format(user.referral_wallet) }}</td><td>{{ user.orders|length }}</td><td>{{ "Banned" if user.is_banned else "Active" }}</td>
+    <td>{{ user.full_name or user.username or "-" }}</td>
+    <td><code>{{ user.telegram_id }}</code></td>
     <td>
-      <form method="post" class="inline-form">
-        <input name="amount" type="number" step="0.01" min="0" placeholder="USDT" size="6" required>
-        <input name="note" placeholder="Note" size="8">
-        <button formaction="/admin/users/{{ user.id }}/credit">Credit</button>
-        <button formaction="/admin/users/{{ user.id }}/debit">Deduct</button>
-      </form>
-      <form method="post" action="/admin/users/{{ user.id }}/toggle-ban" class="inline-form"><button>Ban/Unban</button></form>
+      <div style="display:flex; align-items:center; gap:6px;">
+        <span style="font-weight:700; color: {{ user.loyalty.badge_color }};">
+          {{ user.loyalty.icon }} {{ user.loyalty.short_name }}
+        </span>
+        {% if user.loyalty.is_override %}
+        <span title="Admin override applied" style="background:rgba(251,191,36,0.2); color:#fbbf24; border:1px solid rgba(251,191,36,0.4); border-radius:4px; font-size:10px; padding:1px 4px; font-weight:700;">OVERRIDE</span>
+        {% endif %}
+      </div>
+      <div style="font-size:11px; color:#94a3b8; margin-top:2px;">
+        {{ user.loyalty.discount_pct }}% discount • {{ user.loyalty.completed_orders }} completed (${{ "%.2f"|format(user.loyalty.lifetime_spend) }})
+      </div>
+    </td>
+    <td>{{ "%.2f"|format(user.wallet_usdt) }}</td>
+    <td>{{ user.orders|length }}</td>
+    <td>{{ "Banned" if user.is_banned else "Active" }}</td>
+    <td>
+      <div style="display:flex; flex-direction:column; gap:6px;">
+        <form method="post" class="inline-form">
+          <input name="amount" type="number" step="0.01" min="0" placeholder="USDT" size="6" required>
+          <input name="note" placeholder="Note" size="8">
+          <button formaction="/admin/users/{{ user.id }}/credit">Credit</button>
+          <button formaction="/admin/users/{{ user.id }}/debit">Deduct</button>
+        </form>
+        <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+          <form method="post" action="/admin/users/{{ user.id }}/toggle-ban" class="inline-form">
+            <button>{{ "Unban" if user.is_banned else "Ban" }}</button>
+          </form>
+          <form method="post" action="/admin/users/{{ user.id }}/set-loyalty-tier" class="inline-form" style="display:flex; gap:4px; align-items:center;">
+            <select name="loyalty_tier" style="font-size:11px; padding:2px 4px; background:var(--surface-2, #1e1636); color:var(--ink, #fff); border:1px solid rgba(255,255,255,0.15); border-radius:4px;">
+              <option value="" {% if not user.loyalty_tier_override %}selected{% endif %}>Auto (Calculated)</option>
+              <option value="starter" {% if user.loyalty_tier_override == 'starter' %}selected{% endif %}>🌱 Starter (0%)</option>
+              <option value="bronze" {% if user.loyalty_tier_override == 'bronze' %}selected{% endif %}>🥉 Bronze (2%)</option>
+              <option value="silver" {% if user.loyalty_tier_override == 'silver' %}selected{% endif %}>🥈 Silver (4%)</option>
+              <option value="gold" {% if user.loyalty_tier_override == 'gold' %}selected{% endif %}>🥇 Gold (6%)</option>
+              <option value="platinum" {% if user.loyalty_tier_override == 'platinum' %}selected{% endif %}>💎 Platinum (8%)</option>
+            </select>
+            <button type="submit" style="font-size:11px; padding:2px 6px;">Set</button>
+          </form>
+        </div>
+      </div>
     </td>
   </tr>
   {% else %}

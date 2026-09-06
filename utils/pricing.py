@@ -72,13 +72,21 @@ class PriceQuote:
     unit_price: float
     list_price: float
     discount: UserProductDiscount | None = None
+    discount_pct: float = 0.0
+    discount_source: str = "none"  # "none", "loyalty", "personal", "sale"
+    loyalty_tier: dict | None = None
+    custom_label: str | None = None
 
     @property
     def has_discount(self) -> bool:
-        return self.discount is not None and self.unit_price < self.list_price - 1e-9
+        return self.unit_price < self.list_price - 1e-9
 
     @property
     def discount_label(self) -> str | None:
+        if self.custom_label:
+            return self.custom_label
+        if self.discount_source == "loyalty" and self.loyalty_tier:
+            return f"{self.loyalty_tier['short_name']} Member • {self.discount_pct:g}% off"
         if not self.discount:
             return None
         d = self.discount
@@ -130,16 +138,62 @@ def resolve_unit_price(
     service: Service,
     user: User | None = None,
 ) -> PriceQuote:
-    """Current sell_price (already includes active ProductSale) + optional user discount."""
+    """Current sell_price (already includes active ProductSale) + optional personal/loyalty discount.
+    
+    Precedence rule:
+    Final customer discount = whichever is higher: Personal Admin Discount OR Loyalty Tier Discount.
+    No automatic stacking (prevents margin compounding).
+    """
+    from utils.loyalty import compute_customer_loyalty
+
     list_price = round(float(getattr(service, "sell_price", 0) or 0), 6)
-    discount = None
-    if user is not None:
-        discount = get_active_user_discount(db, user_id=user.id, service_id=service.id)
-    unit = apply_discount_to_price(list_price, discount)
-    if discount and unit >= list_price - 1e-9 and discount.discount_type != "price":
-        # No effective reduction — treat as no discount for display.
-        return PriceQuote(unit_price=list_price, list_price=list_price, discount=None)
-    return PriceQuote(unit_price=unit, list_price=list_price, discount=discount)
+    if user is None:
+        return PriceQuote(unit_price=list_price, list_price=list_price)
+
+    # 1. Personal discount
+    personal_disc = get_active_user_discount(db, user_id=user.id, service_id=service.id)
+    price_after_personal = apply_discount_to_price(list_price, personal_disc)
+    personal_pct = 0.0
+    if personal_disc:
+        if personal_disc.discount_type == "percent":
+            personal_pct = float(personal_disc.value or 0)
+        elif list_price > 0:
+            personal_pct = round(((list_price - price_after_personal) / list_price) * 100.0, 2)
+
+    # 2. Loyalty tier discount
+    loyalty = compute_customer_loyalty(db, user)
+    loyalty_pct = float(loyalty.get("discount_pct", 0.0) or 0.0)
+    price_after_loyalty = round(max(0.0, list_price * (1.0 - loyalty_pct / 100.0)), 6)
+
+    # 3. Precedence: Whichever discount is higher (more favorable to customer)
+    if personal_pct > loyalty_pct and personal_disc is not None:
+        unit = price_after_personal
+        source = "personal"
+        eff_pct = personal_pct
+        label = f"Personal {personal_pct:g}% off"
+    elif loyalty_pct > 0.0:
+        unit = price_after_loyalty
+        source = "loyalty"
+        eff_pct = loyalty_pct
+        label = f"{loyalty['short_name']} Member • {loyalty_pct:g}% off"
+    else:
+        unit = list_price
+        source = "none"
+        eff_pct = 0.0
+        label = None
+
+    if unit >= list_price - 1e-9:
+        return PriceQuote(unit_price=list_price, list_price=list_price, loyalty_tier=loyalty)
+
+    return PriceQuote(
+        unit_price=unit,
+        list_price=list_price,
+        discount=personal_disc if source == "personal" else None,
+        discount_pct=eff_pct,
+        discount_source=source,
+        loyalty_tier=loyalty,
+        custom_label=label,
+    )
 
 
 def service_unit_prices(

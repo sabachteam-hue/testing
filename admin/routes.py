@@ -3153,6 +3153,8 @@ async def update_order(order_id: int, request: Request, status: str = Form(...),
 
 @router.get("/users")
 def users(request: Request, period: str | None = None, q: str | None = None, db: Session = Depends(get_db)):
+    from utils.loyalty import compute_customer_loyalty
+
     admin_required(request)
     _mark_sidebar_seen(db, "sidebar_seen_users_at")
     qp = request.query_params
@@ -3167,15 +3169,38 @@ def users(request: Request, period: str | None = None, q: str | None = None, db:
                 User.full_name.ilike(like),
             )
         )
+    user_rows = query.order_by(User.joined_at.desc()).all()
+    for u in user_rows:
+        u.loyalty = compute_customer_loyalty(db, u)
+
     return render(
         request,
         "users.html",
         {
-            "users": query.order_by(User.joined_at.desc()).all(),
+            "users": user_rows,
             "q": search,
             "period_stats": users_period_stats(db, period or qp.get("period"), qp.get("from"), qp.get("to")),
         },
     )
+
+
+@router.post("/users/{user_id}/set-loyalty-tier")
+def set_loyalty_tier(
+    user_id: int,
+    request: Request,
+    loyalty_tier: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    admin_required(request)
+    user = db.get(User, user_id)
+    if user:
+        clean = (loyalty_tier or "").strip().lower()
+        if clean in ("starter", "bronze", "silver", "gold", "platinum"):
+            user.loyalty_tier_override = clean
+        else:
+            user.loyalty_tier_override = None  # None resets to automatic order-based calculation
+        db.commit()
+    return redirect("/admin/users")
 
 
 @router.post("/users/{user_id}/credit")

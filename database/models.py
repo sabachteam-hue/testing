@@ -412,6 +412,8 @@ class User(Base):
     # Mini App / website signup (not Telegram). telegram_id is still set to web:{email}.
     email: Mapped[str | None] = mapped_column(String(200), nullable=True, unique=True)
     password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Admin loyalty tier override (e.g. 'platinum', 'gold', 'silver', 'bronze', 'starter' or None for auto)
+    loyalty_tier_override: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
     referrer: Mapped["User | None"] = relationship(remote_side="User.id")
     orders: Mapped[list["Order"]] = relationship(back_populates="user")
@@ -457,6 +459,9 @@ class Order(Base):
     preorder_fee: Mapped[float] = mapped_column(Float, default=0.0)
     preorder_status: Mapped[str | None] = mapped_column(String(20), nullable=True)  # waiting | fulfilled | cancelled_refunded
     preorder_paid_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # Dynamic discount tracking (loyalty / personal)
+    applied_discount_pct: Mapped[float | None] = mapped_column(Float, nullable=True, default=0.0)
+    discount_source: Mapped[str | None] = mapped_column(String(32), nullable=True, default="none")
 
     user: Mapped[User] = relationship(back_populates="orders")
     service: Mapped[Service] = relationship(back_populates="orders")
@@ -956,6 +961,12 @@ def run_light_migrations() -> None:
         if "preorder_paid_at" not in existing_columns:
             with engine.begin() as connection:
                 connection.execute(text("ALTER TABLE orders ADD COLUMN preorder_paid_at TIMESTAMP"))
+        if "applied_discount_pct" not in existing_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE orders ADD COLUMN applied_discount_pct FLOAT DEFAULT 0.0"))
+        if "discount_source" not in existing_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE orders ADD COLUMN discount_source VARCHAR(32) DEFAULT 'none'"))
 
     if "transactions" in table_names:
         existing_columns = {col["name"] for col in inspector.get_columns("transactions")}
@@ -1055,6 +1066,9 @@ def run_light_migrations() -> None:
         if "referral_join_credited" not in existing_columns:
             with engine.begin() as connection:
                 connection.execute(text("ALTER TABLE users ADD COLUMN referral_join_credited BOOLEAN DEFAULT FALSE"))
+        if "loyalty_tier_override" not in existing_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE users ADD COLUMN loyalty_tier_override VARCHAR(32)"))
 
         # Widen password_hash for Argon2id on Postgres
         if engine.dialect.name.startswith("postgresql"):
