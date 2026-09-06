@@ -1593,6 +1593,16 @@ def web_checkout(
         db.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     db.commit()
+    # Phase 7: Trigger in-app order created notification
+    try:
+        from utils.customer_notifications import notify_order_created_inapp
+        for c_ord in created:
+            ord_obj = db.query(Order).filter(Order.order_code == c_ord["order_code"]).first()
+            if ord_obj:
+                notify_order_created_inapp(db, ord_obj)
+    except Exception:
+        pass
+
     return {
         "ok": True,
         "order_code": created[0]["order_code"],
@@ -1627,3 +1637,272 @@ def get_web_order(code: str, db: Session = Depends(get_db)) -> dict:
         "method_name": method.name if method else order.payment_method,
         "network": method.network if method else None,
     }
+
+
+# ==============================================================================
+# PHASE 7 — CUSTOMER NOTIFICATIONS / MESSAGES & ACCOUNT SETTINGS
+# ==============================================================================
+
+@router.get("/account/notifications")
+def web_account_notifications(
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    unread_only: bool = Query(False),
+    type: str = Query("all"),
+    current_user: User = Depends(get_current_customer),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Return paginated notification history for the authenticated customer."""
+    from utils.customer_notifications import get_customer_notifications
+
+    items, unread_count, total = get_customer_notifications(
+        db,
+        current_user.id,
+        limit=limit,
+        offset=offset,
+        unread_only=unread_only,
+        type_filter=type,
+    )
+    return {
+        "ok": True,
+        "notifications": items,
+        "unread_count": unread_count,
+        "total": total,
+    }
+
+
+@router.get("/account/notifications/unread-count")
+def web_account_notifications_unread_count(
+    current_user: User = Depends(get_current_customer),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Lightweight endpoint for navigation badge counter."""
+    from utils.customer_notifications import get_unread_notification_count
+
+    count = get_unread_notification_count(db, current_user.id)
+    return {"ok": True, "unread_count": count}
+
+
+@router.post("/account/notifications/{notification_id}/read")
+def web_account_notification_mark_read(
+    notification_id: int,
+    current_user: User = Depends(get_current_customer),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Mark a single notification as read for the authenticated customer."""
+    from utils.customer_notifications import get_unread_notification_count, mark_notification_read
+
+    success = mark_notification_read(db, current_user.id, notification_id)
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Notification not found or access denied.",
+        )
+    return {
+        "ok": True,
+        "unread_count": get_unread_notification_count(db, current_user.id),
+    }
+
+
+@router.post("/account/notifications/read-all")
+def web_account_notifications_mark_all_read(
+    current_user: User = Depends(get_current_customer),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Mark all unread notifications for the authenticated customer as read."""
+    from utils.customer_notifications import mark_all_notifications_read
+
+    marked = mark_all_notifications_read(db, current_user.id)
+    return {
+        "ok": True,
+        "marked_count": marked,
+        "unread_count": 0,
+    }
+
+
+# ------------------------------------------------------------------------------
+# Customer Profile & Settings Endpoints
+# ------------------------------------------------------------------------------
+
+class ProfileUpdateBody(BaseModel):
+    full_name: str | None = None
+    language: str | None = None
+    currency: str | None = None
+
+
+class PasswordChangeBody(BaseModel):
+    current_password: str = ""
+    new_password: str
+    confirm_password: str
+
+
+class PreferencesUpdateBody(BaseModel):
+    notify_order_updates: bool = True
+    notify_claim_updates: bool = True
+    notify_promotions: bool = True
+    notify_email: bool = True
+    notify_telegram: bool = True
+
+
+def _serialize_customer_settings(user: User, db: Session) -> dict:
+    from utils.loyalty import compute_customer_loyalty
+
+    loyalty_data = compute_customer_loyalty(db, user)
+    is_tg = bool(user.telegram_id and not str(user.telegram_id).startswith("web:"))
+
+    return {
+        "id": user.id,
+        "full_name": user.full_name or "",
+        "email": user.email or "",
+        "telegram_id": user.telegram_id if is_tg else None,
+        "telegram_username": user.username if is_tg else None,
+        "is_telegram_linked": is_tg,
+        "language": user.language or "en",
+        "currency": getattr(user, "currency", "USD") or "USD",
+        "has_password": bool(user.password_hash),
+        "wallet_balance": float(user.wallet_usdt or 0.0),
+        "loyalty": loyalty_data,
+        "created_at": user.created_at.strftime("%b %d, %Y") if getattr(user, "created_at", None) else "—",
+        "preferences": {
+            "notify_order_updates": getattr(user, "notify_order_updates", True),
+            "notify_claim_updates": getattr(user, "notify_claim_updates", True),
+            "notify_promotions": getattr(user, "notify_promotions", True),
+            "notify_email": getattr(user, "notify_email", True),
+            "notify_telegram": getattr(user, "notify_telegram", True),
+        },
+    }
+
+
+@router.get("/account/settings")
+def web_account_settings(
+    current_user: User = Depends(get_current_customer),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Return customer profile, linked identities, and notification preferences."""
+    return {
+        "ok": True,
+        "settings": _serialize_customer_settings(current_user, db),
+    }
+
+
+@router.post("/account/settings/profile")
+def web_account_update_profile(
+    body: ProfileUpdateBody,
+    current_user: User = Depends(get_current_customer),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Safely update editable customer profile fields (full name, language, currency)."""
+    from utils.customer_notifications import notify_profile_updated_inapp
+
+    changed = False
+
+    if body.full_name is not None:
+        clean_name = body.full_name.strip()[:100]
+        if clean_name and clean_name != current_user.full_name:
+            current_user.full_name = clean_name
+            changed = True
+
+    if body.language is not None:
+        clean_lang = body.language.strip().lower()[:10]
+        if clean_lang and clean_lang != current_user.language:
+            current_user.language = clean_lang
+            changed = True
+
+    if body.currency is not None:
+        clean_curr = body.currency.strip().upper()[:10]
+        if clean_curr in ("USD", "PKR", "USDT", "EUR", "GBP"):
+            if clean_curr != getattr(current_user, "currency", "USD"):
+                current_user.currency = clean_curr
+                changed = True
+
+    if changed:
+        db.commit()
+        db.refresh(current_user)
+        notify_profile_updated_inapp(db, current_user.id)
+
+    return {
+        "ok": True,
+        "message": "Profile updated successfully.",
+        "settings": _serialize_customer_settings(current_user, db),
+    }
+
+
+@router.post("/account/settings/password")
+def web_account_change_password(
+    body: PasswordChangeBody,
+    current_user: User = Depends(get_current_customer),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Secure password change endpoint. Verifies current password and hashes new credentials."""
+    from utils.customer_notifications import notify_password_changed_inapp
+
+    # 1. If account already has a password, current password is strictly mandatory
+    if current_user.password_hash:
+        if not body.current_password:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Current password is required.",
+            )
+        is_valid, _ = verify_password(body.current_password, current_user.password_hash)
+        if not is_valid:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Current password is incorrect.",
+            )
+
+    # 2. Confirm password match
+    if body.new_password != body.confirm_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New password and confirmation do not match.",
+        )
+
+    # 3. Strength / length check
+    if len(body.new_password) < 6:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New password must be at least 6 characters.",
+        )
+
+    # 4. Hash and save with modern Argon2id
+    current_user.password_hash = hash_password(body.new_password)
+    db.commit()
+    db.refresh(current_user)
+
+    # 5. Emit security notification
+    notify_password_changed_inapp(db, current_user.id)
+
+    return {
+        "ok": True,
+        "message": "Password changed successfully.",
+    }
+
+
+@router.post("/account/settings/preferences")
+def web_account_update_preferences(
+    body: PreferencesUpdateBody,
+    current_user: User = Depends(get_current_customer),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Update customer notification preferences."""
+    current_user.notify_order_updates = bool(body.notify_order_updates)
+    current_user.notify_claim_updates = bool(body.notify_claim_updates)
+    current_user.notify_promotions = bool(body.notify_promotions)
+    current_user.notify_email = bool(body.notify_email)
+    current_user.notify_telegram = bool(body.notify_telegram)
+
+    db.commit()
+    db.refresh(current_user)
+
+    return {
+        "ok": True,
+        "message": "Notification preferences saved successfully.",
+        "preferences": {
+            "notify_order_updates": current_user.notify_order_updates,
+            "notify_claim_updates": current_user.notify_claim_updates,
+            "notify_promotions": current_user.notify_promotions,
+            "notify_email": current_user.notify_email,
+            "notify_telegram": current_user.notify_telegram,
+        },
+    }
+

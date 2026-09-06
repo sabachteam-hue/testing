@@ -417,11 +417,19 @@ class User(Base):
     password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     # Admin loyalty tier override (e.g. 'platinum', 'gold', 'silver', 'bronze', 'starter' or None for auto)
     loyalty_tier_override: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    # Phase 7: Currency and notification preferences
+    currency: Mapped[str] = mapped_column(String(10), default="USD")
+    notify_order_updates: Mapped[bool] = mapped_column(Boolean, default=True)
+    notify_claim_updates: Mapped[bool] = mapped_column(Boolean, default=True)
+    notify_promotions: Mapped[bool] = mapped_column(Boolean, default=True)
+    notify_email: Mapped[bool] = mapped_column(Boolean, default=True)
+    notify_telegram: Mapped[bool] = mapped_column(Boolean, default=True)
 
     referrer: Mapped["User | None"] = relationship(remote_side="User.id")
     orders: Mapped[list["Order"]] = relationship(back_populates="user")
     transactions: Mapped[list["Transaction"]] = relationship(back_populates="user")
     api_keys: Mapped[list["ApiKey"]] = relationship(back_populates="user")
+    notifications: Mapped[list["CustomerNotification"]] = relationship(back_populates="user", cascade="all, delete-orphan")
 
 
 class Order(Base):
@@ -589,6 +597,23 @@ class GrantedAccount(Base, TimestampMixin):
     order: Mapped[Order] = relationship(back_populates="granted_accounts")
     user: Mapped[User] = relationship()
     service: Mapped[Service] = relationship()
+
+
+class CustomerNotification(Base):
+    __tablename__ = "customer_notifications"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    type: Mapped[str] = mapped_column(String(40), default="info")  # order | claim | refund | replacement | wallet | announcement | security
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    reference_type: Mapped[str | None] = mapped_column(String(40), nullable=True)  # order | granted_account | claim | transaction
+    reference_id: Mapped[str | None] = mapped_column(String(100), nullable=True)  # order_code | account_id | claim_code | id
+    link_url: Mapped[str | None] = mapped_column(String(255), nullable=True)  # #orders, #accounts, #claims, #wallet
+    is_read: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+    user: Mapped[User] = relationship(back_populates="notifications")
 
 
 class Transaction(Base):
@@ -1072,6 +1097,24 @@ def run_light_migrations() -> None:
         if "loyalty_tier_override" not in existing_columns:
             with engine.begin() as connection:
                 connection.execute(text("ALTER TABLE users ADD COLUMN loyalty_tier_override VARCHAR(32)"))
+        if "currency" not in existing_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE users ADD COLUMN currency VARCHAR(10) DEFAULT 'USD'"))
+        if "notify_order_updates" not in existing_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE users ADD COLUMN notify_order_updates BOOLEAN DEFAULT TRUE"))
+        if "notify_claim_updates" not in existing_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE users ADD COLUMN notify_claim_updates BOOLEAN DEFAULT TRUE"))
+        if "notify_promotions" not in existing_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE users ADD COLUMN notify_promotions BOOLEAN DEFAULT TRUE"))
+        if "notify_email" not in existing_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE users ADD COLUMN notify_email BOOLEAN DEFAULT TRUE"))
+        if "notify_telegram" not in existing_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE users ADD COLUMN notify_telegram BOOLEAN DEFAULT TRUE"))
 
         # Widen password_hash for Argon2id on Postgres
         if engine.dialect.name.startswith("postgresql"):
@@ -1104,6 +1147,9 @@ def run_light_migrations() -> None:
         if "low_balance_alert_active" not in existing_columns:
             with engine.begin() as connection:
                 connection.execute(text("ALTER TABLE providers ADD COLUMN low_balance_alert_active BOOLEAN DEFAULT FALSE"))
+
+    if "customer_notifications" not in table_names:
+        CustomerNotification.__table__.create(engine, checkfirst=True)
 
     if "payment_methods" in table_names:
         existing_columns = {col["name"] for col in inspector.get_columns("payment_methods")}

@@ -310,7 +310,13 @@ def create_customer_claim(
     db.refresh(claim)
     db.refresh(granted_account)
 
-    # 9. Send Telegram notification if user has telegram_id
+    # 9. Send in-app notification & Telegram notification
+    try:
+        from utils.customer_notifications import notify_claim_submitted_inapp
+        notify_claim_submitted_inapp(db, claim)
+    except Exception as exc:
+        logger.warning("Could not schedule claim submitted in-app notification: %s", exc)
+
     if user.telegram_id:
         try:
             from utils.notifications import notify_claim_submitted
@@ -430,7 +436,13 @@ def resolve_claim_with_replacement(
     db.refresh(new_account)
     db.refresh(old_account)
 
-    # 6. Telegram notification
+    # 6. Send in-app notification & Telegram notification
+    try:
+        from utils.customer_notifications import notify_claim_replacement_inapp
+        notify_claim_replacement_inapp(db, claim, new_account)
+    except Exception as exc:
+        logger.warning("Could not schedule replacement in-app notification: %s", exc)
+
     user = claim.user or db.get(User, claim.user_id)
     if user and user.telegram_id:
         try:
@@ -560,7 +572,15 @@ def resolve_claim_with_refund(
     db.refresh(order)
     db.refresh(user)
 
-    # 7. Telegram notification
+    # 7. Send in-app notification & Telegram notification
+    try:
+        from utils.customer_notifications import notify_claim_refund_inapp, notify_wallet_transaction_inapp
+        notify_claim_refund_inapp(db, claim, float(amt), clean_method)
+        if clean_method == "wallet" and 'tx' in locals() and tx:
+            notify_wallet_transaction_inapp(db, tx)
+    except Exception as exc:
+        logger.warning("Could not schedule refund in-app notification: %s", exc)
+
     if user.telegram_id:
         try:
             from utils.notifications import notify_claim_refunded
@@ -615,6 +635,13 @@ def resolve_claim_with_support_fix(
     if account:
         db.refresh(account)
 
+    # Send in-app notification & Telegram notification
+    try:
+        from utils.customer_notifications import notify_claim_support_inapp
+        notify_claim_support_inapp(db, claim, note=note_msg)
+    except Exception as exc:
+        logger.warning("Could not schedule support fix in-app notification: %s", exc)
+
     user = claim.user or db.get(User, claim.user_id)
     if user and user.telegram_id:
         try:
@@ -661,6 +688,13 @@ def reject_claim(
     if account:
         db.refresh(account)
 
+    # Send in-app notification & Telegram notification
+    try:
+        from utils.customer_notifications import notify_claim_rejected_inapp
+        notify_claim_rejected_inapp(db, claim, reason=note_msg)
+    except Exception as exc:
+        logger.warning("Could not schedule claim rejection in-app notification: %s", exc)
+
     user = claim.user or db.get(User, claim.user_id)
     if user and user.telegram_id:
         try:
@@ -694,6 +728,13 @@ def request_claim_evidence(
 
     db.commit()
     db.refresh(claim)
+
+    # Send in-app notification & Telegram notification
+    try:
+        from utils.customer_notifications import notify_claim_evidence_requested_inapp
+        notify_claim_evidence_requested_inapp(db, claim, note=claim.admin_note)
+    except Exception as exc:
+        logger.warning("Could not schedule evidence requested in-app notification: %s", exc)
 
     user = claim.user or db.get(User, claim.user_id)
     if user and user.telegram_id:

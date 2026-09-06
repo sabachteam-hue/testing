@@ -614,6 +614,7 @@ def sync_granted_accounts_for_order(db: Session, order: Order) -> list[GrantedAc
         return []
 
     synced_records = []
+    has_new = False
     for idx, item in enumerate(parsed_accounts):
         existing = (
             db.query(GrantedAccount)
@@ -653,6 +654,14 @@ def sync_granted_accounts_for_order(db: Session, order: Order) -> list[GrantedAc
             )
             db.add(new_acc)
             synced_records.append(new_acc)
+            has_new = True
+
+    if has_new and not is_order_refunded:
+        try:
+            from utils.customer_notifications import notify_order_delivered_inapp
+            notify_order_delivered_inapp(db, order, auto_commit=False)
+        except Exception:
+            pass
 
     db.flush()
     return synced_records
