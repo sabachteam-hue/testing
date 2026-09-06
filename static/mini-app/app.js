@@ -54,7 +54,7 @@
     featured: cachedFeat,
     categories: cachedCats,
     methods: [],
-    currency: localStorage.getItem("smf_currency") || "USD",
+    currency: localStorage.getItem("smf_currency") || "PKR",
     language: localStorage.getItem("smf_language") || "en",
     query: "",
     categoryId: null,
@@ -133,6 +133,18 @@
       const pkr = value * rate;
       return `Rs. ${pkr.toLocaleString("en-PK", { maximumFractionDigits: 0 })}`;
     }
+    if (state.currency === "EUR") {
+      const eur = value * 0.92;
+      return `€${eur.toFixed(2)}`;
+    }
+    if (state.currency === "GBP") {
+      const gbp = value * 0.79;
+      return `£${gbp.toFixed(2)}`;
+    }
+    if (state.currency === "INR") {
+      const inr = value * 83.5;
+      return `₹${inr.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
+    }
     return `$${value.toFixed(2)}`;
   }
 
@@ -188,8 +200,7 @@
   }
 
   function waHref(product) {
-    const base = (state.shop && state.shop.whatsapp_url) || "";
-    if (!base) return state.shop && state.shop.support_url ? state.shop.support_url : "#";
+    const base = (state.shop && state.shop.whatsapp_url) || "https://wa.me/";
     let text = "Hi SMF SHOP, I want to place an order from the Mini App.";
     if (product) {
       text = `Hi SMF SHOP, I want to order ${product.name} (${product.sku}) for ${formatPrice(product.sell_price)}`;
@@ -197,7 +208,8 @@
       const lines = state.cart.map((row) => `${row.qty}x ${row.name} (${formatPrice(row.sell_price)})`).join(", ");
       text = `Hi SMF SHOP, I want to order: ${lines}. Total ${formatPrice(cartTotal())}`;
     }
-    return `${base}?text=${encodeURIComponent(text)}`;
+    const sep = base.includes("?") ? "&" : "?";
+    return `${base}${sep}text=${encodeURIComponent(text)}`;
   }
 
   function closeMenus() {
@@ -205,6 +217,8 @@
       menu.hidden = true;
     });
     document.querySelectorAll(".chip").forEach((btn) => btn.setAttribute("aria-expanded", "false"));
+    const authDd = document.getElementById("meetway-auth-dropdown");
+    if (authDd) authDd.hidden = true;
   }
 
   function flagIso(item) {
@@ -217,24 +231,49 @@
     return `<img class="flag-img" src="/static/mini-app/flags/${iso}.svg" alt="" width="20" height="14" onerror="this.onerror=null;this.src='/static/mini-app/flags/xx.svg'"> ${label}`;
   }
 
+  const CURRENCIES = [
+    { code: "USD", label: "USD ($)", flag_iso: "us" },
+    { code: "PKR", label: "PKR (Rs.)", flag_iso: "pk" },
+    { code: "EUR", label: "EUR (€)", flag_iso: "eu" },
+    { code: "GBP", label: "GBP (£)", flag_iso: "gb" },
+    { code: "INR", label: "INR (₹)", flag_iso: "in" },
+  ];
+
   function renderMenus() {
-    const currencies = (state.shop && state.shop.currencies) || [
-      { code: "USD", label: "USD ($)", flag_iso: "us" },
-      { code: "PKR", label: "PKR (Rs.)", flag_iso: "pk" },
-    ];
-    els.currencyMenu.innerHTML = currencies
-      .map((item) => `<button type="button" data-currency="${item.code}">${flagMarkup(item)}</button>`)
-      .join("");
-    const current = currencies.find((item) => item.code === state.currency) || currencies[0];
-    els.currencyBtn.innerHTML = flagMarkup(current);
+    const currencies = CURRENCIES;
+    if (els.currencyMenu) {
+      els.currencyMenu.innerHTML = currencies
+        .map(
+          (item) => `
+        <button type="button" role="menuitem" data-currency="${item.code}" class="${item.code === state.currency ? "active" : ""}">
+          <img class="flag-img" src="/static/mini-app/flags/${item.flag_iso}.svg" alt="" width="20" height="14" onerror="this.onerror=null;this.src='/static/mini-app/flags/xx.svg'">
+          <span>${item.label}</span>
+          ${item.code === state.currency ? '<span class="check-indicator">✓</span>' : ""}
+        </button>
+      `
+        )
+        .join("");
+    }
+    const current = currencies.find((item) => item.code === state.currency) || currencies[1] || currencies[0];
+    if (els.currencyBtn) {
+      els.currencyBtn.innerHTML = `
+        <span class="flag-icon" id="currency-flag"><img class="flag-img" src="/static/mini-app/flags/${current.flag_iso}.svg" alt="" width="20" height="14"></span>
+        <span id="currency-label">${current.label}</span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m6 9 6 6 6-6"/></svg>
+      `;
+    }
 
     const languages = (state.shop && state.shop.languages) || [{ code: "en", name: "English", flag_iso: "gb" }];
-    els.languageMenu.innerHTML = languages
-      .map((item) => `<button type="button" data-language="${item.code}">${flagMarkup(item)}</button>`)
-      .join("");
+    if (els.languageMenu) {
+      els.languageMenu.innerHTML = languages
+        .map((item) => `<button type="button" data-language="${item.code}">${flagMarkup(item)}</button>`)
+        .join("");
+    }
     const lang = languages.find((item) => item.code === state.language) || languages[0];
     state.language = lang.code;
-    els.languageBtn.innerHTML = flagMarkup(lang);
+    if (els.languageBtn) {
+      els.languageBtn.innerHTML = flagMarkup(lang);
+    }
   }
 
   function renderChrome() {
@@ -773,9 +812,11 @@
   document.addEventListener("click", (event) => {
     const currencyPick = event.target.closest("[data-currency]");
     if (currencyPick) {
+      event.preventDefault();
       state.currency = currencyPick.dataset.currency;
       localStorage.setItem("smf_currency", state.currency);
       closeMenus();
+      renderMenus();
       applyRoute();
       return;
     }
@@ -788,10 +829,16 @@
       return;
     }
     if (event.target.closest("#currency-btn")) {
-      const open = els.currencyMenu.hidden;
+      event.preventDefault();
+      event.stopPropagation();
+      const open = els.currencyMenu && !els.currencyMenu.hidden;
       closeMenus();
-      els.currencyMenu.hidden = !open;
-      els.currencyBtn.setAttribute("aria-expanded", String(open));
+      if (els.currencyMenu) {
+        els.currencyMenu.hidden = open;
+      }
+      if (els.currencyBtn) {
+        els.currencyBtn.setAttribute("aria-expanded", String(!open));
+      }
       return;
     }
     if (event.target.closest("#language-btn")) {
@@ -799,6 +846,21 @@
       closeMenus();
       els.languageMenu.hidden = !open;
       els.languageBtn.setAttribute("aria-expanded", String(open));
+      return;
+    }
+    if (event.target.closest("#btn-account")) {
+      const signed = Boolean(state.user && state.user.email);
+      if (!signed) {
+        event.preventDefault();
+        event.stopPropagation();
+        const authDd = document.getElementById("meetway-auth-dropdown");
+        const open = authDd && !authDd.hidden;
+        closeMenus();
+        if (authDd) authDd.hidden = open;
+        return;
+      }
+    }
+    if (event.target.closest("#meetway-auth-dropdown")) {
       return;
     }
     if (event.target.closest("#btn-close-perks")) {
@@ -932,9 +994,39 @@
   if (btnExplore) {
     btnExplore.addEventListener("click", (event) => {
       event.preventDefault();
-      location.hash = "#/";
-      const catalogEl = document.getElementById("catalog");
-      if (catalogEl) setTimeout(() => catalogEl.scrollIntoView({ behavior: "smooth" }), 50);
+      location.hash = "#/products";
+      renderCollection("products");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+  }
+
+  const btnPopLogin = document.getElementById("btn-pop-login");
+  if (btnPopLogin) {
+    btnPopLogin.addEventListener("click", (e) => {
+      const authDd = document.getElementById("meetway-auth-dropdown");
+      if (authDd) authDd.hidden = true;
+      location.hash = "#/login";
+      const signupForm = document.getElementById("signup-form");
+      const loginForm = document.getElementById("login-form");
+      const authTitle = document.getElementById("auth-title");
+      if (signupForm) signupForm.hidden = true;
+      if (loginForm) loginForm.hidden = false;
+      if (authTitle) authTitle.textContent = "Log in to SMF SHOP";
+    });
+  }
+
+  const btnPopRegister = document.getElementById("btn-pop-register");
+  if (btnPopRegister) {
+    btnPopRegister.addEventListener("click", (e) => {
+      const authDd = document.getElementById("meetway-auth-dropdown");
+      if (authDd) authDd.hidden = true;
+      location.hash = "#/signup";
+      const signupForm = document.getElementById("signup-form");
+      const loginForm = document.getElementById("login-form");
+      const authTitle = document.getElementById("auth-title");
+      if (signupForm) signupForm.hidden = false;
+      if (loginForm) loginForm.hidden = true;
+      if (authTitle) authTitle.textContent = "Create your SMF SHOP account";
     });
   }
 

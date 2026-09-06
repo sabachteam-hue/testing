@@ -27,16 +27,16 @@
         </a>
         <nav class="nav-capsule-group" aria-label="Shop">
           <a class="nav-capsule-btn" href="#/hot-deals" id="nav-hot-deals">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>
-            <span>🔥 Hot Deals</span>
+            <span class="nav-emoji anim-flame">🔥</span>
+            <span>Hot Deals</span>
           </a>
           <a class="nav-capsule-btn" href="#/live-stock" id="nav-live-stock">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-            <span>⚡ Live Stock</span>
+            <span class="nav-emoji anim-spark">⚡</span>
+            <span>Live Stock</span>
           </a>
           <a class="nav-capsule-btn active" href="#/products" id="nav-all-products">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
-            <span>📦 Products</span>
+            <span class="nav-emoji anim-box">📦</span>
+            <span>Products</span>
           </a>
         </nav>
 
@@ -48,6 +48,16 @@
           <span id="nav-categories">Categories</span>
           <span id="nav-brands">Brands</span>
           <span id="nav-products">Products</span>
+          <div id="language-dd">
+            <button type="button" id="language-btn">
+              <span id="language-flag"><img class="flag-img" src="/static/mini-app/flags/gb.svg" alt="" width="20" height="14"></span>
+              <span id="language-label">EN</span>
+            </button>
+            <div id="language-menu">
+              <button data-lang="en">English</button>
+              <button data-lang="ur">اردو</button>
+            </div>
+          </div>
         </div>
 
         <label class="search-pill-modern" style="margin-left: auto;">
@@ -56,24 +66,19 @@
         </label>
 
         <div class="tool-cluster">
+          <!-- Meetway-Style Currency Dropdown -->
           <div class="dd" id="currency-dd">
-            <button type="button" class="btn-dd" id="currency-btn" aria-haspopup="true" aria-expanded="false">
-              <span class="flag-icon" id="currency-flag"><img class="flag-img" src="/static/mini-app/flags/us.svg" alt="" width="20" height="14"></span>
-              <span id="currency-label">USD</span>
+            <button type="button" class="btn-dd meetway-currency-trigger" id="currency-btn" aria-haspopup="true" aria-expanded="false">
+              <span class="flag-icon" id="currency-flag"><img class="flag-img" src="/static/mini-app/flags/pk.svg" alt="" width="20" height="14"></span>
+              <span id="currency-label">PKR (Rs.)</span>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m6 9 6 6 6-6"/></svg>
             </button>
-            <div class="menu" role="menu">
-              <button type="button" role="menuitem" data-currency="USD"><img class="flag-img" src="/static/mini-app/flags/us.svg" alt="" width="20" height="14"> USD ($)</button>
-              <button type="button" role="menuitem" data-currency="PKR"><img class="flag-img" src="/static/mini-app/flags/pk.svg" alt="" width="20" height="14"> PKR (Rs)</button>
-            </div>
-          </div>
-          <div class="dd" id="language-dd">
-            <button type="button" class="btn-dd" id="language-btn" aria-haspopup="true" aria-expanded="false">
-              <span class="flag-icon" id="language-flag"><img class="flag-img" src="/static/mini-app/flags/gb.svg" alt="" width="20" height="14"></span>
-              <span id="language-label">EN</span>
-            </button>
-            <div class="menu" role="menu">
-              <button type="button" role="menuitem" data-lang="en"><img class="flag-img" src="/static/mini-app/flags/gb.svg" alt="" width="20" height="14"> English</button>
-              <button type="button" role="menuitem" data-lang="ur"><img class="flag-img" src="/static/mini-app/flags/pk.svg" alt="" width="20" height="14"> اردو</button>
+            <div class="menu meetway-currency-menu" role="menu" id="currency-menu" hidden>
+              <button type="button" role="menuitem" data-currency="USD"><img class="flag-img" src="/static/mini-app/flags/us.svg" alt="" width="20" height="14"> <span>USD ($)</span></button>
+              <button type="button" class="active" role="menuitem" data-currency="PKR"><img class="flag-img" src="/static/mini-app/flags/pk.svg" alt="" width="20" height="14"> <span>PKR (Rs.)</span> <span class="check-indicator">✓</span></button>
+              <button type="button" role="menuitem" data-currency="EUR"><img class="flag-img" src="/static/mini-app/flags/eu.svg" alt="" width="20" height="14"> <span>EUR (€)</span></button>
+              <button type="button" role="menuitem" data-currency="GBP"><img class="flag-img" src="/static/mini-app/flags/gb.svg" alt="" width="20" height="14"> <span>GBP (£)</span></button>
+              <button type="button" role="menuitem" data-currency="INR"><img class="flag-img" src="/static/mini-app/flags/in.svg" alt="" width="20" height="14"> <span>INR (₹)</span></button>
             </div>
           </div>
 
@@ -90,12 +95,34 @@
             <span class="badge" id="cart-count" style="background: #8b5cf6;">0</span>
           </button>
 
-          <a class="vip-user-widget" id="btn-account" href="#/signup">
-            <img class="vip-user-avatar" id="topbar-user-avatar" src="/static/mini-app/brand/smf-logo.svg" alt="">
-            <span id="account-pill-label">VIP</span>
-            <span class="vip-gold-pill">VIP</span>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m6 9 6 6 6-6"/></svg>
-          </a>
+          <!-- Meetway-Style Account Trigger with Register & Sign In -->
+          <div class="account-dd-wrapper" style="position: relative;">
+            <a class="vip-user-widget" id="btn-account" href="#/signup">
+              <img class="vip-user-avatar" id="topbar-user-avatar" src="/static/mini-app/brand/smf-logo.svg" alt="">
+              <span id="account-pill-label">Sign In</span>
+              <span class="vip-gold-pill">VIP</span>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m6 9 6 6 6-6"/></svg>
+            </a>
+
+            <!-- Meetway Auth Popover (Register or Login) -->
+            <div class="meetway-auth-card" id="meetway-auth-dropdown" hidden>
+              <div class="meetway-auth-badge">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00f2fe" stroke-width="2"><path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                <span>VIP AUTHENTICATION</span>
+              </div>
+              <p class="meetway-auth-desc">Sign in to view active balance, access tool licenses, and inspect orders.</p>
+              <div class="meetway-auth-buttons">
+                <a href="#/login" class="btn-meetway-auth-primary" id="btn-pop-login">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+                  <span>Sign In / Login</span>
+                </a>
+                <a href="#/signup" class="btn-meetway-auth-secondary" id="btn-pop-register">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                  <span>Register / Create Account</span>
+                </a>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -103,13 +130,37 @@
 
   <main class="page" style="max-width: 1280px; padding: 24px 20px 60px;">
     <section id="view-home">
-      <!-- Cinematic 3D Storefront Hero Showcase (Matching Mockup) -->
+      <!-- Cinematic 3D Storefront Hero Showcase (With Real Brand Logos) -->
       <div class="cinematic-hero-wrap">
         <div class="hero-side-tiles" aria-hidden="true">
-          <div class="hero-glass-tile" style="color: #e50914; font-weight: 900;">N</div>
-          <div class="hero-glass-tile" style="background: rgba(139, 92, 246, 0.25); color: #c084fc;">🟣</div>
-          <div class="hero-glass-tile" style="background: rgba(236, 72, 153, 0.25); color: #f472b6;">💎</div>
-          <div class="hero-glass-tile" style="background: rgba(0, 242, 254, 0.25); color: #00f2fe;">🤖</div>
+          <!-- Real Brand Logo: Netflix -->
+          <div class="hero-glass-tile brand-tile-netflix" title="Netflix">
+            <svg width="34" height="34" viewBox="0 0 24 24" fill="none">
+              <path d="M5.5 2h3.2v20H5.5V2z" fill="#B81D24"/>
+              <path d="M15.3 2h3.2v20h-3.2V2z" fill="#B81D24"/>
+              <path d="M5.5 2l9.8 20h3.2L8.7 2H5.5z" fill="#E50914"/>
+            </svg>
+          </div>
+          <!-- Real Brand Logo: ChatGPT / OpenAI -->
+          <div class="hero-glass-tile brand-tile-chatgpt" title="ChatGPT Plus">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="#10A37F">
+              <path d="M22.28 9.37a5.55 5.55 0 0 0-.48-4.66 5.66 5.66 0 0 0-4.05-2.73 5.57 5.57 0 0 0-4.68.97 5.55 5.55 0 0 0-3.86-1.5 5.66 5.66 0 0 0-5.32 3.86 5.57 5.57 0 0 0-1.8 4.45 5.55 5.55 0 0 0-2.3 3.48 5.66 5.66 0 0 0 1.28 5.4 5.57 5.57 0 0 0 .48 4.66 5.66 5.66 0 0 0 4.05 2.73 5.57 5.57 0 0 0 4.68-.97 5.55 5.55 0 0 0 3.86 1.5 5.66 5.66 0 0 0 5.32-3.86 5.57 5.57 0 0 0 1.8-4.45 5.55 5.55 0 0 0 2.3-3.48 5.66 5.66 0 0 0-1.28-5.4zM12 15.5a3.5 3.5 0 1 1 3.5-3.5 3.5 3.5 0 0 1-3.5 3.5z"/>
+            </svg>
+          </div>
+          <!-- Real Brand Logo: YouTube Premium -->
+          <div class="hero-glass-tile brand-tile-youtube" title="YouTube Premium">
+            <svg width="34" height="34" viewBox="0 0 24 24">
+              <rect x="2" y="4.5" width="20" height="15" rx="4.5" fill="#FF0000"/>
+              <polygon points="10,8.5 16,12 10,15.5" fill="#FFFFFF"/>
+            </svg>
+          </div>
+          <!-- Real Brand Logo: Spotify -->
+          <div class="hero-glass-tile brand-tile-spotify" title="Spotify Premium">
+            <svg width="34" height="34" viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="10.5" fill="#1DB954"/>
+              <path d="M7 9.5c3.5-1 7.5-.7 10.5 1m-9.5 3c3-.8 6.5-.5 9 .8m-8 3c2.3-.6 5-.3 7 .7" stroke="#000000" stroke-width="2.2" stroke-linecap="round" fill="none"/>
+            </svg>
+          </div>
         </div>
 
         <div class="hero-center-content">
@@ -122,16 +173,46 @@
             <span>Instant 1-Click Delivery Guarantee</span>
           </div>
           <div class="hero-actions" style="margin-top: 14px; display: flex; gap: 12px; justify-content: center;">
-            <a class="btn btn-primary" href="#catalog" id="btn-explore">Explore Products</a>
-            <a class="btn btn-whatsapp" id="btn-whatsapp" href="#" target="_blank" rel="noopener">Order on WhatsApp</a>
+            <a class="btn btn-primary" href="#/products" id="btn-explore">Explore Products</a>
+            <a class="btn btn-whatsapp" id="btn-whatsapp" href="https://wa.me/" target="_blank" rel="noopener">Order on WhatsApp</a>
           </div>
         </div>
 
         <div class="hero-side-tiles" aria-hidden="true">
-          <div class="hero-glass-tile" style="background: rgba(16, 185, 129, 0.25); color: #10b981;">⚡</div>
-          <div class="hero-glass-tile" style="background: rgba(0, 196, 204, 0.25); color: #00c4cc;">🎨</div>
-          <div class="hero-glass-tile" style="background: rgba(29, 185, 84, 0.25); color: #1db954;">🎵</div>
-          <div class="hero-glass-tile" style="background: rgba(37, 99, 235, 0.25); color: #3b82f6;">🔊</div>
+          <!-- Real Brand Logo: PlayStation -->
+          <div class="hero-glass-tile brand-tile-playstation" title="PlayStation">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="#0070D1">
+              <path d="M8.5 3.5c.8 0 1.5.7 1.5 1.5v11.5c-1-.5-2.2-.8-3.5-.8-2.8 0-4 1.2-4 2.8s1.2 2.5 3.5 2.5c3.2 0 6.5-1.8 6.5-4.5V3.5c0-.8.7-1.5 1.5-1.5s1.5.7 1.5 1.5v13c2.2-.8 4.5-1 6-1 1.8 0 3 .8 3 2s-1.2 2-3 2c-2.5 0-5.5-.8-7.5-1.8"/>
+            </svg>
+          </div>
+          <!-- Real Brand Logo: Canva -->
+          <div class="hero-glass-tile brand-tile-canva" title="Canva Pro">
+            <svg width="34" height="34" viewBox="0 0 24 24">
+              <defs>
+                <linearGradient id="hero-canva-grad" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stop-color="#00C4CC"/>
+                  <stop offset="100%" stop-color="#7D2AE8"/>
+                </linearGradient>
+              </defs>
+              <circle cx="12" cy="12" r="10.5" fill="url(#hero-canva-grad)"/>
+              <text x="12" y="16.5" font-family="'Brush Script MT', cursive, sans-serif" font-size="15" font-weight="900" font-style="italic" fill="#ffffff" text-anchor="middle">C</text>
+            </svg>
+          </div>
+          <!-- Real Brand Logo: Discord -->
+          <div class="hero-glass-tile brand-tile-discord" title="Discord Nitro">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="#5865F2">
+              <path d="M19.3 4.5A16.7 16.7 0 0 0 15.2 3a.1.1 0 0 0-.1.1 11.6 11.6 0 0 0-.5 1.1 15.4 15.4 0 0 0-4.6 0 11.6 11.6 0 0 0-.5-1.1.1.1 0 0 0-.1-.1 16.7 16.7 0 0 0-4.1 1.5.1.1 0 0 0 0 .1C2.8 8.8 2 13 2.5 17.2a.1.1 0 0 0 0 .1 16.9 16.9 0 0 0 5.1 2.6.1.1 0 0 0 .1 0 12.1 12.1 0 0 0 1-1.7.1.1 0 0 0-.1-.1 11.1 11.1 0 0 1-1.6-.8.1.1 0 0 1 0-.1c.1-.1.2-.2.4-.2a12 12 0 0 0 10.4 0 .1.1 0 0 1 .4.2 11.1 11.1 0 0 1-1.6.8.1.1 0 0 0-.1.1c.3.5.7 1.1 1 1.7a.1.1 0 0 0 .1 0 16.9 16.9 0 0 0 5.1-2.6.1.1 0 0 0 0-.1c.6-4.8-.9-9-2.9-12.7zM8.5 14.5c-1 0-1.8-.9-1.8-2s.8-2 1.8-2 1.8.9 1.8 2-.8 2-1.8 2zm7 0c-1 0-1.8-.9-1.8-2s.8-2 1.8-2 1.8.9 1.8 2-.8 2-1.8 2z"/>
+            </svg>
+          </div>
+          <!-- Real Brand Logo: Prime Video -->
+          <div class="hero-glass-tile brand-tile-prime" title="Prime Video">
+            <svg width="34" height="34" viewBox="0 0 24 24">
+              <rect x="2" y="3.5" width="20" height="17" rx="4" fill="#000814"/>
+              <path d="M6 14.5c3.5 2 8.5 2 12 0" stroke="#00A8E1" stroke-width="2.5" stroke-linecap="round"/>
+              <polygon points="17,14 19.5,15 18,17" fill="#00A8E1"/>
+              <text x="12" y="11" font-family="sans-serif" font-size="8" font-weight="900" fill="#ffffff" text-anchor="middle">prime</text>
+            </svg>
+          </div>
         </div>
       </div>
 
