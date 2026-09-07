@@ -278,8 +278,8 @@
 
   function renderChrome() {
     if (state.shop) {
-      if (els.eyebrow && state.shop.eyebrow) els.eyebrow.textContent = state.shop.eyebrow;
-      if (els.headline && state.shop.headline) els.headline.textContent = state.shop.headline;
+      if (els.eyebrow && state.shop.eyebrow && state.shop.eyebrow !== "PREMIUM DIGITAL ACCOUNTS") els.eyebrow.textContent = state.shop.eyebrow;
+      if (els.headline && state.shop.headline && state.shop.headline !== "SMF SHOP") els.headline.textContent = state.shop.headline;
       if (els.tagline && state.shop.tagline) els.tagline.textContent = state.shop.tagline;
       [els.whatsapp, els.whatsappCatalog, els.whatsappCheckout].forEach((node) => {
         if (!node) return;
