@@ -200,6 +200,7 @@ CATEGORY_UPLOAD_DIR = get_upload_dir("categories")
 SERVICE_UPLOAD_DIR = get_upload_dir("services")
 PAYMENT_METHOD_UPLOAD_DIR = get_upload_dir("payment_methods")
 CUSTOM_EMOJI_UPLOAD_DIR = get_upload_dir("custom_emoji")
+LOGO_UPLOAD_DIR = get_upload_dir("logos")
 
 
 async def save_icon_image(icon_image: UploadFile | None, upload_dir: Path, prefix: str) -> str | None:
@@ -3625,22 +3626,69 @@ def settings(request: Request, db: Session = Depends(get_db)):
     )
 
 
+async def _process_hero_logo_uploads(
+    logo_netflix: str = "",
+    file_netflix: UploadFile | None = None,
+    logo_discord: str = "",
+    file_discord: UploadFile | None = None,
+    logo_chatgpt: str = "",
+    file_chatgpt: UploadFile | None = None,
+    logo_star: str = "",
+    file_star: UploadFile | None = None,
+    logo_canva: str = "",
+    file_canva: UploadFile | None = None,
+    logo_spotify: str = "",
+    file_spotify: UploadFile | None = None,
+) -> dict:
+    logos = get_hero_logos()
+    pairs = [
+        ("netflix", logo_netflix, file_netflix),
+        ("discord", logo_discord, file_discord),
+        ("chatgpt", logo_chatgpt, file_chatgpt),
+        ("star", logo_star, file_star),
+        ("canva", logo_canva, file_canva),
+        ("spotify", logo_spotify, file_spotify),
+    ]
+    updated = False
+    for key, text_val, file_val in pairs:
+        if file_val and file_val.filename:
+            saved_path = await save_icon_image(file_val, LOGO_UPLOAD_DIR, key)
+            if saved_path:
+                logos[key] = saved_path
+                updated = True
+        elif text_val and text_val.strip():
+            logos[key] = text_val.strip()
+            updated = True
+    if updated:
+        save_hero_logos(logos)
+    return logos
+
+
 @router.post("/settings/hero-logos")
 async def update_main_page_logos(
     request: Request,
     logo_netflix: str = Form(""),
+    file_netflix: UploadFile | None = File(None),
     logo_discord: str = Form(""),
+    file_discord: UploadFile | None = File(None),
     logo_chatgpt: str = Form(""),
+    file_chatgpt: UploadFile | None = File(None),
     logo_star: str = Form(""),
+    file_star: UploadFile | None = File(None),
+    logo_canva: str = Form(""),
+    file_canva: UploadFile | None = File(None),
+    logo_spotify: str = Form(""),
+    file_spotify: UploadFile | None = File(None),
 ):
     admin_required(request)
-    logos = {
-        "netflix": logo_netflix.strip(),
-        "discord": logo_discord.strip(),
-        "chatgpt": logo_chatgpt.strip(),
-        "star": logo_star.strip(),
-    }
-    save_hero_logos(logos)
+    await _process_hero_logo_uploads(
+        logo_netflix, file_netflix,
+        logo_discord, file_discord,
+        logo_chatgpt, file_chatgpt,
+        logo_star, file_star,
+        logo_canva, file_canva,
+        logo_spotify, file_spotify,
+    )
     return redirect(f"/admin/settings?message={quote('Main page 3D logos updated successfully!')}")
 
 
@@ -3667,19 +3715,28 @@ async def update_settings(
     force_join_group_url: str = Form(""),
     mini_app_url: str = Form(""),
     logo_netflix: str = Form(""),
+    file_netflix: UploadFile | None = File(None),
     logo_discord: str = Form(""),
+    file_discord: UploadFile | None = File(None),
     logo_chatgpt: str = Form(""),
+    file_chatgpt: UploadFile | None = File(None),
     logo_star: str = Form(""),
+    file_star: UploadFile | None = File(None),
+    logo_canva: str = Form(""),
+    file_canva: UploadFile | None = File(None),
+    logo_spotify: str = Form(""),
+    file_spotify: UploadFile | None = File(None),
     db: Session = Depends(get_db),
 ):
     admin_required(request)
-    if any([logo_netflix, logo_discord, logo_chatgpt, logo_star]):
-        existing_logos = get_hero_logos()
-        existing_logos["netflix"] = logo_netflix.strip()
-        existing_logos["discord"] = logo_discord.strip()
-        existing_logos["chatgpt"] = logo_chatgpt.strip()
-        existing_logos["star"] = logo_star.strip()
-        save_hero_logos(existing_logos)
+    await _process_hero_logo_uploads(
+        logo_netflix, file_netflix,
+        logo_discord, file_discord,
+        logo_chatgpt, file_chatgpt,
+        logo_star, file_star,
+        logo_canva, file_canva,
+        logo_spotify, file_spotify,
+    )
     config = db.query(BotConfig).first() or BotConfig()
     was_maintenance = bool(getattr(config, "maintenance", False))
     # Checkbox posts "true" when ticked; missing field when unticked (same as force_join).

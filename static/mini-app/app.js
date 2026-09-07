@@ -290,10 +290,20 @@
     if (logos.chatgpt) {
       const el = document.getElementById("hero-badge-chatgpt");
       if (el) el.innerHTML = `<img src="${escapeHtml(logos.chatgpt)}" class="hero-custom-logo-img" alt="ChatGPT">`;
+      const el2 = document.getElementById("hero-badge-chatgpt-r");
+      if (el2) el2.innerHTML = `<img src="${escapeHtml(logos.chatgpt)}" class="hero-custom-logo-img" alt="ChatGPT">`;
     }
     if (logos.star) {
       const el = document.getElementById("hero-badge-star");
       if (el) el.innerHTML = `<img src="${escapeHtml(logos.star)}" class="hero-custom-logo-img" alt="VIP Star">`;
+    }
+    if (logos.canva) {
+      const el = document.getElementById("hero-badge-canva");
+      if (el) el.innerHTML = `<img src="${escapeHtml(logos.canva)}" class="hero-custom-logo-img" alt="Canva">`;
+    }
+    if (logos.spotify) {
+      const el = document.getElementById("hero-badge-spotify-green");
+      if (el) el.innerHTML = `<img src="${escapeHtml(logos.spotify)}" class="hero-custom-logo-img" alt="Spotify">`;
     }
   }
 
@@ -621,11 +631,19 @@
   }
 
   function openSheet(el) {
+    if (!el) return;
     el.hidden = false;
+    requestAnimationFrame(() => {
+      el.classList.add("sheet-open");
+    });
   }
 
   function closeSheet(el) {
-    el.hidden = true;
+    if (!el) return;
+    el.classList.remove("sheet-open");
+    setTimeout(() => {
+      el.hidden = true;
+    }, 200);
   }
 
   function renderProductSheet(product) {
@@ -1057,6 +1075,9 @@
 
     if (event.target.closest("[data-close]")) {
       closeSheet(event.target.closest(".sheet"));
+    }
+    if (event.target.classList && event.target.classList.contains("sheet")) {
+      closeSheet(event.target);
     }
     if (!event.target.closest(".dropdown")) closeMenus();
   });

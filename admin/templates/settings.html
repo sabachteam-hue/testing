@@ -6,7 +6,7 @@
 {% if message %}<p class="alert success">{{ message }}</p>{% endif %}
 
 <div>
-<form method="post" action="/admin/settings">
+<form method="post" action="/admin/settings" enctype="multipart/form-data">
 
   <div class="panel">
     <div class="settings-card-head">
@@ -60,26 +60,123 @@
     <div class="settings-card-head">
       <div>
         <h3>Update Main Page Logos (Hero 3D Badges)</h3>
-        <p class="muted settings-card-sub">Main page hero banner ke 3D floating brand logos/icons yahan se update karein</p>
+        <p class="muted settings-card-sub">Main page hero banner ke 3D floating brand logos/icons yahan se direct upload karein ya image link dalein</p>
       </div>
     </div>
     <div class="settings-fields">
-      <label>Netflix 3D Logo (Image URL ya Path)
-        <input name="logo_netflix" value="{{ hero_logos.get('netflix', '') if hero_logos else '' }}" placeholder="https://example.com/netflix.png or /static/uploads/...">
-        <span class="field-hint">Khali chhorny par default official 3D Netflix ribbon badge show hoga.</span>
-      </label>
-      <label>Discord 3D Logo (Image URL ya Path)
-        <input name="logo_discord" value="{{ hero_logos.get('discord', '') if hero_logos else '' }}" placeholder="https://example.com/discord.png or /static/uploads/...">
-        <span class="field-hint">Khali chhorny par default official 3D Discord Clyde badge show hoga.</span>
-      </label>
-      <label>ChatGPT Plus 3D Logo (Image URL ya Path)
-        <input name="logo_chatgpt" value="{{ hero_logos.get('chatgpt', '') if hero_logos else '' }}" placeholder="https://example.com/chatgpt.png or /static/uploads/...">
-        <span class="field-hint">Khali chhorny par default official 3D OpenAI mint coin badge show hoga.</span>
-      </label>
-      <label>Reward Star 3D Badge (Image URL ya Path)
-        <input name="logo_star" value="{{ hero_logos.get('star', '') if hero_logos else '' }}" placeholder="https://example.com/star.png or /static/uploads/...">
-        <span class="field-hint">Khali chhorny par default official 3D pink gem star badge show hoga.</span>
-      </label>
+      <!-- Netflix 3D Logo -->
+      <div style="background: rgba(18, 12, 36, 0.7); border: 1px solid rgba(139, 92, 246, 0.25); border-radius: 14px; padding: 14px; margin-bottom: 12px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+          <strong style="color: #ff3b45; font-size: 14px;">1. Netflix 3D Logo (Left Top)</strong>
+          {% if hero_logos and hero_logos.get('netflix') %}
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="muted" style="font-size: 11px;">Current:</span>
+              <img src="{{ hero_logos.get('netflix') }}" style="width: 32px; height: 32px; object-fit: contain; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: #000;" alt="">
+            </div>
+          {% endif %}
+        </div>
+        <label style="margin-bottom: 6px;">Direct Image File Upload:
+          <input type="file" name="file_netflix" accept="image/png, image/jpeg, image/webp, image/svg+xml" style="padding: 6px; background: rgba(0,0,0,0.3);">
+        </label>
+        <label>Ya Image Link/URL:
+          <input name="logo_netflix" value="{{ hero_logos.get('netflix', '') if hero_logos else '' }}" placeholder="https://... or /admin/static/uploads/...">
+        </label>
+      </div>
+
+      <!-- Discord 3D Logo -->
+      <div style="background: rgba(18, 12, 36, 0.7); border: 1px solid rgba(139, 92, 246, 0.25); border-radius: 14px; padding: 14px; margin-bottom: 12px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+          <strong style="color: #a855f7; font-size: 14px;">2. Discord 3D Logo (Left Mid-Right)</strong>
+          {% if hero_logos and hero_logos.get('discord') %}
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="muted" style="font-size: 11px;">Current:</span>
+              <img src="{{ hero_logos.get('discord') }}" style="width: 32px; height: 32px; object-fit: contain; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: #000;" alt="">
+            </div>
+          {% endif %}
+        </div>
+        <label style="margin-bottom: 6px;">Direct Image File Upload:
+          <input type="file" name="file_discord" accept="image/png, image/jpeg, image/webp, image/svg+xml" style="padding: 6px; background: rgba(0,0,0,0.3);">
+        </label>
+        <label>Ya Image Link/URL:
+          <input name="logo_discord" value="{{ hero_logos.get('discord', '') if hero_logos else '' }}" placeholder="https://... or /admin/static/uploads/...">
+        </label>
+      </div>
+
+      <!-- ChatGPT Plus Mint Disc -->
+      <div style="background: rgba(18, 12, 36, 0.7); border: 1px solid rgba(139, 92, 246, 0.25); border-radius: 14px; padding: 14px; margin-bottom: 12px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+          <strong style="color: #10b981; font-size: 14px;">3. ChatGPT Plus 3D Coin (Left Bottom)</strong>
+          {% if hero_logos and hero_logos.get('chatgpt') %}
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="muted" style="font-size: 11px;">Current:</span>
+              <img src="{{ hero_logos.get('chatgpt') }}" style="width: 32px; height: 32px; object-fit: contain; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: #000;" alt="">
+            </div>
+          {% endif %}
+        </div>
+        <label style="margin-bottom: 6px;">Direct Image File Upload:
+          <input type="file" name="file_chatgpt" accept="image/png, image/jpeg, image/webp, image/svg+xml" style="padding: 6px; background: rgba(0,0,0,0.3);">
+        </label>
+        <label>Ya Image Link/URL:
+          <input name="logo_chatgpt" value="{{ hero_logos.get('chatgpt', '') if hero_logos else '' }}" placeholder="https://... or /admin/static/uploads/...">
+        </label>
+      </div>
+
+      <!-- Reward Star Badge -->
+      <div style="background: rgba(18, 12, 36, 0.7); border: 1px solid rgba(139, 92, 246, 0.25); border-radius: 14px; padding: 14px; margin-bottom: 12px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+          <strong style="color: #ec4899; font-size: 14px;">4. VIP Reward Star 3D Badge (Left Bottom-Left)</strong>
+          {% if hero_logos and hero_logos.get('star') %}
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="muted" style="font-size: 11px;">Current:</span>
+              <img src="{{ hero_logos.get('star') }}" style="width: 32px; height: 32px; object-fit: contain; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: #000;" alt="">
+            </div>
+          {% endif %}
+        </div>
+        <label style="margin-bottom: 6px;">Direct Image File Upload:
+          <input type="file" name="file_star" accept="image/png, image/jpeg, image/webp, image/svg+xml" style="padding: 6px; background: rgba(0,0,0,0.3);">
+        </label>
+        <label>Ya Image Link/URL:
+          <input name="logo_star" value="{{ hero_logos.get('star', '') if hero_logos else '' }}" placeholder="https://... or /admin/static/uploads/...">
+        </label>
+      </div>
+
+      <!-- Canva Pro 3D Logo (Right side) -->
+      <div style="background: rgba(18, 12, 36, 0.7); border: 1px solid rgba(139, 92, 246, 0.25); border-radius: 14px; padding: 14px; margin-bottom: 12px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+          <strong style="color: #00d2ff; font-size: 14px;">5. Canva Pro 3D Badge (Right Top)</strong>
+          {% if hero_logos and hero_logos.get('canva') %}
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="muted" style="font-size: 11px;">Current:</span>
+              <img src="{{ hero_logos.get('canva') }}" style="width: 32px; height: 32px; object-fit: contain; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: #000;" alt="">
+            </div>
+          {% endif %}
+        </div>
+        <label style="margin-bottom: 6px;">Direct Image File Upload:
+          <input type="file" name="file_canva" accept="image/png, image/jpeg, image/webp, image/svg+xml" style="padding: 6px; background: rgba(0,0,0,0.3);">
+        </label>
+        <label>Ya Image Link/URL:
+          <input name="logo_canva" value="{{ hero_logos.get('canva', '') if hero_logos else '' }}" placeholder="https://... or /admin/static/uploads/...">
+        </label>
+      </div>
+
+      <!-- Spotify 3D Logo (Right side) -->
+      <div style="background: rgba(18, 12, 36, 0.7); border: 1px solid rgba(139, 92, 246, 0.25); border-radius: 14px; padding: 14px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+          <strong style="color: #1ed760; font-size: 14px;">6. Spotify 3D Badge (Right Bottom)</strong>
+          {% if hero_logos and hero_logos.get('spotify') %}
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="muted" style="font-size: 11px;">Current:</span>
+              <img src="{{ hero_logos.get('spotify') }}" style="width: 32px; height: 32px; object-fit: contain; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: #000;" alt="">
+            </div>
+          {% endif %}
+        </div>
+        <label style="margin-bottom: 6px;">Direct Image File Upload:
+          <input type="file" name="file_spotify" accept="image/png, image/jpeg, image/webp, image/svg+xml" style="padding: 6px; background: rgba(0,0,0,0.3);">
+        </label>
+        <label>Ya Image Link/URL:
+          <input name="logo_spotify" value="{{ hero_logos.get('spotify', '') if hero_logos else '' }}" placeholder="https://... or /admin/static/uploads/...">
+        </label>
+      </div>
     </div>
   </div>
 

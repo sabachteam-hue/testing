@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script defer src="https://telegram.org/js/telegram-web-app.js"></script>
-  <link rel="stylesheet" href="/static/mini-app/styles.css?v=site8">
+  <link rel="stylesheet" href="/static/mini-app/styles.css?v=site10">
 </head>
 <body>
   <div class="bg" id="ambient-bg" aria-hidden="true">
@@ -194,9 +194,42 @@
             <svg width="18" height="18" viewBox="0 0 24 24" fill="#00f2fe"><path d="M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4Zm-2 16-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8Z"/></svg>
             <span>Instant 1-Click Delivery Guarantee</span>
           </div>
-          <div class="hero-actions" style="margin-top: 18px; display: flex; gap: 14px;">
+          <div class="hero-actions" style="margin-top: 18px; display: flex; gap: 14px; justify-content: center;">
             <a class="btn btn-primary" href="#/products" id="btn-explore">Explore Products</a>
             <a class="btn btn-whatsapp" id="btn-whatsapp" href="https://wa.me/" target="_blank" rel="noopener">Order on WhatsApp</a>
+          </div>
+        </div>
+
+        <div class="hero-floating-cluster hero-cluster-right" aria-hidden="true">
+          <!-- 3D Glass Tile 5: OpenAI Mint Coin -->
+          <div class="hero-glass-tile brand-tile-chatgpt-coin" title="OpenAI API" id="hero-badge-chatgpt-r">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" class="hero-icon-svg">
+              <path d="M22.28 9.37a5.55 5.55 0 0 0-.48-4.66 5.66 5.66 0 0 0-4.05-2.73 5.57 5.57 0 0 0-4.68.97 5.55 5.55 0 0 0-3.86-1.5 5.66 5.66 0 0 0-5.32 3.86 5.57 5.57 0 0 0-1.8 4.45 5.55 5.55 0 0 0-2.3 3.48 5.66 5.66 0 0 0 1.28 5.4 5.57 5.57 0 0 0 .48 4.66 5.66 5.66 0 0 0 4.05 2.73 5.57 5.57 0 0 0 4.68-.97 5.55 5.55 0 0 0 3.86 1.5 5.66 5.66 0 0 0 5.32-3.86 5.57 5.57 0 0 0 1.8-4.45 5.55 5.55 0 0 0 2.3-3.48 5.66 5.66 0 0 0-1.28-5.4zM12 15.5a3.5 3.5 0 1 1 3.5-3.5 3.5 3.5 0 0 1-3.5 3.5z" stroke="#ffffff" stroke-width="1.6" fill="rgba(255, 255, 255, 0.2)" stroke-linecap="round" stroke-linejoin="round" style="filter: drop-shadow(0 3px 6px rgba(0,0,0,0.5));"/>
+            </svg>
+          </div>
+
+          <!-- 3D Glass Tile 6: Canva Pro 3D Orb -->
+          <div class="hero-glass-tile brand-tile-canva-orb" title="Canva Pro" id="hero-badge-canva">
+            <svg width="68" height="28" viewBox="0 0 76 30" fill="none">
+              <text x="38" y="22" font-family="'Brush Script MT', 'Dancing Script', 'Caveat', cursive, sans-serif" font-size="26" font-weight="900" font-style="italic" fill="#ffffff" text-anchor="middle" letter-spacing="1" style="filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));">Canva</text>
+            </svg>
+          </div>
+
+          <!-- 3D Glass Tile 7: Spotify Cyan Waves -->
+          <div class="hero-glass-tile brand-tile-spotify-cyan" title="Spotify Cyan Waves" id="hero-badge-spotify-cyan">
+            <svg width="46" height="46" viewBox="0 0 24 24" fill="none" style="filter: drop-shadow(0 3px 6px rgba(0,0,0,0.5));">
+              <path d="M5 9c4.5-1.2 9.5-.8 14 1.2" stroke="#00f2fe" stroke-width="2.8" stroke-linecap="round"/>
+              <path d="M6.5 13.5c3.8-1 8-.7 11.5 1" stroke="#00f2fe" stroke-width="2.5" stroke-linecap="round"/>
+              <path d="M8 18c3-.8 6.5-.5 9 .8" stroke="#00f2fe" stroke-width="2.2" stroke-linecap="round"/>
+            </svg>
+          </div>
+
+          <!-- 3D Glass Tile 8: Spotify Emerald Tile -->
+          <div class="hero-glass-tile brand-tile-spotify-green" title="Spotify Premium" id="hero-badge-spotify-green">
+            <svg width="48" height="48" viewBox="0 0 24 24" style="filter: drop-shadow(0 3px 8px rgba(0,0,0,0.6));">
+              <circle cx="12" cy="12" r="10.5" fill="#1DB954"/>
+              <path d="M7 9.5c3.5-1 7.5-.7 10.5 1m-9.5 3c3-.8 6.5-.5 9 .8m-8 3c2.3-.6 5-.3 7 .7" stroke="#081014" stroke-width="2.2" stroke-linecap="round" fill="none"/>
+            </svg>
           </div>
         </div>
       </div>
@@ -261,7 +294,7 @@
         <div class="auth-card-luxury" id="auth-card-box">
           <!-- Glowing 3D Lock / Key Icon -->
           <div class="auth-icon-badge" id="auth-icon-badge">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#00f2fe" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#c4b5fd" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
               <rect x="3" y="11" width="18" height="11" rx="3" ry="3"/>
               <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
             </svg>
@@ -485,6 +518,6 @@
   <div id="toast-container" class="toast-container" aria-live="polite"></div>
 
   <script src="/static/mini-app/cursor-light.js?v=site9"></script>
-  <script src="/static/mini-app/app.js?v=site7"></script>
+  <script src="/static/mini-app/app.js?v=site10"></script>
 </body>
 </html>
