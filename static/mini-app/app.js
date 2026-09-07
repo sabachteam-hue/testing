@@ -669,36 +669,223 @@
 
   function renderCartSheet() {
     if (!state.cart.length) {
-      els.cartBody.innerHTML = `<p class="empty">Your cart is empty.</p>`;
+      els.cartBody.innerHTML = `
+        <div style="text-align: center; padding: 48px 16px; color: var(--muted);">
+          <div style="font-size: 48px; margin-bottom: 14px;">🛍️</div>
+          <h3 style="color: #fff; margin-bottom: 8px; font-size: 18px;">Your cart is empty</h3>
+          <p style="font-size: 13px; margin: 0 0 20px 0;">Add digital licenses from the store to checkout.</p>
+          <button type="button" class="cart-btn-primary" style="max-width: 200px; margin: 0 auto;" id="btn-empty-browse">Browse Products</button>
+        </div>
+      `;
+      const browseBtn = document.getElementById("btn-empty-browse");
+      if (browseBtn) browseBtn.onclick = () => closeSheet(els.cartSheet);
       openSheet(els.cartSheet);
       return;
     }
-    els.cartBody.innerHTML = `
-      ${state.cart
-        .map(
-          (row) => `
-        <div class="cart-row">
-          <div>
-            <strong>${escapeHtml(row.name)}</strong>
-            <div class="muted">${formatPrice(row.sell_price)}</div>
-          </div>
-          <div class="cart-actions">
-            <button type="button" class="qty-btn" data-sku="${row.sku}" data-delta="-1">−</button>
-            ${row.qty}
-            <button type="button" class="qty-btn" data-sku="${row.sku}" data-delta="1">+</button>
-            <button type="button" class="remove-btn" data-remove="${row.sku}">Remove</button>
-          </div>
-        </div>
-      `
-        )
-        .join("")}
-      <p><strong>Total ${formatPrice(cartTotal())}</strong></p>
-      <div class="hero-actions">
-        <a class="btn btn-primary" href="#/checkout" id="cart-checkout">Direct checkout</a>
-        <a class="btn btn-whatsapp" target="_blank" rel="noopener" href="${waHref()}">Order on WhatsApp</a>
+
+    const isSigned = Boolean(state.user && state.user.email);
+    const subtotal = cartTotal();
+    const total = subtotal;
+
+    const itemsHtml = `
+      <div class="cart-items-list">
+        ${state.cart
+          .map((row) => {
+            const prod = productBySku(row.sku);
+            const thumb = (prod && prod.image_url)
+              ? `<img src="${escapeHtml(prod.image_url)}" alt="">`
+              : (row.emoji || (prod && prod.emoji) || "⚡");
+            const subtitle = (prod && (prod.subtitle || prod.category || prod.duration)) || "Instant Delivery · Team Plan";
+
+            return `
+              <div class="cart-item-card">
+                <div class="cart-item-thumb">${thumb}</div>
+                <div class="cart-item-info">
+                  <div class="cart-item-name">${escapeHtml(row.name)}</div>
+                  <div class="cart-item-meta">${escapeHtml(subtitle)}</div>
+                  <div class="cart-qty-pill">
+                    <button type="button" class="qty-btn-inline" data-cart-delta="-1" data-sku="${escapeHtml(row.sku)}">−</button>
+                    <span class="cart-qty-val">${row.qty}</span>
+                    <button type="button" class="qty-btn-inline" data-cart-delta="1" data-sku="${escapeHtml(row.sku)}">+</button>
+                  </div>
+                </div>
+                <div class="cart-item-price-col">
+                  <div class="cart-item-price">${formatPrice(row.sell_price * row.qty)}</div>
+                  <button type="button" class="cart-item-remove" data-remove="${escapeHtml(row.sku)}" data-cart-remove="${escapeHtml(row.sku)}" title="Remove item">✕</button>
+                </div>
+              </div>
+            `;
+          })
+          .join("")}
       </div>
     `;
-    document.getElementById("cart-checkout").onclick = () => closeSheet(els.cartSheet);
+
+    const summaryHtml = `
+      <div class="cart-summary-section">
+        <div class="cart-summary-row">
+          <span>Subtotal</span>
+          <span>${formatPrice(subtotal)}</span>
+        </div>
+        <div class="cart-total-row">
+          <span>Total</span>
+          <span class="cart-total-val">${formatPrice(total)}</span>
+        </div>
+      </div>
+    `;
+
+    // Checkout contact field logic (As user requested:
+    // "or agr client sign in me ho to mail ya phone number option na ay sign out stage me ho to ay")
+    let contactSectionHtml = "";
+    if (isSigned) {
+      contactSectionHtml = `
+        <div class="cart-signed-badge">
+          <span class="cart-signed-dot">✓</span>
+          <div class="cart-signed-info">
+            <div class="cart-signed-title">Ordering as: <strong>${escapeHtml(state.user.name || state.user.email)}</strong></div>
+            <div class="cart-signed-subtitle">Order & Instant Delivery will be credited directly to your account.</div>
+          </div>
+        </div>
+      `;
+    } else {
+      contactSectionHtml = `
+        <div class="cart-auth-banner">
+          <span>⚡ Have an account?</span>
+          <a href="#/login" id="cart-go-signin">Sign In / Register &gt;</a>
+        </div>
+        <div class="cart-field-group">
+          <label class="cart-field-label" for="cart-contact-input">Email or phone (where we send your order)</label>
+          <input type="text" id="cart-contact-input" class="cart-input-field" placeholder="you@example.com or 03001234567" autocomplete="email tel">
+          <div id="cart-contact-error" class="cart-error-msg" hidden>Please enter an email address or phone number above.</div>
+        </div>
+      `;
+    }
+
+    // Payment methods: dynamically populated from state.methods (admin panel configured)
+    const methods = (state.methods && state.methods.length) ? state.methods : [
+      { code: "binance_pay", name: "Binance Pay", network: "Direct" },
+      { code: "usdt_bep20", name: "USDT (BEP-20)", network: "BSC" },
+      { code: "easypaisa", name: "EasyPaisa", network: "PKR" },
+    ];
+
+    const methodsOptionsHtml = methods.map((m, idx) => `
+      <option value="${escapeHtml(m.code)}" ${idx === 0 ? 'selected' : ''}>
+        ${escapeHtml(m.name)}${m.network ? ` (${escapeHtml(m.network)})` : ''}
+      </option>
+    `).join("");
+
+    const checkoutSectionHtml = `
+      <div class="cart-checkout-section">
+        ${contactSectionHtml}
+        <div class="cart-field-group">
+          <label class="cart-field-label" for="cart-method-select">Pay with</label>
+          <select id="cart-method-select" class="cart-select-field">
+            ${methodsOptionsHtml}
+          </select>
+        </div>
+        <button type="button" class="cart-btn-primary" id="btn-cart-submit" title="Direct checkout" data-action="#/checkout">
+          <span>Continue to payment ➔</span>
+        </button>
+        <a class="cart-btn-secondary" id="btn-cart-wa" target="_blank" rel="noopener" href="${waHref()}">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.97.58 3.86 1.69 5.48L2.08 22l4.76-1.69c1.55.97 3.35 1.5 5.2 1.5 5.46 0 9.91-4.45 9.91-9.91S17.5 2 12.04 2Z"/></svg>
+          <span>Checkout via WhatsApp</span>
+        </a>
+      </div>
+    `;
+
+    els.cartBody.innerHTML = itemsHtml + summaryHtml + checkoutSectionHtml;
+
+    const signinLink = document.getElementById("cart-go-signin");
+    if (signinLink) {
+      signinLink.onclick = (e) => {
+        e.preventDefault();
+        closeSheet(els.cartSheet);
+        location.hash = "#/login";
+        renderAuth("login");
+      };
+    }
+
+    // Delta buttons
+    els.cartBody.querySelectorAll("[data-cart-delta]").forEach((btn) => {
+      btn.onclick = () => {
+        const sku = btn.dataset.sku;
+        const delta = Number(btn.dataset.cartDelta || 0);
+        const row = state.cart.find((r) => r.sku === sku);
+        if (!row) return;
+        row.qty += delta;
+        if (row.qty <= 0) {
+          state.cart = state.cart.filter((r) => r.sku !== sku);
+        }
+        saveCart();
+        renderCartSheet();
+      };
+    });
+
+    // Remove button
+    els.cartBody.querySelectorAll("[data-cart-remove]").forEach((btn) => {
+      btn.onclick = () => {
+        const sku = btn.dataset.cartRemove;
+        removeFromCart(sku);
+        renderCartSheet();
+      };
+    });
+
+    // Submit handler
+    const submitBtn = document.getElementById("btn-cart-submit");
+    if (submitBtn) {
+      submitBtn.onclick = async () => {
+        let contactVal = "";
+        if (isSigned) {
+          contactVal = state.user.email;
+        } else {
+          const input = document.getElementById("cart-contact-input");
+          const errEl = document.getElementById("cart-contact-error");
+          contactVal = (input && input.value || "").trim();
+          if (!contactVal) {
+            if (errEl) errEl.hidden = false;
+            if (input) input.focus();
+            return;
+          }
+          if (errEl) errEl.hidden = true;
+        }
+
+        const methodSelect = document.getElementById("cart-method-select");
+        const selectedMethod = methodSelect ? methodSelect.value : "";
+        if (!selectedMethod) {
+          alert("Please choose a payment method.");
+          return;
+        }
+
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = `<span>Processing order…</span>`;
+
+        try {
+          const data = await postJSON("/api/web/checkout", {
+            email: contactVal,
+            payment_method: selectedMethod,
+            items: state.cart.map((r) => ({ sku: r.sku, qty: r.qty })),
+          });
+          if (data.user) saveUser(data.user);
+          state.cart = [];
+          saveCart();
+          state.order = data;
+          closeSheet(els.cartSheet);
+
+          if (isSigned) {
+            // Signed in user: direct to Customer Dashboard delivery/orders
+            window.location.href = "/account#orders";
+          } else {
+            // Guest: direct to Order completed screen with credentials
+            location.hash = `#/order/${encodeURIComponent(data.order_code)}`;
+            renderOrder(data);
+          }
+        } catch (err) {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = `<span>Continue to payment ➔</span>`;
+          alert(err.message || "Failed to process checkout.");
+        }
+      };
+    }
+
     openSheet(els.cartSheet);
   }
 
@@ -875,20 +1062,100 @@
             address: payload.pay_to || "",
             instructions: payload.instructions || "",
           };
-    document.getElementById("order-title").textContent = `Order ${first.order_code}`;
+
+    const isCompleted = payload.is_completed || (first.status === "completed" || first.status === "delivered");
+    const deliveredInfo = payload.delivered_info || first.delivered_info;
+    const contact = payload.customer_contact || payload.customer_email || (state.user && state.user.email);
+
+    document.getElementById("order-title").textContent = `Order #${first.order_code}`;
+
+    let deliveryCardHtml = "";
+    if (isCompleted && deliveredInfo) {
+      deliveryCardHtml = `
+        <div class="delivery-credentials-card">
+          <div class="delivery-credentials-header">
+            <span class="delivery-badge-success">⚡ INSTANT DELIVERY COMPLETE</span>
+            <span style="font-size: 12px; color: #10b981; font-weight: 750;">✓ Ready to Use</span>
+          </div>
+          <h3 style="margin: 6px 0; font-size: 16px; color: #fff;">Your Account Credentials & Access Keys</h3>
+          <p style="font-size: 13px; color: var(--muted); margin: 0 0 10px 0;">Use the credentials below to log into your account:</p>
+          <div class="delivery-code-box">
+            <pre id="delivery-creds-pre">${escapeHtml(deliveredInfo)}</pre>
+          </div>
+          <button type="button" class="btn-copy-creds" id="btn-copy-delivery-creds">
+            <span>📋 Copy Credentials</span>
+          </button>
+          ${contact ? `<div style="margin-top: 14px; font-size: 12px; color: #94a3b8;">📧 Order confirmation & delivery copy recorded for: <strong>${escapeHtml(contact)}</strong></div>` : ""}
+        </div>
+      `;
+    } else if (first.status === "pending") {
+      deliveryCardHtml = `
+        <div style="background: rgba(139, 92, 246, 0.12); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 16px; padding: 18px; margin: 18px 0; text-align: left;">
+          <div style="display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: 13.5px; color: #c4b5fd; margin-bottom: 6px;">
+            <span style="font-size: 16px;">⏳</span> Payment Verification in Progress
+          </div>
+          <p style="font-size: 13px; color: var(--muted); margin: 0 0 12px 0;">Send payment to the details below. Your instant credentials will appear here automatically upon confirmation.</p>
+          ${contact ? `<div style="font-size: 12px; color: #94a3b8; margin-bottom: 12px;">Contact: <strong>${escapeHtml(contact)}</strong></div>` : ""}
+          <button type="button" class="cart-btn-primary" id="btn-refresh-order" style="height: 38px; font-size: 13px; max-width: 230px;">🔄 Refresh / Check Status</button>
+        </div>
+      `;
+    }
+
     document.getElementById("order-body").innerHTML = `
-      <p>Your order is <strong>${escapeHtml(first.status || "pending")}</strong>. Pay with <strong>${escapeHtml(pay.name || first.payment_method || "")}</strong> using the details below, then wait for admin confirmation — same flow as the Telegram shop.</p>
-      ${(payload.orders || [first])
-        .map((row) => `<div class="cart-row"><div><strong>${escapeHtml(row.name || row.product || "")}</strong><div class="muted">${row.qty} × ${row.sku || ""}</div></div><strong>${formatPrice(row.amount)}</strong></div>`)
-        .join("")}
-      <p><strong>Total ${formatPrice(payload.total || first.amount)}</strong></p>
-      ${pay.address ? `<p>Send to: <code>${escapeHtml(pay.address)}</code></p>` : ""}
-      ${pay.instructions ? `<p class="muted">${escapeHtml(pay.instructions)}</p>` : ""}
-      <div class="hero-actions">
-        <a class="btn btn-whatsapp" target="_blank" rel="noopener" href="${waHref()}">Order on WhatsApp</a>
-        <a class="btn btn-primary" href="#/">Back to shop</a>
+      ${deliveryCardHtml}
+      <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 16px; padding: 18px; margin-bottom: 20px; text-align: left;">
+        <h4 style="margin: 0 0 12px 0; font-size: 14px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted);">Order Summary</h4>
+        ${(payload.orders || [first])
+          .map((row) => `<div class="cart-row" style="border-bottom: 1px solid rgba(255,255,255,0.06); padding: 10px 0;"><div><strong>${escapeHtml(row.name || row.product || "")}</strong><div class="muted">${row.qty} × ${escapeHtml(row.sku || "")}</div></div><strong>${formatPrice(row.amount)}</strong></div>`)
+          .join("")}
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 12px; font-size: 16px; font-weight: 850;">
+          <span>Total</span>
+          <span style="color: #a78bfa; font-size: 18px;">${formatPrice(payload.total || first.amount)}</span>
+        </div>
+      </div>
+      ${pay.address ? `
+        <div style="background: rgba(14, 9, 30, 0.9); border: 1px solid rgba(139, 92, 246, 0.35); border-radius: 16px; padding: 18px; margin-bottom: 20px; text-align: left;">
+          <h4 style="margin: 0 0 8px 0; font-size: 14px; color: #fff;">Payment Details: ${escapeHtml(pay.name || first.payment_method || "")}</h4>
+          <p style="margin: 0 0 8px 0; font-size: 13px; color: var(--muted);">Send payment to:</p>
+          <div style="background: #080612; border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 10px; word-break: break-all; font-family: monospace; font-size: 13.5px; color: #00f2fe; margin-bottom: 8px;">
+            ${escapeHtml(pay.address)}
+          </div>
+          ${pay.instructions ? `<p style="font-size: 12.5px; color: var(--muted); margin: 0;">${escapeHtml(pay.instructions)}</p>` : ""}
+        </div>
+      ` : ""}
+      <div class="hero-actions" style="justify-content: center; gap: 12px;">
+        <a class="btn btn-whatsapp" target="_blank" rel="noopener" href="${waHref()}">Confirm on WhatsApp</a>
+        <a class="btn btn-primary" href="#/">Back to Catalog</a>
       </div>
     `;
+
+    const copyBtn = document.getElementById("btn-copy-delivery-creds");
+    if (copyBtn && deliveredInfo) {
+      copyBtn.onclick = () => {
+        navigator.clipboard.writeText(deliveredInfo).then(() => {
+          copyBtn.innerHTML = `<span>✓ Copied to Clipboard!</span>`;
+          setTimeout(() => {
+            copyBtn.innerHTML = `<span>📋 Copy Credentials</span>`;
+          }, 2000);
+        });
+      };
+    }
+
+    const refreshBtn = document.getElementById("btn-refresh-order");
+    if (refreshBtn) {
+      refreshBtn.onclick = () => {
+        refreshBtn.textContent = "Checking…";
+        getJSON(`/api/web/orders/${encodeURIComponent(first.order_code)}`)
+          .then((data) => {
+            state.order = data;
+            renderOrder(data);
+          })
+          .catch((err) => {
+            refreshBtn.textContent = "Error: " + err.message;
+          });
+      };
+    }
+
     showView("view-order");
   }
 
@@ -1158,14 +1425,14 @@
       const isRestock = (restockIndex % 2 === 1);
       if (isRestock) {
         card.classList.remove("new-product-mode");
-        if (tag) tag.textContent = "!! RESTOCK JUST LANDED";
+        if (tag) tag.textContent = "⚡ STOCK ADDED";
         const newAdded = Math.floor(Math.random() * 8) + 2;
         if (added) added.textContent = `💥 ${newAdded} new added`;
         const readyStock = p.stock != null ? p.stock : (newAdded + 14);
         if (ready) ready.textContent = `📦 ${readyStock} ready now`;
       } else {
         card.classList.add("new-product-mode");
-        if (tag) tag.textContent = "✨ NEW PRODUCT ADDED";
+        if (tag) tag.textContent = "✨ PRODUCT ADDED";
         if (added) added.textContent = "⚡ Just Arrived";
         const avail = p.stock != null ? p.stock : 25;
         if (ready) ready.textContent = `📦 ${avail} in stock`;
@@ -1178,7 +1445,8 @@
         link.onclick = (e) => {
           e.preventDefault();
           dismissRestockNotification();
-          renderProductSheet(p);
+          addToCart(p);
+          renderCartSheet();
         };
       }
 

@@ -643,18 +643,32 @@ class CheckoutBody(BaseModel):
     items: list[CheckoutItem]
 
 
-def _get_or_create_web_user(db: Session, email: str, name: str = "", password: str | None = None) -> User:
-    clean_email = (email or "").strip().lower()
-    if not clean_email or "@" not in clean_email:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="A valid email is required")
+def _get_or_create_web_user(db: Session, email_or_phone: str, name: str = "", password: str | None = None) -> User:
+    raw_ident = (email_or_phone or "").strip()
+    if not raw_ident:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email or phone number is required")
+
+    if "@" in raw_ident:
+        clean_email = raw_ident.lower()
+        uname = clean_email.split("@")[0][:80]
+        full_n = (name or "").strip() or uname
+    else:
+        # Client entered phone number (e.g. 03001234567 or +923001234567)
+        phone_digits = re.sub(r"[^\d+]", "", raw_ident)
+        if len(phone_digits) < 6:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Please enter a valid email or phone number")
+        clean_email = f"{phone_digits}@phone.smf"
+        uname = phone_digits[:80]
+        full_n = (name or "").strip() or f"User {phone_digits[-4:]}"
+
     user = db.query(User).filter(User.email == clean_email).first()
     if user is None:
         user = db.query(User).filter(User.telegram_id == _web_telegram_id(clean_email)).first()
     if user is None:
         user = User(
             telegram_id=_web_telegram_id(clean_email),
-            username=clean_email.split("@")[0][:80],
-            full_name=(name or "").strip() or clean_email.split("@")[0],
+            username=uname,
+            full_name=full_n,
             email=clean_email,
             password_hash=hash_password(password) if password else None,
             force_join_ok=True,
@@ -1535,11 +1549,13 @@ def web_checkout(
 
     # If logged in as customer, link order to authenticated customer unless a different valid email was specified
     logged_in_user = get_optional_customer(request, db)
-    clean_email = (body.email or "").strip().lower()
-    if logged_in_user and (not clean_email or clean_email == (logged_in_user.email or "").lower()):
+    raw_contact = (body.email or "").strip()
+    if logged_in_user and (not raw_contact or raw_contact.lower() == (logged_in_user.email or "").lower()):
         user = logged_in_user
+        contact_for_order = logged_in_user.email or logged_in_user.username
     else:
-        user = _get_or_create_web_user(db, body.email, body.name, body.password)
+        user = _get_or_create_web_user(db, raw_contact, body.name, body.password)
+        contact_for_order = raw_contact or user.email
         # If user provided a password during checkout, establish session
         if body.password:
             _set_customer_session(request, user.id)
@@ -1573,7 +1589,7 @@ def web_checkout(
                 status="pending",
                 order_type="manual",
                 payment_method=method.code,
-                customer_email=user.email,
+                customer_email=contact_for_order,
                 applied_discount_pct=float(quote.discount_pct),
                 discount_source=quote.discount_source,
                 note=f"Web Mini App checkout via {method.name}" + (f" ({quote.discount_label})" if quote.has_discount else ""),
@@ -1612,14 +1628,15 @@ def web_checkout(
         "order_code": created[0]["order_code"],
         "orders": created,
         "total": sum(row["amount"] for row in created),
-        "payment_method": payment_method_payload(method),
+        "payment_method": payment_method_payload(method, request),
         "user": _public_user(user),
+        "is_logged_in": bool(logged_in_user),
     }
 
 
 @router.get("/orders/{code}")
-def get_web_order(code: str, db: Session = Depends(get_db)) -> dict:
-    order = db.query(Order).filter(Order.order_code == code).first()
+def get_web_order(code: str, request: Request, db: Session = Depends(get_db)) -> dict:
+    order = db.query(Order).options(joinedload(Order.service)).filter(Order.order_code == code).first()
     if not order:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
     service = order.service
@@ -1628,6 +1645,16 @@ def get_web_order(code: str, db: Session = Depends(get_db)) -> dict:
         if order.payment_method
         else None
     )
+
+    st = (order.status or "").lower()
+    delivered_info = None
+    if st in ("completed", "delivered") or order.delivered_info:
+        delivered_info = order.delivered_info or "Instant delivery items have been credited and issued."
+
+    contact = order.customer_email or (order.user.email if order.user else None)
+    if contact and contact.endswith("@phone.smf"):
+        contact = contact.replace("@phone.smf", "")
+
     return {
         "order_code": order.order_code,
         "status": order.status,
@@ -1640,6 +1667,9 @@ def get_web_order(code: str, db: Session = Depends(get_db)) -> dict:
         "pay_to": method.address if method else None,
         "method_name": method.name if method else order.payment_method,
         "network": method.network if method else None,
+        "delivered_info": delivered_info,
+        "customer_contact": contact,
+        "is_completed": st in ("completed", "delivered"),
     }
 
 
