@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script defer src="https://telegram.org/js/telegram-web-app.js"></script>
-  <link rel="stylesheet" href="/static/mini-app/styles.css?v=site10">
+  <link rel="stylesheet" href="/static/mini-app/styles.css?v=site11">
 </head>
 <body>
   <div class="bg" id="ambient-bg" aria-hidden="true">
@@ -465,8 +465,29 @@
     </div>
   </div>
 
-  <!-- Floating Customer Perks Widget (Matching Approved Screenshot) -->
-  <div class="floating-perks-widget" id="floating-perks-widget">
+  <!-- Floating Live Restock & New Product Notification Toast (Meetway Style, Above Support Button) -->
+  <div class="restock-notify-card" id="restock-notify-card" hidden aria-live="polite">
+    <div class="restock-notify-header">
+      <div class="restock-notify-tag" id="restock-card-tag">
+        <span class="restock-pulse-dot"></span>
+        <span id="restock-card-tag-text">!! RESTOCK JUST LANDED</span>
+      </div>
+      <button type="button" class="restock-notify-close" id="btn-close-restock" aria-label="Close notification">✕</button>
+    </div>
+    <div class="restock-notify-title" id="restock-card-title">Product Name</div>
+    <div class="restock-notify-meta">
+      <span class="restock-meta-chip added-chip" id="restock-card-added">💥 2 new added</span>
+      <span class="restock-meta-chip ready-chip" id="restock-card-stock">📦 147 ready now</span>
+      <span class="restock-meta-chip price-chip" id="restock-card-price">Rs. 1,200</span>
+    </div>
+    <a href="javascript:void(0)" class="restock-view-link" id="restock-card-link">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+      <span>View product</span>
+    </a>
+  </div>
+
+  <!-- Floating Customer Perks Widget (Visible only in signed in phase) -->
+  <div class="floating-perks-widget" id="floating-perks-widget" hidden>
     <div class="perks-head">
       <div class="perks-title">
         <span>⭐</span> CUSTOMER PERKS
@@ -518,6 +539,6 @@
   <div id="toast-container" class="toast-container" aria-live="polite"></div>
 
   <script src="/static/mini-app/cursor-light.js?v=site9"></script>
-  <script src="/static/mini-app/app.js?v=site10"></script>
+  <script src="/static/mini-app/app.js?v=site11"></script>
 </body>
 </html>

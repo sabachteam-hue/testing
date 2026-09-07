@@ -984,21 +984,28 @@ a { color: inherit; text-decoration: none; }
 
 .fab {
   position: fixed;
-  right: 16px;
-  bottom: calc(16px + var(--safe-bottom));
-  width: 52px;
-  height: 52px;
-  border: 0;
+  right: 20px;
+  bottom: calc(20px + var(--safe-bottom));
+  width: 54px;
+  height: 54px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
   border-radius: 50%;
-  background: var(--purple);
+  background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%);
   color: #fff;
-  box-shadow: 0 12px 28px var(--glow);
+  box-shadow: 0 10px 28px rgba(139, 92, 246, 0.5), 0 0 16px rgba(139, 92, 246, 0.35);
   cursor: pointer;
   display: grid;
   place-items: center;
+  z-index: 99 !important;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
-.fab svg { width: 22px; height: 22px; }
+.fab:hover {
+  transform: scale(1.08);
+  box-shadow: 0 12px 34px rgba(139, 92, 246, 0.7), 0 0 24px rgba(196, 181, 253, 0.5);
+}
+
+.fab svg { width: 24px; height: 24px; }
 
 .toast-container {
   position: fixed;
@@ -1444,19 +1451,173 @@ legend {
   }
 }
 
-/* Floating Customer Perks Widget (Desktop Screenshot) */
+/* Floating Live Restock & New Product Notification Toast (Meetway Style, Above Support Button) */
+.restock-notify-card {
+  position: fixed;
+  right: 20px;
+  bottom: calc(86px + var(--safe-bottom));
+  width: 320px;
+  max-width: calc(100vw - 32px);
+  background: rgba(14, 9, 28, 0.96);
+  border: 1.5px solid rgba(16, 185, 129, 0.5);
+  border-radius: 18px;
+  padding: 14px 16px;
+  z-index: 98;
+  backdrop-filter: blur(20px);
+  box-shadow: 0 16px 45px rgba(0, 0, 0, 0.75), 0 0 30px rgba(16, 185, 129, 0.25);
+  animation: restock-slide-in 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  transition: transform 0.25s ease, opacity 0.25s ease;
+}
+
+.restock-notify-card.new-product-mode {
+  border-color: rgba(139, 92, 246, 0.6);
+  box-shadow: 0 16px 45px rgba(0, 0, 0, 0.75), 0 0 30px rgba(139, 92, 246, 0.3);
+}
+
+@keyframes restock-slide-in {
+  from { transform: translateY(18px) scale(0.96); opacity: 0; }
+  to { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+.restock-notify-card.dismissing {
+  transform: translateY(18px) scale(0.96);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.restock-notify-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.restock-notify-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #10b981;
+}
+
+.new-product-mode .restock-notify-tag {
+  color: #c4b5fd;
+}
+
+.restock-pulse-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 10px #10b981;
+  animation: pulse-dot-anim 1.4s infinite;
+}
+
+.new-product-mode .restock-pulse-dot {
+  background: #c4b5fd;
+  box-shadow: 0 0 10px #8b5cf6;
+}
+
+@keyframes pulse-dot-anim {
+  0% { transform: scale(0.9); opacity: 0.8; }
+  50% { transform: scale(1.3); opacity: 1; }
+  100% { transform: scale(0.9); opacity: 0.8; }
+}
+
+.restock-notify-close {
+  background: transparent;
+  border: none;
+  color: #7d729c;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 2px 6px;
+  line-height: 1;
+  border-radius: 6px;
+  transition: color 0.15s ease;
+}
+
+.restock-notify-close:hover {
+  color: #fff;
+}
+
+.restock-notify-title {
+  font-size: 13px;
+  font-weight: 800;
+  color: #ffffff;
+  line-height: 1.35;
+  margin-bottom: 9px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.restock-notify-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.restock-meta-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.restock-meta-chip.added-chip {
+  color: #f87171;
+  background: rgba(239, 68, 68, 0.14);
+}
+
+.restock-meta-chip.ready-chip {
+  color: #34d399;
+  background: rgba(16, 185, 129, 0.14);
+}
+
+.restock-meta-chip.price-chip {
+  color: #00f2fe;
+  background: rgba(0, 242, 254, 0.12);
+  margin-left: auto;
+}
+
+.restock-view-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 750;
+  color: #00f2fe;
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.restock-view-link:hover {
+  color: #a7f3d0;
+  text-decoration: underline;
+}
+
+/* Floating Customer Perks Widget (Desktop Screenshot - Positioned safely above Support Button) */
 .floating-perks-widget {
   position: fixed;
-  right: 24px;
-  bottom: 24px;
-  width: 280px;
-  background: rgba(16, 11, 30, 0.92);
-  border: 1px solid rgba(0, 242, 254, 0.35);
-  border-radius: 18px;
+  right: 20px;
+  bottom: calc(86px + var(--safe-bottom));
+  width: 290px;
+  background: rgba(16, 11, 32, 0.94);
+  border: 1.5px solid rgba(139, 92, 246, 0.4);
+  border-radius: 20px;
   padding: 16px;
-  z-index: 80;
+  z-index: 96;
   backdrop-filter: blur(20px);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6), 0 0 24px rgba(0, 242, 254, 0.15);
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.7), 0 0 24px rgba(139, 92, 246, 0.2);
   transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 

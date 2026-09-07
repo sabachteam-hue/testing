@@ -338,6 +338,12 @@
       languageDd.style.display = signed ? "none" : "inline-block";
     }
 
+    const perksWidget = document.getElementById("floating-perks-widget");
+    if (perksWidget) {
+      perksWidget.hidden = !signed;
+      perksWidget.style.display = signed ? "block" : "none";
+    }
+
     if (accountBtn) {
       accountBtn.href = signed ? "/account" : "#/signup";
       if (accountLabel) {
@@ -1108,6 +1114,90 @@
     };
   }
 
+  // Live Restock & New Product Toast Notifications (Meetway Style, situated above support button)
+  let restockTimer = null;
+  let restockDismissTimer = null;
+  let restockIndex = 0;
+
+  function initRestockNotifications() {
+    const card = document.getElementById("restock-notify-card");
+    const tag = document.getElementById("restock-card-tag-text");
+    const title = document.getElementById("restock-card-title");
+    const added = document.getElementById("restock-card-added");
+    const ready = document.getElementById("restock-card-stock");
+    const price = document.getElementById("restock-card-price");
+    const link = document.getElementById("restock-card-link");
+    const btnClose = document.getElementById("btn-close-restock");
+
+    if (!card || !title) return;
+
+    if (btnClose) {
+      btnClose.onclick = (e) => {
+        e.stopPropagation();
+        dismissRestockNotification();
+      };
+    }
+
+    function dismissRestockNotification() {
+      if (!card || card.hidden) return;
+      card.classList.add("dismissing");
+      clearTimeout(restockDismissTimer);
+      restockDismissTimer = setTimeout(() => {
+        card.hidden = true;
+        card.classList.remove("dismissing");
+      }, 250);
+    }
+
+    function showNextNotification() {
+      const items = (state.products && state.products.length) ? state.products : (state.featured.live || []);
+      if (!items || !items.length) return;
+
+      const p = items[restockIndex % items.length];
+      restockIndex++;
+
+      const isRestock = (restockIndex % 2 === 1);
+      if (isRestock) {
+        card.classList.remove("new-product-mode");
+        if (tag) tag.textContent = "!! RESTOCK JUST LANDED";
+        const newAdded = Math.floor(Math.random() * 8) + 2;
+        if (added) added.textContent = `💥 ${newAdded} new added`;
+        const readyStock = p.stock != null ? p.stock : (newAdded + 14);
+        if (ready) ready.textContent = `📦 ${readyStock} ready now`;
+      } else {
+        card.classList.add("new-product-mode");
+        if (tag) tag.textContent = "✨ NEW PRODUCT ADDED";
+        if (added) added.textContent = "⚡ Just Arrived";
+        const avail = p.stock != null ? p.stock : 25;
+        if (ready) ready.textContent = `📦 ${avail} in stock`;
+      }
+
+      title.textContent = p.name;
+      if (price) price.textContent = formatPrice(p.sell_price);
+
+      if (link) {
+        link.onclick = (e) => {
+          e.preventDefault();
+          dismissRestockNotification();
+          renderProductSheet(p);
+        };
+      }
+
+      card.classList.remove("dismissing");
+      card.hidden = false;
+
+      clearTimeout(restockDismissTimer);
+      restockDismissTimer = setTimeout(() => {
+        dismissRestockNotification();
+      }, 6500);
+    }
+
+    clearTimeout(restockTimer);
+    restockTimer = setTimeout(() => {
+      showNextNotification();
+      setInterval(showNextNotification, 16000);
+    }, 3500);
+  }
+
   if (els.search) {
     els.search.addEventListener("input", () => {
       state.query = els.search.value;
@@ -1370,6 +1460,7 @@
     renderFeatured();
     renderPills();
     applyRoute();
+    initRestockNotifications();
   } else {
     // Render high-tech skeleton placeholders so page is never blank
     els.grid.innerHTML = Array.from({ length: 6 })
@@ -1425,6 +1516,7 @@
       try { localStorage.setItem("smf_cache_products", JSON.stringify(products)); } catch (_) {}
       renderPills();
       renderGrid();
+      initRestockNotifications();
       const path = currentPath();
       if (path === "/subscription" || path === "/subscriptions" || path === "/freebies") {
         renderCollection(path.includes("freebie") ? "freebies" : "subscription");
