@@ -9,7 +9,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script defer src="https://telegram.org/js/telegram-web-app.js"></script>
-  <link rel="stylesheet" href="/static/mini-app/styles.css?v=site8">
+  <script src="/static/mini-app/cursor-light.js" defer></script>
+  <link rel="stylesheet" href="/static/mini-app/styles.css?v=site9">
   <style>
     /* Portal specific layout and components matching Mini App design system */
     :root {
@@ -1658,8 +1659,8 @@
     <div class="bg-grid-glow"></div>
   </div>
 
-  <!-- High-Contrast Luxury Header & Top Glass Island Dock -->
-  <header class="topbar" style="border-bottom: 0; background: transparent; padding-top: 16px;">
+  <!-- High-Contrast Luxury Header & Top Glass Island Dock (Grid visible across entire header) -->
+  <header class="topbar portal-topbar-transparent" style="border-bottom: 0; background: transparent !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; padding-top: 16px;">
     <div class="portal-desktop-header">
       <div class="portal-user-profile-dock" id="user-pill" style="cursor: pointer;" onclick="switchTab('settings')">
         <span id="portal-user-avatar-wrap" class="vip-user-avatar-wrap" style="display: flex; align-items: center;"></span>
@@ -1703,7 +1704,7 @@
       </div>
 
       <div style="display: flex; align-items: center; gap: 8px;">
-        <a class="btn btn-whatsapp" href="/mini" style="font-size: 13px; padding: 8px 14px; gap: 6px; border-radius: 999px;">
+        <a class="btn btn-back-shop" href="/mini" style="font-size: 13px; padding: 8px 14px; gap: 6px; border-radius: 999px;">
           <span>🛍️</span> Back to Shop
         </a>
         <button type="button" class="icon-btn" id="btn-logout" title="Log out" aria-label="Log out" hidden style="border-radius: 50%;">

@@ -3631,23 +3631,31 @@ async def _process_hero_logo_uploads(
     file_netflix: UploadFile | None = None,
     logo_discord: str = "",
     file_discord: UploadFile | None = None,
+    logo_youtube: str = "",
+    file_youtube: UploadFile | None = None,
     logo_chatgpt: str = "",
     file_chatgpt: UploadFile | None = None,
-    logo_star: str = "",
-    file_star: UploadFile | None = None,
+    logo_openai: str = "",
+    file_openai: UploadFile | None = None,
     logo_canva: str = "",
     file_canva: UploadFile | None = None,
     logo_spotify: str = "",
     file_spotify: UploadFile | None = None,
+    logo_capcut: str = "",
+    file_capcut: UploadFile | None = None,
+    logo_star: str = "",
+    file_star: UploadFile | None = None,
 ) -> dict:
     logos = get_hero_logos()
     pairs = [
         ("netflix", logo_netflix, file_netflix),
         ("discord", logo_discord, file_discord),
+        ("youtube", logo_youtube or logo_star, file_youtube or file_star),
         ("chatgpt", logo_chatgpt, file_chatgpt),
-        ("star", logo_star, file_star),
+        ("openai", logo_openai, file_openai),
         ("canva", logo_canva, file_canva),
         ("spotify", logo_spotify, file_spotify),
+        ("capcut", logo_capcut, file_capcut),
     ]
     updated = False
     for key, text_val, file_val in pairs:
@@ -3655,9 +3663,13 @@ async def _process_hero_logo_uploads(
             saved_path = await save_icon_image(file_val, LOGO_UPLOAD_DIR, key)
             if saved_path:
                 logos[key] = saved_path
+                if key == "youtube":
+                    logos["star"] = saved_path
                 updated = True
         elif text_val and text_val.strip():
             logos[key] = text_val.strip()
+            if key == "youtube":
+                logos["star"] = text_val.strip()
             updated = True
     if updated:
         save_hero_logos(logos)
@@ -3671,23 +3683,32 @@ async def update_main_page_logos(
     file_netflix: UploadFile | None = File(None),
     logo_discord: str = Form(""),
     file_discord: UploadFile | None = File(None),
+    logo_youtube: str = Form(""),
+    file_youtube: UploadFile | None = File(None),
     logo_chatgpt: str = Form(""),
     file_chatgpt: UploadFile | None = File(None),
-    logo_star: str = Form(""),
-    file_star: UploadFile | None = File(None),
+    logo_openai: str = Form(""),
+    file_openai: UploadFile | None = File(None),
     logo_canva: str = Form(""),
     file_canva: UploadFile | None = File(None),
     logo_spotify: str = Form(""),
     file_spotify: UploadFile | None = File(None),
+    logo_capcut: str = Form(""),
+    file_capcut: UploadFile | None = File(None),
+    logo_star: str = Form(""),
+    file_star: UploadFile | None = File(None),
 ):
     admin_required(request)
     await _process_hero_logo_uploads(
-        logo_netflix, file_netflix,
-        logo_discord, file_discord,
-        logo_chatgpt, file_chatgpt,
-        logo_star, file_star,
-        logo_canva, file_canva,
-        logo_spotify, file_spotify,
+        logo_netflix=logo_netflix, file_netflix=file_netflix,
+        logo_discord=logo_discord, file_discord=file_discord,
+        logo_youtube=logo_youtube, file_youtube=file_youtube,
+        logo_chatgpt=logo_chatgpt, file_chatgpt=file_chatgpt,
+        logo_openai=logo_openai, file_openai=file_openai,
+        logo_canva=logo_canva, file_canva=file_canva,
+        logo_spotify=logo_spotify, file_spotify=file_spotify,
+        logo_capcut=logo_capcut, file_capcut=file_capcut,
+        logo_star=logo_star, file_star=file_star,
     )
     return redirect(f"/admin/settings?message={quote('Main page 3D logos updated successfully!')}")
 
@@ -3718,24 +3739,33 @@ async def update_settings(
     file_netflix: UploadFile | None = File(None),
     logo_discord: str = Form(""),
     file_discord: UploadFile | None = File(None),
+    logo_youtube: str = Form(""),
+    file_youtube: UploadFile | None = File(None),
     logo_chatgpt: str = Form(""),
     file_chatgpt: UploadFile | None = File(None),
-    logo_star: str = Form(""),
-    file_star: UploadFile | None = File(None),
+    logo_openai: str = Form(""),
+    file_openai: UploadFile | None = File(None),
     logo_canva: str = Form(""),
     file_canva: UploadFile | None = File(None),
     logo_spotify: str = Form(""),
     file_spotify: UploadFile | None = File(None),
+    logo_capcut: str = Form(""),
+    file_capcut: UploadFile | None = File(None),
+    logo_star: str = Form(""),
+    file_star: UploadFile | None = File(None),
     db: Session = Depends(get_db),
 ):
     admin_required(request)
     await _process_hero_logo_uploads(
-        logo_netflix, file_netflix,
-        logo_discord, file_discord,
-        logo_chatgpt, file_chatgpt,
-        logo_star, file_star,
-        logo_canva, file_canva,
-        logo_spotify, file_spotify,
+        logo_netflix=logo_netflix, file_netflix=file_netflix,
+        logo_discord=logo_discord, file_discord=file_discord,
+        logo_youtube=logo_youtube, file_youtube=file_youtube,
+        logo_chatgpt=logo_chatgpt, file_chatgpt=file_chatgpt,
+        logo_openai=logo_openai, file_openai=file_openai,
+        logo_canva=logo_canva, file_canva=file_canva,
+        logo_spotify=logo_spotify, file_spotify=file_spotify,
+        logo_capcut=logo_capcut, file_capcut=file_capcut,
+        logo_star=logo_star, file_star=file_star,
     )
     config = db.query(BotConfig).first() or BotConfig()
     was_maintenance = bool(getattr(config, "maintenance", False))

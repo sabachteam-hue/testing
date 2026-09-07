@@ -59,21 +59,34 @@
   <div class="panel" id="panel-hero-logos">
     <div class="settings-card-head">
       <div>
-        <h3>Update Main Page Logos (Hero 3D Badges)</h3>
-        <p class="muted settings-card-sub">Main page hero banner ke 3D floating brand logos/icons yahan se direct upload karein ya image link dalein</p>
+        <h3>Update Main Page Logos (All 8 Hero 3D Badges)</h3>
+        <p class="muted settings-card-sub">Main page hero banner ke 8 3D floating brand logos yahan se direct upload karein ya image link dalein</p>
       </div>
     </div>
-    <div class="settings-fields">
-      <!-- Netflix 3D Logo -->
-      <div style="background: rgba(18, 12, 36, 0.7); border: 1px solid rgba(139, 92, 246, 0.25); border-radius: 14px; padding: 14px; margin-bottom: 12px;">
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
-          <strong style="color: #ff3b45; font-size: 14px;">1. Netflix 3D Logo (Left Top)</strong>
+
+    <!-- Prominent Dimensions Notice for Designer -->
+    <div style="background: rgba(139, 92, 246, 0.15); border: 1px solid rgba(139, 92, 246, 0.4); border-radius: 12px; padding: 14px 16px; margin-bottom: 18px; display: flex; align-items: center; gap: 14px;">
+      <span style="font-size: 28px;">📐</span>
+      <div style="font-size: 13px; color: #e2e8f0; line-height: 1.5;">
+        <strong style="color: #a78bfa; font-size: 14px;">Logo Designer Guide — Exact Recommended Dimensions:</strong><br>
+        All 8 3D badges require an exact square ratio: <strong>120 × 120 px</strong> (or high-res <strong>512 × 512 px</strong>) in transparent <strong>PNG</strong> or <strong>SVG</strong> format. Transparent background gives the cleanest HD floating 3D glass effect.
+      </div>
+    </div>
+
+    <div class="settings-fields" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px;">
+      <!-- Logo 1: Netflix 3D Logo (Left Top-Left) -->
+      <div style="background: rgba(18, 12, 36, 0.7); border: 1px solid rgba(139, 92, 246, 0.25); border-radius: 14px; padding: 14px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+          <strong style="color: #ff3b45; font-size: 14px;">1. Netflix 3D Badge (Left Top-Left)</strong>
           {% if hero_logos and hero_logos.get('netflix') %}
             <div style="display: flex; align-items: center; gap: 8px;">
               <span class="muted" style="font-size: 11px;">Current:</span>
               <img src="{{ hero_logos.get('netflix') }}" style="width: 32px; height: 32px; object-fit: contain; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: #000;" alt="">
             </div>
           {% endif %}
+        </div>
+        <div style="display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border-radius: 6px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.4); color: #38bdf8; font-size: 11px; font-weight: 700; margin-bottom: 10px;">
+          📐 Exact Size: 120 × 120 px (Square PNG/SVG, Transparent)
         </div>
         <label style="margin-bottom: 6px;">Direct Image File Upload:
           <input type="file" name="file_netflix" accept="image/png, image/jpeg, image/webp, image/svg+xml" style="padding: 6px; background: rgba(0,0,0,0.3);">
@@ -83,16 +96,19 @@
         </label>
       </div>
 
-      <!-- Discord 3D Logo -->
-      <div style="background: rgba(18, 12, 36, 0.7); border: 1px solid rgba(139, 92, 246, 0.25); border-radius: 14px; padding: 14px; margin-bottom: 12px;">
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
-          <strong style="color: #a855f7; font-size: 14px;">2. Discord 3D Logo (Left Mid-Right)</strong>
+      <!-- Logo 2: Claude / Discord 3D Logo (Left Top-Right) -->
+      <div style="background: rgba(18, 12, 36, 0.7); border: 1px solid rgba(139, 92, 246, 0.25); border-radius: 14px; padding: 14px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+          <strong style="color: #a855f7; font-size: 14px;">2. Claude / Discord 3D Badge (Left Top-Right)</strong>
           {% if hero_logos and hero_logos.get('discord') %}
             <div style="display: flex; align-items: center; gap: 8px;">
               <span class="muted" style="font-size: 11px;">Current:</span>
               <img src="{{ hero_logos.get('discord') }}" style="width: 32px; height: 32px; object-fit: contain; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: #000;" alt="">
             </div>
           {% endif %}
+        </div>
+        <div style="display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border-radius: 6px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.4); color: #38bdf8; font-size: 11px; font-weight: 700; margin-bottom: 10px;">
+          📐 Exact Size: 120 × 120 px (Square PNG/SVG, Transparent)
         </div>
         <label style="margin-bottom: 6px;">Direct Image File Upload:
           <input type="file" name="file_discord" accept="image/png, image/jpeg, image/webp, image/svg+xml" style="padding: 6px; background: rgba(0,0,0,0.3);">
@@ -102,16 +118,41 @@
         </label>
       </div>
 
-      <!-- ChatGPT Plus Mint Disc -->
-      <div style="background: rgba(18, 12, 36, 0.7); border: 1px solid rgba(139, 92, 246, 0.25); border-radius: 14px; padding: 14px; margin-bottom: 12px;">
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
-          <strong style="color: #10b981; font-size: 14px;">3. ChatGPT Plus 3D Coin (Left Bottom)</strong>
+      <!-- Logo 3: YouTube 3D Logo (Left Bottom-Left) -->
+      <div style="background: rgba(18, 12, 36, 0.7); border: 1px solid rgba(139, 92, 246, 0.25); border-radius: 14px; padding: 14px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+          <strong style="color: #ef4444; font-size: 14px;">3. YouTube 3D Badge (Left Bottom-Left)</strong>
+          {% if hero_logos and (hero_logos.get('youtube') or hero_logos.get('star')) %}
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="muted" style="font-size: 11px;">Current:</span>
+              <img src="{{ hero_logos.get('youtube') or hero_logos.get('star') }}" style="width: 32px; height: 32px; object-fit: contain; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: #000;" alt="">
+            </div>
+          {% endif %}
+        </div>
+        <div style="display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border-radius: 6px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.4); color: #38bdf8; font-size: 11px; font-weight: 700; margin-bottom: 10px;">
+          📐 Exact Size: 120 × 120 px (Square PNG/SVG, Transparent)
+        </div>
+        <label style="margin-bottom: 6px;">Direct Image File Upload:
+          <input type="file" name="file_youtube" accept="image/png, image/jpeg, image/webp, image/svg+xml" style="padding: 6px; background: rgba(0,0,0,0.3);">
+        </label>
+        <label>Ya Image Link/URL:
+          <input name="logo_youtube" value="{{ hero_logos.get('youtube', '') or hero_logos.get('star', '') if hero_logos else '' }}" placeholder="https://... or /admin/static/uploads/...">
+        </label>
+      </div>
+
+      <!-- Logo 4: ChatGPT Plus 3D Coin (Left Bottom-Right) -->
+      <div style="background: rgba(18, 12, 36, 0.7); border: 1px solid rgba(139, 92, 246, 0.25); border-radius: 14px; padding: 14px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+          <strong style="color: #10b981; font-size: 14px;">4. ChatGPT Plus 3D Coin (Left Bottom-Right)</strong>
           {% if hero_logos and hero_logos.get('chatgpt') %}
             <div style="display: flex; align-items: center; gap: 8px;">
               <span class="muted" style="font-size: 11px;">Current:</span>
               <img src="{{ hero_logos.get('chatgpt') }}" style="width: 32px; height: 32px; object-fit: contain; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: #000;" alt="">
             </div>
           {% endif %}
+        </div>
+        <div style="display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border-radius: 6px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.4); color: #38bdf8; font-size: 11px; font-weight: 700; margin-bottom: 10px;">
+          📐 Exact Size: 120 × 120 px (Square PNG/SVG, Transparent)
         </div>
         <label style="margin-bottom: 6px;">Direct Image File Upload:
           <input type="file" name="file_chatgpt" accept="image/png, image/jpeg, image/webp, image/svg+xml" style="padding: 6px; background: rgba(0,0,0,0.3);">
@@ -121,35 +162,41 @@
         </label>
       </div>
 
-      <!-- Reward Star Badge -->
-      <div style="background: rgba(18, 12, 36, 0.7); border: 1px solid rgba(139, 92, 246, 0.25); border-radius: 14px; padding: 14px; margin-bottom: 12px;">
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
-          <strong style="color: #ec4899; font-size: 14px;">4. VIP Reward Star 3D Badge (Left Bottom-Left)</strong>
-          {% if hero_logos and hero_logos.get('star') %}
+      <!-- Logo 5: OpenAI 3D Badge (Right Top-Left) -->
+      <div style="background: rgba(18, 12, 36, 0.7); border: 1px solid rgba(139, 92, 246, 0.25); border-radius: 14px; padding: 14px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+          <strong style="color: #06b6d4; font-size: 14px;">5. OpenAI 3D Badge (Right Top-Left)</strong>
+          {% if hero_logos and hero_logos.get('openai') %}
             <div style="display: flex; align-items: center; gap: 8px;">
               <span class="muted" style="font-size: 11px;">Current:</span>
-              <img src="{{ hero_logos.get('star') }}" style="width: 32px; height: 32px; object-fit: contain; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: #000;" alt="">
+              <img src="{{ hero_logos.get('openai') }}" style="width: 32px; height: 32px; object-fit: contain; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: #000;" alt="">
             </div>
           {% endif %}
         </div>
+        <div style="display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border-radius: 6px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.4); color: #38bdf8; font-size: 11px; font-weight: 700; margin-bottom: 10px;">
+          📐 Exact Size: 120 × 120 px (Square PNG/SVG, Transparent)
+        </div>
         <label style="margin-bottom: 6px;">Direct Image File Upload:
-          <input type="file" name="file_star" accept="image/png, image/jpeg, image/webp, image/svg+xml" style="padding: 6px; background: rgba(0,0,0,0.3);">
+          <input type="file" name="file_openai" accept="image/png, image/jpeg, image/webp, image/svg+xml" style="padding: 6px; background: rgba(0,0,0,0.3);">
         </label>
         <label>Ya Image Link/URL:
-          <input name="logo_star" value="{{ hero_logos.get('star', '') if hero_logos else '' }}" placeholder="https://... or /admin/static/uploads/...">
+          <input name="logo_openai" value="{{ hero_logos.get('openai', '') if hero_logos else '' }}" placeholder="https://... or /admin/static/uploads/...">
         </label>
       </div>
 
-      <!-- Canva Pro 3D Logo (Right side) -->
-      <div style="background: rgba(18, 12, 36, 0.7); border: 1px solid rgba(139, 92, 246, 0.25); border-radius: 14px; padding: 14px; margin-bottom: 12px;">
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
-          <strong style="color: #00d2ff; font-size: 14px;">5. Canva Pro 3D Badge (Right Top)</strong>
+      <!-- Logo 6: Canva Pro 3D Badge (Right Top-Right) -->
+      <div style="background: rgba(18, 12, 36, 0.7); border: 1px solid rgba(139, 92, 246, 0.25); border-radius: 14px; padding: 14px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+          <strong style="color: #00d2ff; font-size: 14px;">6. Canva Pro 3D Badge (Right Top-Right)</strong>
           {% if hero_logos and hero_logos.get('canva') %}
             <div style="display: flex; align-items: center; gap: 8px;">
               <span class="muted" style="font-size: 11px;">Current:</span>
               <img src="{{ hero_logos.get('canva') }}" style="width: 32px; height: 32px; object-fit: contain; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: #000;" alt="">
             </div>
           {% endif %}
+        </div>
+        <div style="display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border-radius: 6px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.4); color: #38bdf8; font-size: 11px; font-weight: 700; margin-bottom: 10px;">
+          📐 Exact Size: 120 × 120 px (Square PNG/SVG, Transparent)
         </div>
         <label style="margin-bottom: 6px;">Direct Image File Upload:
           <input type="file" name="file_canva" accept="image/png, image/jpeg, image/webp, image/svg+xml" style="padding: 6px; background: rgba(0,0,0,0.3);">
@@ -159,10 +206,10 @@
         </label>
       </div>
 
-      <!-- Spotify 3D Logo (Right side) -->
+      <!-- Logo 7: Spotify 3D Badge (Right Bottom-Left) -->
       <div style="background: rgba(18, 12, 36, 0.7); border: 1px solid rgba(139, 92, 246, 0.25); border-radius: 14px; padding: 14px;">
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
-          <strong style="color: #1ed760; font-size: 14px;">6. Spotify 3D Badge (Right Bottom)</strong>
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+          <strong style="color: #1ed760; font-size: 14px;">7. Spotify 3D Badge (Right Bottom-Left)</strong>
           {% if hero_logos and hero_logos.get('spotify') %}
             <div style="display: flex; align-items: center; gap: 8px;">
               <span class="muted" style="font-size: 11px;">Current:</span>
@@ -170,11 +217,36 @@
             </div>
           {% endif %}
         </div>
+        <div style="display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border-radius: 6px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.4); color: #38bdf8; font-size: 11px; font-weight: 700; margin-bottom: 10px;">
+          📐 Exact Size: 120 × 120 px (Square PNG/SVG, Transparent)
+        </div>
         <label style="margin-bottom: 6px;">Direct Image File Upload:
           <input type="file" name="file_spotify" accept="image/png, image/jpeg, image/webp, image/svg+xml" style="padding: 6px; background: rgba(0,0,0,0.3);">
         </label>
         <label>Ya Image Link/URL:
           <input name="logo_spotify" value="{{ hero_logos.get('spotify', '') if hero_logos else '' }}" placeholder="https://... or /admin/static/uploads/...">
+        </label>
+      </div>
+
+      <!-- Logo 8: CapCut 3D Badge (Right Bottom-Right) -->
+      <div style="background: rgba(18, 12, 36, 0.7); border: 1px solid rgba(139, 92, 246, 0.25); border-radius: 14px; padding: 14px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+          <strong style="color: #f59e0b; font-size: 14px;">8. CapCut 3D Badge (Right Bottom-Right)</strong>
+          {% if hero_logos and hero_logos.get('capcut') %}
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="muted" style="font-size: 11px;">Current:</span>
+              <img src="{{ hero_logos.get('capcut') }}" style="width: 32px; height: 32px; object-fit: contain; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: #000;" alt="">
+            </div>
+          {% endif %}
+        </div>
+        <div style="display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border-radius: 6px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.4); color: #38bdf8; font-size: 11px; font-weight: 700; margin-bottom: 10px;">
+          📐 Exact Size: 120 × 120 px (Square PNG/SVG, Transparent)
+        </div>
+        <label style="margin-bottom: 6px;">Direct Image File Upload:
+          <input type="file" name="file_capcut" accept="image/png, image/jpeg, image/webp, image/svg+xml" style="padding: 6px; background: rgba(0,0,0,0.3);">
+        </label>
+        <label>Ya Image Link/URL:
+          <input name="logo_capcut" value="{{ hero_logos.get('capcut', '') if hero_logos else '' }}" placeholder="https://... or /admin/static/uploads/...">
         </label>
       </div>
     </div>

@@ -519,9 +519,34 @@ a { color: inherit; text-decoration: none; }
 }
 
 .btn-whatsapp {
-  background: rgba(31, 191, 99, 0.12);
-  border-color: rgba(31, 191, 99, 0.35);
-  color: #7dffb2;
+  background: #25D366 !important;
+  border-color: #20ba5a !important;
+  color: #ffffff !important;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  box-shadow: 0 4px 18px rgba(37, 211, 102, 0.45);
+}
+
+.btn-whatsapp:hover {
+  background: #20ba5a !important;
+  color: #ffffff !important;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 24px rgba(37, 211, 102, 0.65);
+}
+
+.btn-back-shop {
+  background: rgba(139, 92, 246, 0.22);
+  border: 1px solid rgba(139, 92, 246, 0.45);
+  color: #fff;
+  font-weight: 750;
+  transition: all 0.2s ease;
+}
+
+.btn-back-shop:hover {
+  background: rgba(139, 92, 246, 0.4);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(139, 92, 246, 0.35);
 }
 
 .featured {
@@ -2200,14 +2225,22 @@ legend {
 }
 
 .hero-showcase-title {
-  font-size: clamp(28px, 4.5vw, 44px);
+  font-size: clamp(26px, 3.8vw, 44px);
   font-weight: 900;
-  letter-spacing: -0.02em;
-  line-height: 1.15;
+  letter-spacing: -0.01em;
+  line-height: 1.18;
   margin: 0 0 16px 0;
-  background: linear-gradient(180deg, #ffffff 0%, #e2d9fc 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  color: #ffffff !important;
+  background: none !important;
+  -webkit-text-fill-color: #ffffff !important;
+  text-shadow: 0 4px 20px rgba(0, 0, 0, 0.75), 0 0 30px rgba(255, 255, 255, 0.25);
+}
+
+.hero-showcase-title .headline-line-1,
+.hero-showcase-title .headline-line-2 {
+  display: block;
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
 }
 
 .hero-guarantee-pill-luxury {
@@ -4277,26 +4310,30 @@ legend {
   100% { transform: rotate(360deg); }
 }
 @keyframes rocket-float {
-  0% { transform: translateY(0) rotate(0deg); }
-  50% { transform: translateY(-3px) rotate(-6deg); }
-  100% { transform: translateY(0) rotate(0deg); }
+  0% { transform: translateY(0) rotate(0deg) scale(1); }
+  50% { transform: translateY(-4px) rotate(-8deg) scale(1.15); filter: drop-shadow(0 2px 8px rgba(0, 242, 254, 0.6)); }
+  100% { transform: translateY(0) rotate(0deg) scale(1); }
 }
 @keyframes box-bounce {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.18) translateY(-2px); }
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-4px) scale(1.18); filter: drop-shadow(0 2px 8px rgba(245, 158, 11, 0.6)); }
 }
 @keyframes wallet-pulse {
   0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.22); }
+  50% { transform: scale(1.22); filter: drop-shadow(0 0 8px rgba(236, 72, 153, 0.6)); }
 }
 @keyframes shield-glow {
   0%, 100% { transform: scale(1); filter: drop-shadow(0 0 2px rgba(139, 92, 246, 0.4)); }
-  50% { transform: scale(1.15); filter: drop-shadow(0 0 8px rgba(196, 181, 253, 0.8)); }
+  50% { transform: scale(1.18); filter: drop-shadow(0 0 10px rgba(196, 181, 253, 0.9)); }
 }
 @keyframes message-wobble {
   0%, 100% { transform: rotate(0deg) scale(1); }
-  25% { transform: rotate(-8deg) scale(1.12); }
-  75% { transform: rotate(8deg) scale(1.12); }
+  25% { transform: rotate(-10deg) scale(1.16); }
+  75% { transform: rotate(10deg) scale(1.16); }
+}
+@keyframes gear-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
 .anim-pulse-scale {
@@ -4306,26 +4343,40 @@ legend {
 .anim-gear {
   animation: gear-spin 5s linear infinite;
   display: inline-block;
+  transform-origin: center;
 }
 .anim-rocket {
-  animation: rocket-float 2.4s ease-in-out infinite;
+  animation: rocket-float 2.2s ease-in-out infinite;
   display: inline-block;
+  transform-origin: center;
 }
 .anim-box {
-  animation: box-bounce 2s ease-in-out infinite;
+  animation: box-bounce 1.9s ease-in-out infinite;
   display: inline-block;
+  transform-origin: center;
 }
 .anim-wallet {
-  animation: wallet-pulse 2s ease-in-out infinite;
+  animation: wallet-pulse 1.8s ease-in-out infinite;
   display: inline-block;
+  transform-origin: center;
 }
 .anim-shield {
-  animation: shield-glow 2.2s ease-in-out infinite;
+  animation: shield-glow 2s ease-in-out infinite;
   display: inline-block;
+  transform-origin: center;
 }
 .anim-message {
-  animation: message-wobble 2.5s ease-in-out infinite;
+  animation: message-wobble 2.2s ease-in-out infinite;
   display: inline-block;
+  transform-origin: center;
+}
+
+.portal-topbar-transparent {
+  background: transparent !important;
+  background-image: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border-bottom: none !important;
 }
 
 @media (max-width: 600px) {

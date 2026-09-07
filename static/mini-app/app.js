@@ -345,31 +345,47 @@
   function renderHeroBadges() {
     if (!state.shop || !state.shop.hero_logos) return;
     const logos = state.shop.hero_logos;
+    // 1. Netflix (Left Top-Left)
     if (logos.netflix) {
       const el = document.getElementById("hero-badge-netflix");
       if (el) el.innerHTML = `<img src="${escapeHtml(logos.netflix)}" class="hero-custom-logo-img" alt="Netflix">`;
     }
+    // 2. Claude / Discord (Left Top-Right)
     if (logos.discord) {
       const el = document.getElementById("hero-badge-discord");
       if (el) el.innerHTML = `<img src="${escapeHtml(logos.discord)}" class="hero-custom-logo-img" alt="Discord">`;
     }
+    // 3. YouTube (Left Bottom-Left)
+    const ytLogo = logos.youtube || logos.star;
+    if (ytLogo) {
+      const el = document.getElementById("hero-badge-star");
+      if (el) el.innerHTML = `<img src="${escapeHtml(ytLogo)}" class="hero-custom-logo-img" alt="YouTube">`;
+    }
+    // 4. ChatGPT Plus Wireframe (Left Bottom-Right)
     if (logos.chatgpt) {
       const el = document.getElementById("hero-badge-chatgpt");
       if (el) el.innerHTML = `<img src="${escapeHtml(logos.chatgpt)}" class="hero-custom-logo-img" alt="ChatGPT">`;
-      const el2 = document.getElementById("hero-badge-chatgpt-r");
-      if (el2) el2.innerHTML = `<img src="${escapeHtml(logos.chatgpt)}" class="hero-custom-logo-img" alt="ChatGPT">`;
     }
-    if (logos.star) {
-      const el = document.getElementById("hero-badge-star");
-      if (el) el.innerHTML = `<img src="${escapeHtml(logos.star)}" class="hero-custom-logo-img" alt="VIP Star">`;
+    // 5. OpenAI Mint Disc (Right Top-Left)
+    const oaiLogo = logos.openai || logos.chatgpt_r;
+    if (oaiLogo) {
+      const el = document.getElementById("hero-badge-chatgpt-r");
+      if (el) el.innerHTML = `<img src="${escapeHtml(oaiLogo)}" class="hero-custom-logo-img" alt="OpenAI">`;
     }
+    // 6. Canva Pro (Right Top-Right)
     if (logos.canva) {
       const el = document.getElementById("hero-badge-canva");
       if (el) el.innerHTML = `<img src="${escapeHtml(logos.canva)}" class="hero-custom-logo-img" alt="Canva">`;
     }
+    // 7. Spotify Cyan Waves (Right Bottom-Left)
     if (logos.spotify) {
-      const el = document.getElementById("hero-badge-spotify-green");
+      const el = document.getElementById("hero-badge-spotify-cyan");
       if (el) el.innerHTML = `<img src="${escapeHtml(logos.spotify)}" class="hero-custom-logo-img" alt="Spotify">`;
+    }
+    // 8. CapCut (Right Bottom-Right)
+    if (logos.capcut) {
+      const el = document.getElementById("hero-badge-spotify-green");
+      if (el) el.innerHTML = `<img src="${escapeHtml(logos.capcut)}" class="hero-custom-logo-img" alt="CapCut">`;
     }
   }
 
@@ -377,13 +393,16 @@
     renderHeroBadges();
     if (state.shop) {
       if (els.eyebrow && state.shop.eyebrow && state.shop.eyebrow !== "PREMIUM DIGITAL ACCOUNTS") els.eyebrow.textContent = state.shop.eyebrow;
-      if (els.headline) els.headline.textContent = "GET PREMIUM TOOLS. PAY LESS. DO MORE.";
+      if (els.headline) {
+        els.headline.innerHTML = '<span class="headline-line-1">GET PREMIUM TOOLS.</span><span class="headline-line-2">PAY LESS. DO MORE.</span>';
+      }
       if (els.tagline && state.shop.tagline) els.tagline.textContent = state.shop.tagline;
       [els.whatsapp, els.whatsappCatalog, els.whatsappCheckout].forEach((node) => {
         if (!node) return;
         node.href = waHref();
         node.hidden = false;
         node.style.display = "";
+        node.textContent = "ORDER ON WHATSAPP";
       });
     }
     const signed = Boolean(state.user && state.user.email);
@@ -410,8 +429,26 @@
       perksWidget.style.display = signed ? "block" : "none";
     }
 
+    // Toggle popover dropdown content based on logged-in state
+    const guestCard = document.getElementById("auth-popover-guest");
+    const userCard = document.getElementById("auth-popover-user");
+    if (guestCard && userCard) {
+      guestCard.hidden = signed;
+      guestCard.style.display = signed ? "none" : "block";
+      userCard.hidden = !signed;
+      userCard.style.display = signed ? "block" : "none";
+    }
+    if (signed) {
+      const popName = document.getElementById("pop-user-name");
+      const popEmail = document.getElementById("pop-user-email");
+      const popAvatar = document.getElementById("pop-user-avatar");
+      if (popName) popName.textContent = state.user.name || "VIP Member";
+      if (popEmail) popEmail.textContent = state.user.email || "";
+      if (popAvatar) popAvatar.innerHTML = getSmartAvatar(state.user.name || state.user.email || "", false);
+    }
+
     if (accountBtn) {
-      accountBtn.href = signed ? "/account" : "#/signup";
+      accountBtn.href = "javascript:void(0)";
       if (accountLabel) {
         accountLabel.textContent = signed ? (state.user.name || "VIP") : "Sign In";
       }
@@ -1313,16 +1350,26 @@
       return;
     }
     if (event.target.closest("#btn-account")) {
-      const signed = Boolean(state.user && state.user.email);
-      if (!signed) {
-        event.preventDefault();
-        event.stopPropagation();
-        const authDd = document.getElementById("meetway-auth-dropdown");
-        const open = authDd && !authDd.hidden;
-        closeMenus();
-        if (authDd) authDd.hidden = open;
-        return;
-      }
+      event.preventDefault();
+      event.stopPropagation();
+      const authDd = document.getElementById("meetway-auth-dropdown");
+      const open = authDd && !authDd.hidden;
+      closeMenus();
+      if (authDd) authDd.hidden = open;
+      return;
+    }
+    if (event.target.closest("#btn-pop-logout")) {
+      event.preventDefault();
+      event.stopPropagation();
+      const authDd = document.getElementById("meetway-auth-dropdown");
+      if (authDd) authDd.hidden = true;
+      try {
+        postJSON("/api/web/logout", {}).catch(() => {});
+      } catch (_e) {}
+      saveUser(null);
+      renderChrome();
+      location.hash = "#/home";
+      return;
     }
     if (event.target.closest("#meetway-auth-dropdown")) {
       return;
