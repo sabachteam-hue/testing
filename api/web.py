@@ -684,13 +684,14 @@ async def web_signup(request: Request, body: SignupBody, db: Session = Depends(g
             detail=f"Too many signup attempts. Try again in {retry_after} seconds.",
         )
 
-    email = body.email.strip().lower()
+    raw_ident = body.email.strip().lower()
+    email = raw_ident if "@" in raw_ident else f"{raw_ident}@phone.smf"
     password = (body.password or "").strip()
     if len(password) < 6:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Password must be at least 6 characters")
-    existing = db.query(User).filter(User.email == email).first()
+    existing = db.query(User).filter((User.email == email) | (User.email == raw_ident)).first()
     if existing and existing.password_hash:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="An account with this email already exists")
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="An account with this email/phone already exists")
     user = _get_or_create_web_user(db, email, body.name, password)
     user.password_hash = hash_password(password)
     db.commit()
@@ -709,11 +710,12 @@ async def web_login(request: Request, body: LoginBody, db: Session = Depends(get
             detail=f"Too many login attempts. Try again in {retry_after} seconds.",
         )
 
-    email = body.email.strip().lower()
-    user = db.query(User).filter(User.email == email).first()
+    raw_ident = body.email.strip().lower()
+    email_ident = raw_ident if "@" in raw_ident else f"{raw_ident}@phone.smf"
+    user = db.query(User).filter((User.email == raw_ident) | (User.email == email_ident) | (User.username == raw_ident)).first()
     is_valid, needs_rehash = verify_password(body.password, user.password_hash if user else None)
     if not user or not is_valid:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Email or password is incorrect")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Email/phone or password is incorrect")
     if user.is_banned:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This account is banned")
 

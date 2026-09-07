@@ -423,7 +423,12 @@
         if (!hasStock) return false;
       }
       // "products" returns all products (both in-stock and out-of-stock)
-      if (kind === "home" && state.categoryId && product.category_id !== state.categoryId) return false;
+      if (kind === "home" && state.categoryId != null) {
+        const catObj = (state.categories || []).find((c) => c.id === state.categoryId);
+        const matchId = product.category_id === state.categoryId;
+        const matchName = Boolean(catObj && product.category && product.category.toLowerCase() === catObj.name.toLowerCase());
+        if (!matchId && !matchName) return false;
+      }
       if (!q) return true;
       const hay = `${product.name} ${product.sku} ${product.category || ""} ${product.description || ""}`.toLowerCase();
       return hay.includes(q);
@@ -517,19 +522,66 @@
       .join("");
   }
 
+  const DEFAULT_CATEGORIES = [
+    { id: 1, name: "CapCut", emoji: "CC" },
+    { id: 2, name: "ChatGPT", emoji: "AI" },
+    { id: 3, name: "Netflix", emoji: "TV" },
+    { id: 4, name: "Social Media", emoji: "SM" },
+    { id: 5, name: "VPN & Security", emoji: "🛡️" },
+    { id: 6, name: "Gaming & Keys", emoji: "🎮" },
+  ];
+
+  function renderCategoryIcon(iconVal, categoryName) {
+    const raw = String(iconVal || "").trim();
+    const name = String(categoryName || "").toLowerCase();
+    const code = raw.toUpperCase();
+
+    if (raw.startsWith("http://") || raw.startsWith("https://") || raw.startsWith("/") || raw.includes(".png") || raw.includes(".svg") || raw.includes(".webp")) {
+      return `<img src="${escapeHtml(raw)}" class="cat-pill-img" alt="" onerror="this.outerHTML='<span class=\\'cat-pill-icon\\'>📦</span>'">`;
+    }
+
+    if (code === "CC" || name.includes("capcut") || name.includes("video")) {
+      return '<span class="cat-pill-icon">🎬</span>';
+    }
+    if (code === "AI" || name.includes("chatgpt") || name.includes("openai") || name.includes("gpt") || name.includes("ai")) {
+      return '<span class="cat-pill-icon">🤖</span>';
+    }
+    if (code === "TV" || name.includes("netflix") || name.includes("streaming") || name.includes("ott")) {
+      return '<span class="cat-pill-icon">📺</span>';
+    }
+    if (code === "SM" || name.includes("social") || name.includes("telegram") || name.includes("instagram")) {
+      return '<span class="cat-pill-icon">🌐</span>';
+    }
+    if (name.includes("vpn") || name.includes("security")) {
+      return '<span class="cat-pill-icon">🛡️</span>';
+    }
+    if (name.includes("game") || name.includes("gaming") || name.includes("xbox") || name.includes("psn")) {
+      return '<span class="cat-pill-icon">🎮</span>';
+    }
+    if (name.includes("music") || name.includes("spotify") || name.includes("audio")) {
+      return '<span class="cat-pill-icon">🎵</span>';
+    }
+    if (name.includes("canva") || name.includes("adobe") || name.includes("design")) {
+      return '<span class="cat-pill-icon">🎨</span>';
+    }
+
+    if (raw) {
+      return `<span class="cat-pill-icon">${escapeHtml(raw)}</span>`;
+    }
+    return '<span class="cat-pill-icon">📦</span>';
+  }
+
   function renderPills() {
-    const counts = {};
-    state.products.forEach((product) => {
-      counts[product.category_id] = (counts[product.category_id] || 0) + 1;
-    });
+    if (!els.pills) return;
+    const cats = (state.categories && state.categories.length) ? state.categories : DEFAULT_CATEGORIES;
+    const isAll = state.categoryId == null;
     els.pills.innerHTML = [
-      `<button type="button" class="pill ${state.categoryId == null ? "active" : ""}" data-cat="">All</button>`,
-      ...state.categories
-        .filter((cat) => counts[cat.id])
-        .map(
-          (cat) =>
-            `<button type="button" class="pill ${state.categoryId === cat.id ? "active" : ""}" data-cat="${cat.id}">${cat.emoji || ""} ${escapeHtml(cat.name)}</button>`
-        ),
+      `<button type="button" class="pill ${isAll ? "active" : ""}" data-cat=""><span class="cat-pill-icon">🛍️</span> <span>All Products</span></button>`,
+      ...cats.map((cat) => {
+        const isActive = state.categoryId === cat.id;
+        const iconMarkup = renderCategoryIcon(cat.emoji, cat.name);
+        return `<button type="button" class="pill ${isActive ? "active" : ""}" data-cat="${cat.id}">${iconMarkup} <span>${escapeHtml(cat.name)}</span></button>`;
+      }),
     ].join("");
   }
 
@@ -684,23 +736,51 @@
     showView("view-collection");
   }
 
-  function renderAuth() {
+  function renderAuth(forcedMode) {
     const signed = Boolean(state.user && state.user.email);
-    document.getElementById("auth-title").textContent = signed
-      ? `Hi, ${state.user.name || "there"}`
-      : "Create your SMF SHOP account";
-    document.getElementById("signup-form").hidden = signed;
-    document.getElementById("login-form").hidden = true;
-    document.querySelector(".auth-switch").hidden = signed;
+    const hash = window.location.hash || "";
+    const mode = forcedMode || (hash.includes("/login") || state.route === "/login" ? "login" : "signup");
+    const isLogin = mode === "login";
+
+    const titleEl = document.getElementById("auth-title");
+    const subEl = document.getElementById("auth-subtitle");
+    const switchPrompt = document.getElementById("auth-switch-prompt");
+    const switchBtn = document.getElementById("btn-switch-mode");
+    const loginForm = document.getElementById("login-form");
+    const signupForm = document.getElementById("signup-form");
     const signedActions = document.getElementById("auth-signed-actions");
-    if (signedActions) signedActions.hidden = !signed;
-    const logout = document.getElementById("btn-logout");
-    if (logout) logout.hidden = !signed;
-    const lede = els.viewAuth.querySelector(".lede");
-    if (lede) {
-      lede.textContent = signed
-        ? "You are signed in to your SMF SHOP customer account."
-        : "Sign up with email — no Telegram login.";
+    const tabs = document.querySelector(".auth-method-tabs");
+
+    if (signed) {
+      if (titleEl) titleEl.textContent = `Hi, ${state.user.name || "there"}`;
+      if (subEl) subEl.textContent = "You are signed in to your SMF SHOP customer account.";
+      if (loginForm) loginForm.hidden = true;
+      if (signupForm) signupForm.hidden = true;
+      if (tabs) tabs.hidden = true;
+      if (switchPrompt) switchPrompt.hidden = true;
+      if (switchBtn) switchBtn.hidden = true;
+      if (signedActions) signedActions.hidden = false;
+    } else {
+      if (signedActions) signedActions.hidden = true;
+      if (tabs) tabs.hidden = false;
+      if (switchPrompt) switchPrompt.hidden = false;
+      if (switchBtn) switchBtn.hidden = false;
+
+      if (isLogin) {
+        if (titleEl) titleEl.textContent = "Sign In";
+        if (subEl) subEl.textContent = "Access your granted accounts, orders, tool modules, and wallet";
+        if (loginForm) loginForm.hidden = false;
+        if (signupForm) signupForm.hidden = true;
+        if (switchPrompt) switchPrompt.textContent = "Don't have an account?";
+        if (switchBtn) switchBtn.textContent = "Create Account ➔";
+      } else {
+        if (titleEl) titleEl.textContent = "Create Account";
+        if (subEl) subEl.textContent = "Sign up with email or phone to access digital licenses and orders";
+        if (loginForm) loginForm.hidden = true;
+        if (signupForm) signupForm.hidden = false;
+        if (switchPrompt) switchPrompt.textContent = "Already have an account?";
+        if (switchBtn) switchBtn.textContent = "Sign In ➔";
+      }
     }
     showView("view-auth");
   }
@@ -798,7 +878,8 @@
     else if (state.route === "/products" || state.route === "/all-products") renderCollection("products");
     else if (state.route === "/subscription" || state.route === "/subscriptions") renderCollection("subscription");
     else if (state.route === "/freebies") renderCollection("freebies");
-    else if (state.route === "/signup" || state.route === "/login") renderAuth();
+    else if (state.route === "/login") renderAuth("login");
+    else if (state.route === "/signup") renderAuth("signup");
     else if (state.route === "/checkout") renderCheckout();
     else {
       showView("view-home");
@@ -924,6 +1005,9 @@
     const cat = event.target.closest("[data-cat]");
     if (cat) {
       state.categoryId = cat.dataset.cat ? Number(cat.dataset.cat) : null;
+      if (state.route !== "/") {
+        location.hash = "#/";
+      }
       renderPills();
       renderGrid();
       return;
@@ -1006,12 +1090,7 @@
       const authDd = document.getElementById("meetway-auth-dropdown");
       if (authDd) authDd.hidden = true;
       location.hash = "#/login";
-      const signupForm = document.getElementById("signup-form");
-      const loginForm = document.getElementById("login-form");
-      const authTitle = document.getElementById("auth-title");
-      if (signupForm) signupForm.hidden = true;
-      if (loginForm) loginForm.hidden = false;
-      if (authTitle) authTitle.textContent = "Log in to SMF SHOP";
+      renderAuth("login");
     });
   }
 
@@ -1021,12 +1100,7 @@
       const authDd = document.getElementById("meetway-auth-dropdown");
       if (authDd) authDd.hidden = true;
       location.hash = "#/signup";
-      const signupForm = document.getElementById("signup-form");
-      const loginForm = document.getElementById("login-form");
-      const authTitle = document.getElementById("auth-title");
-      if (signupForm) signupForm.hidden = false;
-      if (loginForm) loginForm.hidden = true;
-      if (authTitle) authTitle.textContent = "Create your SMF SHOP account";
+      renderAuth("signup");
     });
   }
 
@@ -1061,15 +1135,102 @@
     });
   }
 
+  // Switch between Login and Signup modes
+  const btnSwitchMode = document.getElementById("btn-switch-mode");
+  if (btnSwitchMode) {
+    btnSwitchMode.addEventListener("click", () => {
+      const loginForm = document.getElementById("login-form");
+      const isLoginVisible = loginForm && !loginForm.hidden;
+      if (isLoginVisible) {
+        location.hash = "#/signup";
+        renderAuth("signup");
+      } else {
+        location.hash = "#/login";
+        renderAuth("login");
+      }
+    });
+  }
+
+  // Email vs Phone Tab Switcher
+  const tabAuthEmail = document.getElementById("tab-auth-email");
+  const tabAuthPhone = document.getElementById("tab-auth-phone");
+  const labelLoginIdent = document.getElementById("label-login-identifier");
+  const loginInputIdent = document.getElementById("login-input-ident");
+  const labelSignupIdent = document.getElementById("label-signup-identifier");
+  const signupInputIdent = document.getElementById("signup-input-ident");
+  const iconLoginIdent = document.getElementById("icon-login-ident");
+  const iconSignupIdent = document.getElementById("icon-signup-ident");
+
+  const emailSvg = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m4 4 16 0c1.1 0 2 .9 2 2l0 12c0 1.1-.9 2-2 2l-16 0c-1.1 0-2-.9-2-2l0-12c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>`;
+  const phoneSvg = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/></svg>`;
+
+  if (tabAuthEmail) {
+    tabAuthEmail.addEventListener("click", () => {
+      tabAuthEmail.classList.add("active");
+      tabAuthEmail.setAttribute("aria-selected", "true");
+      if (tabAuthPhone) {
+        tabAuthPhone.classList.remove("active");
+        tabAuthPhone.setAttribute("aria-selected", "false");
+      }
+      if (labelLoginIdent) labelLoginIdent.textContent = "EMAIL ADDRESS OR USERNAME";
+      if (loginInputIdent) {
+        loginInputIdent.placeholder = "you@email.com";
+        loginInputIdent.type = "text";
+      }
+      if (labelSignupIdent) labelSignupIdent.textContent = "EMAIL ADDRESS";
+      if (signupInputIdent) {
+        signupInputIdent.placeholder = "you@email.com";
+        signupInputIdent.type = "text";
+      }
+      if (iconLoginIdent) iconLoginIdent.innerHTML = emailSvg;
+      if (iconSignupIdent) iconSignupIdent.innerHTML = emailSvg;
+    });
+  }
+
+  if (tabAuthPhone) {
+    tabAuthPhone.addEventListener("click", () => {
+      tabAuthPhone.classList.add("active");
+      tabAuthPhone.setAttribute("aria-selected", "true");
+      if (tabAuthEmail) {
+        tabAuthEmail.classList.remove("active");
+        tabAuthEmail.setAttribute("aria-selected", "false");
+      }
+      if (labelLoginIdent) labelLoginIdent.textContent = "PHONE NUMBER";
+      if (loginInputIdent) {
+        loginInputIdent.placeholder = "+92 300 1234567 or 0300...";
+        loginInputIdent.type = "tel";
+      }
+      if (labelSignupIdent) labelSignupIdent.textContent = "PHONE NUMBER";
+      if (signupInputIdent) {
+        signupInputIdent.placeholder = "+92 300 1234567 or 0300...";
+        signupInputIdent.type = "tel";
+      }
+      if (iconLoginIdent) iconLoginIdent.innerHTML = phoneSvg;
+      if (iconSignupIdent) iconSignupIdent.innerHTML = phoneSvg;
+    });
+  }
+
+  // Password Visibility Eye Toggles
+  document.querySelectorAll(".btn-toggle-eye").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const targetId = btn.dataset.target;
+      const input = document.getElementById(targetId);
+      if (!input) return;
+      if (input.type === "password") {
+        input.type = "text";
+        btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22"/></svg>`;
+      } else {
+        input.type = "password";
+        btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>`;
+      }
+    });
+  });
+
   const showLoginBtn = document.getElementById("show-login");
   if (showLoginBtn) {
     showLoginBtn.onclick = () => {
-      const signupForm = document.getElementById("signup-form");
-      const loginForm = document.getElementById("login-form");
-      const authTitle = document.getElementById("auth-title");
-      if (signupForm) signupForm.hidden = true;
-      if (loginForm) loginForm.hidden = false;
-      if (authTitle) authTitle.textContent = "Log in to SMF SHOP";
+      location.hash = "#/login";
+      renderAuth("login");
     };
   }
 
@@ -1081,7 +1242,7 @@
       } catch (_err) {}
       saveUser(null);
       location.hash = "#/signup";
-      renderAuth();
+      renderAuth("signup");
     };
   }
 
