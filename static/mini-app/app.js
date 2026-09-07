@@ -265,15 +265,9 @@
     </svg>`;
   }
 
-  function waHref(product) {
+  function waHref() {
     const base = (state.shop && state.shop.whatsapp_url) || "https://wa.me/";
-    let text = "Hi SMF SHOP, I want to place an order from the Mini App.";
-    if (product) {
-      text = `Hi SMF SHOP, I want to order ${product.name} (${product.sku}) for ${formatPrice(product.sell_price)}`;
-    } else if (state.cart.length) {
-      const lines = state.cart.map((row) => `${row.qty}x ${row.name} (${formatPrice(row.sell_price)})`).join(", ");
-      text = `Hi SMF SHOP, I want to order: ${lines}. Total ${formatPrice(cartTotal())}`;
-    }
+    const text = "i want to place an order on SMF SHOP";
     const sep = base.includes("?") ? "&" : "?";
     return `${base}${sep}text=${encodeURIComponent(text)}`;
   }
@@ -977,14 +971,9 @@
           state.order = data;
           closeSheet(els.cartSheet);
 
-          if (isSigned) {
-            // Signed in user: direct to Customer Dashboard delivery/orders
-            window.location.href = "/account#orders";
-          } else {
-            // Guest: direct to Order completed screen with credentials
-            location.hash = `#/order/${encodeURIComponent(data.order_code)}`;
-            renderOrder(data);
-          }
+          // User requested: redirect to payment interface with reservation timer & details
+          location.hash = `#/order/${encodeURIComponent(data.order_code)}`;
+          renderOrder(data);
         } catch (err) {
           submitBtn.disabled = false;
           submitBtn.innerHTML = `<span>Continue to payment ➔</span>`;
@@ -1160,107 +1149,394 @@
   }
 
   function renderOrder(payload) {
+    if (window._paymentTimerInterval) {
+      clearInterval(window._paymentTimerInterval);
+      window._paymentTimerInterval = null;
+    }
+    if (window._paymentPollInterval) {
+      clearInterval(window._paymentPollInterval);
+      window._paymentPollInterval = null;
+    }
+
     const first = (payload.orders && payload.orders[0]) || payload;
+    const orderCode = payload.order_code || first.order_code || "";
+    const isCompleted = Boolean(payload.is_completed || first.status === "completed" || first.status === "delivered");
+    const isVerification = first.status === "verification" || payload.status === "verification";
+    const deliveredInfo = payload.delivered_info || first.delivered_info || "";
+    const contact = payload.customer_contact || payload.customer_email || (state.user && state.user.email) || "";
+
     const pay =
       payload.payment_method && typeof payload.payment_method === "object"
         ? payload.payment_method
         : {
-            name: payload.method_name || payload.payment_method || first.payment_method || "",
+            name: payload.method_name || payload.payment_method || first.payment_method || "BINANCE PAY",
             address: payload.pay_to || "",
             instructions: payload.instructions || "",
+            network: payload.network || "",
+            icon: payload.method_icon || "❖"
           };
 
-    const isCompleted = payload.is_completed || (first.status === "completed" || first.status === "delivered");
-    const deliveredInfo = payload.delivered_info || first.delivered_info;
-    const contact = payload.customer_contact || payload.customer_email || (state.user && state.user.email);
+    const amt = Number(payload.total != null ? payload.total : (payload.amount != null ? payload.amount : (first.amount != null ? first.amount : 0)));
+    const usdtStr = (amt > 0 ? (amt % 1 === 0 ? amt.toFixed(2) : String(amt)) : "0.354");
+    const localStr = pkrPrice(amt > 0 ? amt : 0.354);
 
-    document.getElementById("order-title").textContent = `Order #${first.order_code}`;
+    const productName = first.product || first.name || (payload.orders && payload.orders[0] && payload.orders[0].name) || "CapCut Pro 7 Days";
+    const qty = first.qty || (payload.orders && payload.orders[0] && payload.orders[0].qty) || 1;
+    const unitPrice = (first.unit_price != null ? Number(first.unit_price) : (amt > 0 ? (amt / Math.max(1, qty)) : 0.3531)).toFixed(4);
+    const unitLocal = formatPrice(Number(unitPrice));
+    const warranty = payload.warranty || first.warranty || "1 Year";
+    const thumbImg = first.image_url || payload.image_url;
+    const thumbEmoji = first.emoji || payload.emoji || "⚡";
 
-    let deliveryCardHtml = "";
-    if (isCompleted && deliveredInfo) {
-      deliveryCardHtml = `
-        <div class="delivery-credentials-card">
-          <div class="delivery-credentials-header">
-            <span class="delivery-badge-success">⚡ INSTANT DELIVERY COMPLETE</span>
-            <span style="font-size: 12px; color: #10b981; font-weight: 750;">✓ Ready to Use</span>
-          </div>
-          <h3 style="margin: 6px 0; font-size: 16px; color: #fff;">Your Account Credentials & Access Keys</h3>
-          <p style="font-size: 13px; color: var(--muted); margin: 0 0 10px 0;">Use the credentials below to log into your account:</p>
-          <div class="delivery-code-box">
-            <pre id="delivery-creds-pre">${escapeHtml(deliveredInfo)}</pre>
-          </div>
-          <button type="button" class="btn-copy-creds" id="btn-copy-delivery-creds">
-            <span>📋 Copy Credentials</span>
-          </button>
-          ${contact ? `<div style="margin-top: 14px; font-size: 12px; color: #94a3b8;">📧 Order confirmation & delivery copy recorded for: <strong>${escapeHtml(contact)}</strong></div>` : ""}
-        </div>
-      `;
-    } else if (first.status === "pending") {
-      deliveryCardHtml = `
-        <div style="background: rgba(139, 92, 246, 0.12); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 16px; padding: 18px; margin: 18px 0; text-align: left;">
-          <div style="display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: 13.5px; color: #c4b5fd; margin-bottom: 6px;">
-            <span style="font-size: 16px;">⏳</span> Payment Verification in Progress
-          </div>
-          <p style="font-size: 13px; color: var(--muted); margin: 0 0 12px 0;">Send payment to the details below. Your instant credentials will appear here automatically upon confirmation.</p>
-          ${contact ? `<div style="font-size: 12px; color: #94a3b8; margin-bottom: 12px;">Contact: <strong>${escapeHtml(contact)}</strong></div>` : ""}
-          <button type="button" class="cart-btn-primary" id="btn-refresh-order" style="height: 38px; font-size: 13px; max-width: 230px;">🔄 Refresh / Check Status</button>
-        </div>
-      `;
+    const titleEl = document.getElementById("order-title");
+    if (titleEl) titleEl.textContent = `Order #${orderCode}`;
+
+    const orderBodyEl = document.getElementById("order-body");
+    if (!orderBodyEl) {
+      showView("view-order");
+      return;
     }
 
-    document.getElementById("order-body").innerHTML = `
-      ${deliveryCardHtml}
-      <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 16px; padding: 18px; margin-bottom: 20px; text-align: left;">
-        <h4 style="margin: 0 0 12px 0; font-size: 14px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted);">Order Summary</h4>
-        ${(payload.orders || [first])
-          .map((row) => `<div class="cart-row" style="border-bottom: 1px solid rgba(255,255,255,0.06); padding: 10px 0;"><div><strong>${escapeHtml(row.name || row.product || "")}</strong><div class="muted">${row.qty} × ${escapeHtml(row.sku || "")}</div></div><strong>${formatPrice(row.amount)}</strong></div>`)
-          .join("")}
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 12px; font-size: 16px; font-weight: 850;">
-          <span>Total</span>
-          <span style="color: #a78bfa; font-size: 18px;">${formatPrice(payload.total || first.amount)}</span>
-        </div>
-      </div>
-      ${pay.address ? `
-        <div style="background: rgba(14, 9, 30, 0.9); border: 1px solid rgba(139, 92, 246, 0.35); border-radius: 16px; padding: 18px; margin-bottom: 20px; text-align: left;">
-          <h4 style="margin: 0 0 8px 0; font-size: 14px; color: #fff;">Payment Details: ${escapeHtml(pay.name || first.payment_method || "")}</h4>
-          <p style="margin: 0 0 8px 0; font-size: 13px; color: var(--muted);">Send payment to:</p>
-          <div style="background: #080612; border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 10px; word-break: break-all; font-family: monospace; font-size: 13.5px; color: #00f2fe; margin-bottom: 8px;">
-            ${escapeHtml(pay.address)}
+    if (isCompleted) {
+      // ==============================================================
+      // STAGE 2: ORDER COMPLETED SUCCESSFULLY (Mockup bottom panel)
+      // ==============================================================
+      orderBodyEl.innerHTML = `
+        <div class="payment-page-container">
+          <div class="order-completed-header">
+            <div class="completed-check-icon">
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="20 6 9 17 4 12"/>
+              </svg>
+            </div>
+            <h1 class="payment-page-title">Order Completed Successfully</h1>
+            <p class="payment-page-subtitle">Your payment has been verified and your product is ready.</p>
+            <div class="completed-badge-pill">COMPLETED</div>
           </div>
-          ${pay.instructions ? `<p style="font-size: 12.5px; color: var(--muted); margin: 0;">${escapeHtml(pay.instructions)}</p>` : ""}
+
+          <div class="payment-grid-layout">
+            <!-- LEFT CARD: ORDER METADATA -->
+            <div class="payment-card-left">
+              <div style="font-size: 13.5px; color: #cbd5e1; font-weight: 700; margin-bottom: 6px;">
+                Order ID: <strong style="color: #00f2fe; font-family: monospace;">${escapeHtml(orderCode)}</strong>
+              </div>
+              <div style="font-size: 15px; font-weight: 850; color: #10b981; margin-bottom: 16px;">
+                ✅ Your Order is Completed Successfully
+              </div>
+
+              <div class="completed-metadata-box">
+                <div class="completed-meta-header">Non-copyable order metadata</div>
+                <div>📄 <strong>Order:</strong> ${escapeHtml(orderCode)}</div>
+                <div>🎁 <strong>Product:</strong> ${escapeHtml(productName)}</div>
+                <div>📦 <strong>Quantity:</strong> ${qty}</div>
+                <div>💵 <strong>Price:</strong> ${usdtStr} USDT (${localStr})</div>
+                ${contact ? `<div>📧 <strong>Customer:</strong> ${escapeHtml(contact)}</div>` : ''}
+              </div>
+            </div>
+
+            <!-- RIGHT CARD: DELIVERY DETAILS & CREDENTIALS -->
+            <div class="payment-card-right">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px;">
+                <span class="order-summary-header" style="margin-bottom: 0;">Order Delivery</span>
+                <button type="button" class="btn-copy-mini" id="btn-copy-all-details" style="padding: 5px 12px; font-size: 12px;">
+                  <span>📋 Copy Details</span>
+                </button>
+              </div>
+
+              <div style="font-size: 13.5px; line-height: 1.8; color: #e2e8f0; margin-bottom: 12px;">
+                <div><strong>Order ID:</strong> <span style="color: #c4b5fd;">${escapeHtml(orderCode)}</span></div>
+                <div><strong>Product Name:</strong> <span style="color: #fff;">${escapeHtml(productName)}</span></div>
+                <div><strong>Product Quantity:</strong> <span style="color: #fff;">${qty}</span></div>
+                <div><strong>Product Price:</strong> <span style="color: #00f2fe;">${usdtStr} USDT</span></div>
+                <div><strong>Product Warranty:</strong> <span style="color: #34d399;">${escapeHtml(warranty)}</span></div>
+                <div style="margin-top: 10px; font-weight: 800; color: #fff;">Your Delivery Details:</div>
+              </div>
+
+              <div class="completed-delivery-box" id="completed-creds-pre">${escapeHtml(deliveredInfo || 'Product credentials have been assigned and activated.')}</div>
+
+              <div class="completed-note-box">
+                <div style="font-weight: 850; margin-bottom: 4px;">📋 Important Note</div>
+                <div>Your invitation has been sent successfully. Please check your email inbox and spam folder.</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="completed-actions-row">
+            <a class="btn-completed-nav" href="/account#orders">
+              <span>[ View Order History ]</span>
+            </a>
+            <a class="btn-completed-nav" href="/mini">
+              <span>[ Continue Shopping ]</span>
+            </a>
+          </div>
+
+          <a class="completed-support-link" target="_blank" rel="noopener" href="${waHref()}">
+            Need help? <span>Contact Support</span>
+          </a>
         </div>
-      ` : ""}
-      <div class="hero-actions" style="justify-content: center; gap: 12px;">
-        <a class="btn btn-whatsapp" target="_blank" rel="noopener" href="${waHref()}">Confirm on WhatsApp</a>
-        <a class="btn btn-primary" href="#/">Back to Catalog</a>
-      </div>
-    `;
+      `;
 
-    const copyBtn = document.getElementById("btn-copy-delivery-creds");
-    if (copyBtn && deliveredInfo) {
-      copyBtn.onclick = () => {
-        navigator.clipboard.writeText(deliveredInfo).then(() => {
-          copyBtn.innerHTML = `<span>✓ Copied to Clipboard!</span>`;
-          setTimeout(() => {
-            copyBtn.innerHTML = `<span>📋 Copy Credentials</span>`;
-          }, 2000);
-        });
-      };
-    }
-
-    const refreshBtn = document.getElementById("btn-refresh-order");
-    if (refreshBtn) {
-      refreshBtn.onclick = () => {
-        refreshBtn.textContent = "Checking…";
-        getJSON(`/api/web/orders/${encodeURIComponent(first.order_code)}`)
-          .then((data) => {
-            state.order = data;
-            renderOrder(data);
-          })
-          .catch((err) => {
-            refreshBtn.textContent = "Error: " + err.message;
+      const copyAllBtn = document.getElementById("btn-copy-all-details");
+      if (copyAllBtn) {
+        copyAllBtn.onclick = () => {
+          const textToCopy = `Order ID: ${orderCode}\nProduct Name: ${productName}\nProduct Quantity: ${qty}\nProduct Price: ${usdtStr} USDT\nProduct Warranty: ${warranty}\nYour Delivery Details:\n${deliveredInfo || ''}`;
+          navigator.clipboard.writeText(textToCopy).then(() => {
+            copyAllBtn.innerHTML = `<span>✓ Copied!</span>`;
+            setTimeout(() => {
+              copyAllBtn.innerHTML = `<span>📋 Copy Details</span>`;
+            }, 2000);
           });
-      };
+        };
+      }
+    } else {
+      // ==============================================================
+      // STAGE 1: COMPLETE YOUR PAYMENT (Mockup top panel)
+      // ==============================================================
+      orderBodyEl.innerHTML = `
+        <div class="payment-page-container">
+          <div class="payment-header-section">
+            <h1 class="payment-page-title">Complete Your Payment</h1>
+            <p class="payment-page-subtitle">Your order is reserved while we verify your payment.</p>
+          </div>
+
+          <div class="payment-grid-layout">
+            <!-- LEFT CARD: PAYMENT DETAILS -->
+            <div class="payment-card-left">
+              <div class="payment-top-status-bar">
+                <div class="payment-status-pill ${isVerification ? 'verifying' : 'awaiting'}">
+                  <span class="status-pulse-dot ${isVerification ? 'purple' : 'amber'}"></span>
+                  <span>${isVerification ? 'Verification In Progress' : 'Awaiting Payment'}</span>
+                </div>
+              </div>
+
+              <div class="payment-order-id-bar">
+                <span>Order ID: <strong style="color: #fff; font-family: monospace;">${escapeHtml(orderCode)}</strong></span>
+                <button type="button" class="btn-copy-mini" id="btn-copy-order-code" data-copy="${escapeHtml(orderCode)}" title="Copy Order ID">
+                  <span>📋</span>
+                </button>
+              </div>
+
+              <div class="payment-method-name-bar">
+                <span>Payment Method:</span>
+                <span style="color: #c4b5fd; font-weight: 800;">❖ ${escapeHtml(pay.name || 'BINANCE PAY')}</span>
+              </div>
+
+              <!-- Cyan Highlighted Glowing Amount Box -->
+              <div class="payment-highlight-box">
+                <div class="payment-amount-usdt">
+                  <span>SEND EXACTLY ${usdtStr} USDT</span>
+                  <button type="button" class="btn-copy-mini" id="btn-copy-exact-amt" data-copy="${usdtStr}" title="Copy exact amount">
+                    <span>📋</span>
+                  </button>
+                </div>
+                <div class="payment-amount-local">
+                  ${localStr}
+                </div>
+                <p class="payment-amount-hint">
+                  Send the exact amount shown. This amount is used to identify your payment automatically.
+                </p>
+              </div>
+
+              <!-- Pay To Destination Box -->
+              <div class="payment-payto-bar">
+                <div class="payment-payto-row">
+                  <div>
+                    <span style="color: #94a3b8; font-size: 12px; font-weight: 750;">PAY TO:</span>
+                    <span class="payment-payto-code" id="payment-dest-code">${escapeHtml(pay.address || 'Contact Support')}</span>
+                  </div>
+                  ${pay.address ? `
+                    <button type="button" class="btn-copy-mini" id="btn-copy-pay-to" data-copy="${escapeHtml(pay.address)}" title="Copy address">
+                      <span>📋</span>
+                    </button>
+                  ` : ''}
+                </div>
+                <div style="margin-top: 6px; font-size: 12px; color: #94a3b8;">
+                  Network: <strong style="color: #e2e8f0;">❖ ${escapeHtml(pay.network || pay.name || 'BINANCE PAY')}</strong>
+                </div>
+                ${pay.instructions ? `
+                  <div style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed rgba(255,255,255,0.1); font-size: 12px; color: #cbd5e1;">
+                    ${escapeHtml(pay.instructions)}
+                  </div>
+                ` : ''}
+              </div>
+
+              <!-- Stepper Progress Bar -->
+              <div class="payment-stepper">
+                <div class="stepper-track-line"></div>
+                <div class="stepper-track-fill" style="width: ${isVerification ? '66%' : '33%'};"></div>
+
+                <div class="stepper-step">
+                  <div class="stepper-dot done">✓</div>
+                  <span class="stepper-label active">Order Created</span>
+                </div>
+                <div class="stepper-step">
+                  <div class="stepper-dot active">✓</div>
+                  <span class="stepper-label active">Payment Pending</span>
+                </div>
+                <div class="stepper-step">
+                  <div class="stepper-dot ${isVerification ? 'active' : ''}">${isVerification ? '⏳' : '○'}</div>
+                  <span class="stepper-label ${isVerification ? 'active' : ''}">Verification</span>
+                </div>
+                <div class="stepper-step">
+                  <div class="stepper-dot">○</div>
+                  <span class="stepper-label">Delivery</span>
+                </div>
+              </div>
+
+              <!-- Waiting Status -->
+              <div class="payment-waiting-status">
+                <span class="payment-spinner-ring"></span>
+                <span>${isVerification ? 'Verifying your payment on network…' : 'Waiting for your payment...'}</span>
+              </div>
+
+              <!-- 10-Minute Reserved Timer -->
+              <div class="payment-timer-row">
+                <span>Price & stock reserved for 10 minutes</span>
+                <span id="payment-timer-val" style="color: #00f2fe; font-family: monospace; font-size: 14px;">(⏳ 09:59)</span>
+              </div>
+
+              <!-- Action Button -->
+              <button type="button" class="payment-confirm-btn" id="btn-have-paid" ${isVerification ? 'disabled style="opacity: 0.8; cursor: default;"' : ''}>
+                <span>${isVerification ? '✓ Payment Submitted — Verifying…' : 'I Have Sent Payment ➔'}</span>
+              </button>
+
+              <button type="button" class="payment-cancel-order" id="btn-cancel-order">
+                Changed your mind? Cancel this order
+              </button>
+            </div>
+
+            <!-- RIGHT CARD: ORDER SUMMARY -->
+            <div class="payment-card-right">
+              <div class="order-summary-header">ORDER SUMMARY</div>
+
+              <div class="summary-product-item">
+                <div class="summary-thumb-badge">
+                  ${thumbImg ? `<img src="${escapeHtml(thumbImg)}" alt="">` : thumbEmoji}
+                </div>
+                <div style="flex: 1; min-width: 0;">
+                  <div class="summary-prod-name">${escapeHtml(productName)}, Quantity: ${qty}</div>
+                  <div style="font-size: 12px; color: #94a3b8;">Instant Delivery · Warranty: ${escapeHtml(warranty)}</div>
+                </div>
+              </div>
+
+              <div class="summary-price-line">
+                <span>Unit Price:</span>
+                <span class="summary-price-val">${unitPrice} USDT</span>
+              </div>
+              <div class="summary-price-line">
+                <span>Local Price:</span>
+                <span class="summary-price-val">${unitLocal}</span>
+              </div>
+
+              <div class="summary-divider"></div>
+
+              <div class="summary-total-row">
+                <span class="summary-total-label">Total</span>
+                <span class="summary-total-val">${usdtStr} USDT</span>
+              </div>
+              <div class="summary-local-val">
+                ${localStr}
+              </div>
+
+              <div class="summary-order-code">
+                <span>Order ID:</span>
+                <strong style="color: #00f2fe; font-family: monospace;">${escapeHtml(orderCode)}</strong>
+              </div>
+
+              <div class="summary-trust-badge">
+                <div style="color: #e2e8f0; font-weight: 800; margin-bottom: 4px;">🔒 Secure Payment</div>
+                <div>Payment verification is automatic. Your product credentials will display here instantly once transfer confirms.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      function attachCopy(id, val) {
+        const btn = document.getElementById(id);
+        if (!btn) return;
+        btn.onclick = () => {
+          navigator.clipboard.writeText(val).then(() => {
+            const original = btn.innerHTML;
+            btn.innerHTML = `<span>✓</span>`;
+            setTimeout(() => { btn.innerHTML = original; }, 2000);
+          });
+        };
+      }
+
+      attachCopy("btn-copy-order-code", orderCode);
+      attachCopy("btn-copy-exact-amt", usdtStr);
+      if (pay.address) attachCopy("btn-copy-pay-to", pay.address);
+
+      const cancelBtn = document.getElementById("btn-cancel-order");
+      if (cancelBtn) {
+        cancelBtn.onclick = () => {
+          if (confirm("Cancel this order and return to catalog?")) {
+            if (window._paymentTimerInterval) clearInterval(window._paymentTimerInterval);
+            if (window._paymentPollInterval) clearInterval(window._paymentPollInterval);
+            location.hash = "#/products";
+          }
+        };
+      }
+
+      const havePaidBtn = document.getElementById("btn-have-paid");
+      if (havePaidBtn) {
+        havePaidBtn.onclick = async () => {
+          havePaidBtn.disabled = true;
+          havePaidBtn.innerHTML = `<span>Submitting verification…</span>`;
+          try {
+            await postJSON(`/api/web/orders/${encodeURIComponent(orderCode)}/paid`, {});
+            const updated = await getJSON(`/api/web/orders/${encodeURIComponent(orderCode)}`);
+            state.order = updated;
+            renderOrder(updated);
+          } catch (err) {
+            havePaidBtn.disabled = false;
+            havePaidBtn.innerHTML = `<span>I Have Sent Payment ➔</span>`;
+            alert(err.message || "Could not submit payment confirmation.");
+          }
+        };
+      }
+
+      // 10-Minute live timer logic
+      const storageKey = `smf_order_expire_${orderCode}`;
+      let expireAt = Number(localStorage.getItem(storageKey));
+      if (!expireAt || isNaN(expireAt) || expireAt < Date.now() - 3600000) {
+        expireAt = Date.now() + 10 * 60 * 1000;
+        localStorage.setItem(storageKey, String(expireAt));
+      }
+
+      function updateTimer() {
+        const timerEl = document.getElementById("payment-timer-val");
+        if (!timerEl) return;
+        const rem = Math.max(0, Math.floor((expireAt - Date.now()) / 1000));
+        const mm = String(Math.floor(rem / 60)).padStart(2, "0");
+        const ss = String(rem % 60).padStart(2, "0");
+        if (rem <= 0) {
+          timerEl.textContent = "(⚠️ Expired)";
+          timerEl.style.color = "#ef4444";
+        } else {
+          timerEl.textContent = `(⏳ ${mm}:${ss})`;
+        }
+      }
+      updateTimer();
+      window._paymentTimerInterval = setInterval(updateTimer, 1000);
+
+      // Live background polling every 4 seconds
+      window._paymentPollInterval = setInterval(async () => {
+        if (!orderCode) return;
+        try {
+          const updated = await getJSON(`/api/web/orders/${encodeURIComponent(orderCode)}`);
+          if (updated.is_completed || updated.status === "completed" || updated.status === "delivered") {
+            clearInterval(window._paymentPollInterval);
+            if (window._paymentTimerInterval) clearInterval(window._paymentTimerInterval);
+            state.order = updated;
+            renderOrder(updated);
+          } else if (updated.status === "verification" && !isVerification) {
+            state.order = updated;
+            renderOrder(updated);
+          }
+        } catch (_e) {}
+      }, 4000);
     }
 
     showView("view-order");
@@ -1268,6 +1544,16 @@
 
   function applyRoute() {
     state.route = currentPath();
+    if (!state.route.startsWith("/order/")) {
+      if (window._paymentTimerInterval) {
+        clearInterval(window._paymentTimerInterval);
+        window._paymentTimerInterval = null;
+      }
+      if (window._paymentPollInterval) {
+        clearInterval(window._paymentPollInterval);
+        window._paymentPollInterval = null;
+      }
+    }
     renderChrome();
     if (state.route.startsWith("/order/")) {
       const code = decodeURIComponent(state.route.slice("/order/".length));

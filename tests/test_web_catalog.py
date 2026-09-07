@@ -443,6 +443,12 @@ class MiniAppDesignTests(unittest.TestCase):
         self.assertIn("VIEW DESCRIPTION", js)
         self.assertIn("product-card", js)
         self.assertIn("flag-img", js)
+        self.assertIn("i want to place an order on SMF SHOP", js)
+        self.assertIn("Complete Your Payment", js)
+        self.assertIn("Order Completed Successfully", js)
+        self.assertIn("Price & stock reserved for 10 minutes", js)
+        self.assertIn(".payment-page-container", css)
+        self.assertIn(".payment-highlight-box", css)
 
 
 if __name__ == "__main__":

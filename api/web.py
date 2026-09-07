@@ -1655,22 +1655,51 @@ def get_web_order(code: str, request: Request, db: Session = Depends(get_db)) ->
     if contact and contact.endswith("@phone.smf"):
         contact = contact.replace("@phone.smf", "")
 
+    warranty = "1 Year"
+    if service and hasattr(service, "warranty_duration") and service.warranty_duration:
+        warranty = f"{service.warranty_duration} Days"
+    elif service and hasattr(service, "warranty_text") and service.warranty_text:
+        warranty = str(service.warranty_text)
+
+    qty = int(order.quantity or 1)
+    amt = float(order.amount_usdt or 0)
+    unit_p = round(amt / max(1, qty), 4)
+
     return {
         "order_code": order.order_code,
         "status": order.status,
-        "qty": order.quantity,
-        "amount": float(order.amount_usdt or 0),
+        "qty": qty,
+        "amount": amt,
+        "unit_price": unit_p,
         "payment_method": order.payment_method,
         "product": (_plain_text(service.name) if service else None) or None,
         "sku": service.sku if service else None,
+        "image_url": absolute_media_url(service.image_path, request) if service else None,
+        "emoji": _display_emoji(service.emoji if service else None, "🛍️"),
+        "warranty": warranty,
         "instructions": _plain_text(method.instructions) if method else None,
         "pay_to": method.address if method else None,
         "method_name": method.name if method else order.payment_method,
         "network": method.network if method else None,
+        "method_icon": _display_emoji(method.icon if method else None, "💳"),
         "delivered_info": delivered_info,
         "customer_contact": contact,
+        "created_at": order.created_at.isoformat() if getattr(order, "created_at", None) else None,
         "is_completed": st in ("completed", "delivered"),
     }
+
+
+@router.post("/orders/{code}/paid")
+def mark_web_order_paid(code: str, db: Session = Depends(get_db)) -> dict:
+    clean_code = (code or "").strip()
+    order = db.query(Order).filter(Order.order_code == clean_code).first()
+    if not order:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
+    if order.status == "pending":
+        order.status = "verification"
+        order.note = (order.note or "") + " [Customer confirmed payment via web]"
+        db.commit()
+    return {"ok": True, "status": order.status}
 
 
 # ==============================================================================
