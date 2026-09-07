@@ -199,6 +199,72 @@
     return state.cart.reduce((sum, row) => sum + row.sell_price * row.qty, 0);
   }
 
+  // Smart Avatar Generator based on name gender guessing
+  function getSmartAvatar(name, isSignOut = false) {
+    if (isSignOut || !name) {
+      return `<svg class="vip-user-signout-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: #c4b5fd; display: block;"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`;
+    }
+    const clean = String(name).toLowerCase().trim();
+    const femalePatterns = [
+      'saba', 'fatima', 'ayesha', 'aisha', 'zainab', 'sana', 'maryam', 'maria', 
+      'hira', 'anaya', 'sarah', 'sara', 'samina', 'nadia', 'bushra', 'sidra', 
+      'iqra', 'nimra', 'sadia', 'rabia', 'mehwish', 'komal', 'noor', 'amna', 
+      'faryal', 'mahnoor', 'laiba', 'kinza', 'iman', 'emaan', 'aleena', 'alina',
+      'kiran', 'asma', 'shazia', 'nida', 'zoya', 'mishal', 'hina', 'farah',
+      'female', 'woman', 'girl', 'lady', 'miss', 'mrs'
+    ];
+    const malePatterns = [
+      'ali', 'ahmed', 'ahmad', 'salman', 'usman', 'hamza', 'bilal', 'saeed', 
+      'omar', 'umer', 'umar', 'hassan', 'hasan', 'hussain', 'hussein', 'fahad', 
+      'waqas', 'shahid', 'alex', 'john', 'david', 'michael', 'muhammad', 'mohammad', 
+      'asif', 'kashif', 'irfan', 'kamran', 'adnan', 'tariq', 'rashid', 'naveed',
+      'imran', 'babur', 'rizwan', 'shaheen', 'haris', 'naseem', 'shadab',
+      'male', 'man', 'boy', 'mr'
+    ];
+    
+    let gender = 'neutral';
+    const tokens = clean.split(/[\s._-]+/);
+    for (const token of tokens) {
+      if (femalePatterns.includes(token)) { gender = 'female'; break; }
+      if (malePatterns.includes(token)) { gender = 'male'; break; }
+    }
+    if (gender === 'neutral') {
+      for (const p of femalePatterns) {
+        if (clean.includes(p)) { gender = 'female'; break; }
+      }
+    }
+    if (gender === 'neutral') {
+      for (const p of malePatterns) {
+        if (clean.includes(p)) { gender = 'male'; break; }
+      }
+    }
+
+    if (gender === 'female') {
+      return `<svg class="vip-user-avatar-svg" viewBox="0 0 36 36" width="28" height="28" style="border-radius: 50%; border: 1.5px solid #c4b5fd; box-shadow: 0 0 10px rgba(167, 139, 250, 0.6); display: block;">
+        <circle cx="18" cy="18" r="18" fill="#4c1d95"/>
+        <path d="M10 18 C10 10 26 10 26 18 C26 23 25 27 24 30 C20 31 16 31 12 30 C11 27 10 23 10 18 Z" fill="#2e1065"/>
+        <ellipse cx="18" cy="17" rx="5.5" ry="6.5" fill="#fed7aa"/>
+        <path d="M11 15 C13 11 23 11 25 15 C23 13 19 13 18 15 C17 13 13 13 11 15 Z" fill="#1e1b4b"/>
+        <path d="M9 34 C9 26 27 26 27 34 Z" fill="#f472b6"/>
+      </svg>`;
+    }
+
+    if (gender === 'male') {
+      return `<svg class="vip-user-avatar-svg" viewBox="0 0 36 36" width="28" height="28" style="border-radius: 50%; border: 1.5px solid #8b5cf6; box-shadow: 0 0 10px rgba(139, 92, 246, 0.6); display: block;">
+        <circle cx="18" cy="18" r="18" fill="#312e81"/>
+        <path d="M12 15 C12 9 24 9 24 15 C23 11 19 11 18 12 C17 11 13 11 12 15 Z" fill="#0f172a"/>
+        <ellipse cx="18" cy="17" rx="5.2" ry="6" fill="#fed7aa"/>
+        <path d="M8 34 C8 26 28 26 28 34 Z" fill="#818cf8"/>
+      </svg>`;
+    }
+
+    return `<svg class="vip-user-avatar-svg" viewBox="0 0 36 36" width="28" height="28" style="border-radius: 50%; border: 1.5px solid #c084fc; box-shadow: 0 0 8px rgba(192, 132, 252, 0.5); display: block;">
+      <circle cx="18" cy="18" r="18" fill="#581c87"/>
+      <circle cx="18" cy="14" r="5" fill="#fed7aa"/>
+      <path d="M10 32 C10 24 26 24 26 32 Z" fill="#c084fc"/>
+    </svg>`;
+  }
+
   function waHref(product) {
     const base = (state.shop && state.shop.whatsapp_url) || "https://wa.me/";
     let text = "Hi SMF SHOP, I want to place an order from the Mini App.";
@@ -311,7 +377,7 @@
     renderHeroBadges();
     if (state.shop) {
       if (els.eyebrow && state.shop.eyebrow && state.shop.eyebrow !== "PREMIUM DIGITAL ACCOUNTS") els.eyebrow.textContent = state.shop.eyebrow;
-      if (els.headline && state.shop.headline && state.shop.headline !== "SMF SHOP") els.headline.textContent = state.shop.headline;
+      if (els.headline) els.headline.textContent = "GET PREMIUM TOOLS. PAY LESS. DO MORE.";
       if (els.tagline && state.shop.tagline) els.tagline.textContent = state.shop.tagline;
       [els.whatsapp, els.whatsappCatalog, els.whatsappCheckout].forEach((node) => {
         if (!node) return;
@@ -349,6 +415,10 @@
       if (accountLabel) {
         accountLabel.textContent = signed ? (state.user.name || "VIP") : "Sign In";
       }
+    }
+    const topbarAvatar = document.getElementById("topbar-user-avatar");
+    if (topbarAvatar) {
+      topbarAvatar.innerHTML = getSmartAvatar(signed ? (state.user.name || state.user.email || "") : "", !signed);
     }
     const balanceDisplay = document.getElementById("topbar-balance-display");
     if (balanceDisplay) {
@@ -1466,6 +1536,80 @@
     }, 3500);
   }
 
+  // Approved Live Recent Order Toast System (Exact User Approved Template)
+  const SAMPLE_RECENT_ORDERS = [
+    { name: "Salman", phone: "03***", item: "Canva Pro 1 Year", method: "Binance", mins: 2 },
+    { name: "Hamza", phone: "03***", item: "ChatGPT Plus 1 Month", method: "JazzCash", mins: 4 },
+    { name: "Ayesha", phone: "03***", item: "Netflix 4K Ultra HD", method: "EasyPaisa", mins: 1 },
+    { name: "Usman", phone: "03***", item: "CapCut Pro 1 Year", method: "Binance", mins: 6 },
+    { name: "Fatima", phone: "03***", item: "Spotify Premium 6 Months", method: "Nayapay", mins: 3 },
+    { name: "Ali", phone: "03***", item: "YouTube Premium 1 Year", method: "Sadapay", mins: 5 },
+    { name: "Zainab", phone: "03***", item: "Adobe Creative Cloud", method: "Bank Transfer", mins: 8 },
+    { name: "Bilal", phone: "03***", item: "Telegram Premium 1 Year", method: "Binance", mins: 2 }
+  ];
+
+  let recentOrderIndex = 0;
+  let recentOrderDismissTimer = null;
+
+  function showRecentOrderToast(order) {
+    const container = document.getElementById("recent-order-toast");
+    if (!container) return;
+
+    const name = escapeHtml(order.name || "Customer");
+    const mask = escapeHtml(order.phone || "03***");
+    const item = escapeHtml(order.item || "Canva Pro 1 Year");
+    const method = escapeHtml(order.method || "Binance");
+    const timeText = order.mins ? `${order.mins} mins ago` : "just now";
+
+    container.innerHTML = `
+      <div class="recent-order-line1">
+        🛍️ <span class="order-toast-name">${name}</span> <span class="order-toast-mask">(${mask})</span> just purchased <span class="order-toast-item">${item}</span> Through <span class="order-toast-method">${method}</span>
+      </div>
+      <div class="recent-order-line2">
+        <span class="order-toast-pulse"></span>
+        <span>⚡ Verified Order · ${timeText}</span>
+      </div>
+    `;
+
+    container.hidden = false;
+    container.classList.remove("dismissing");
+
+    clearTimeout(recentOrderDismissTimer);
+    recentOrderDismissTimer = setTimeout(() => {
+      container.classList.add("dismissing");
+      setTimeout(() => {
+        container.hidden = true;
+        container.classList.remove("dismissing");
+      }, 300);
+    }, 6000);
+  }
+
+  function initRecentOrdersToast() {
+    setTimeout(() => {
+      showRecentOrderToast(SAMPLE_RECENT_ORDERS[recentOrderIndex % SAMPLE_RECENT_ORDERS.length]);
+      recentOrderIndex++;
+      setInterval(() => {
+        showRecentOrderToast(SAMPLE_RECENT_ORDERS[recentOrderIndex % SAMPLE_RECENT_ORDERS.length]);
+        recentOrderIndex++;
+      }, 16000);
+    }, 4500);
+  }
+
+  window.triggerLiveOrderToast = (customerName, phone, productName, paymentMethod) => {
+    const firstName = (customerName || "Customer").trim().split(" ")[0];
+    let phoneMask = "03***";
+    if (phone && phone.length >= 4) {
+      phoneMask = phone.substring(0, 3) + "***";
+    }
+    showRecentOrderToast({
+      name: firstName,
+      phone: phoneMask,
+      item: productName || "Canva Pro 1 Year",
+      method: paymentMethod || "Binance",
+      mins: 0
+    });
+  };
+
   if (els.search) {
     els.search.addEventListener("input", () => {
       state.query = els.search.value;
@@ -1712,6 +1856,10 @@
       state.cart = [];
       saveCart();
       state.order = data;
+      const clientName = (data.user && data.user.name) || document.getElementById("checkout-name").value || "Customer";
+      const clientPhone = document.getElementById("checkout-email").value || "";
+      const firstItem = (data.items && data.items[0] && data.items[0].name) || "License";
+      window.triggerLiveOrderToast(clientName, clientPhone, firstItem, method || "Binance");
       location.hash = `#/order/${data.order_code}`;
       renderOrder(data);
     } catch (err) {
@@ -1729,6 +1877,7 @@
     renderPills();
     applyRoute();
     initRestockNotifications();
+    initRecentOrdersToast();
   } else {
     // Render high-tech skeleton placeholders so page is never blank
     els.grid.innerHTML = Array.from({ length: 6 })
@@ -1785,6 +1934,7 @@
       renderPills();
       renderGrid();
       initRestockNotifications();
+      initRecentOrdersToast();
       const path = currentPath();
       if (path === "/subscription" || path === "/subscriptions" || path === "/freebies") {
         renderCollection(path.includes("freebie") ? "freebies" : "subscription");

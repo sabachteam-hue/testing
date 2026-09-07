@@ -77,9 +77,9 @@
     }
     .portal-nav-item.active {
       color: #fff;
-      background: linear-gradient(135deg, rgba(139, 92, 246, 0.45), rgba(6, 182, 212, 0.35));
-      border: 1px solid rgba(0, 242, 254, 0.45);
-      box-shadow: 0 4px 18px rgba(139, 92, 246, 0.35);
+      background: linear-gradient(135deg, rgba(139, 92, 246, 0.5), rgba(168, 85, 247, 0.4));
+      border: 1px solid rgba(196, 181, 253, 0.5);
+      box-shadow: 0 4px 18px rgba(139, 92, 246, 0.4);
     }
     .portal-nav-divider {
       width: 1px;
@@ -115,7 +115,7 @@
       top: -30px;
       width: 220px;
       height: 220px;
-      background: radial-gradient(circle, rgba(0, 242, 254, 0.2) 0%, rgba(139, 92, 246, 0.15) 50%, transparent 70%);
+      background: radial-gradient(circle, rgba(168, 85, 247, 0.22) 0%, rgba(139, 92, 246, 0.15) 50%, transparent 70%);
       pointer-events: none;
     }
     .welcome-title {
@@ -166,9 +166,9 @@
       transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
     }
     .stat-card:hover {
-      border-color: rgba(0, 242, 254, 0.45);
+      border-color: rgba(167, 139, 250, 0.55);
       transform: translateY(-2px);
-      box-shadow: 0 12px 32px rgba(0, 242, 254, 0.15);
+      box-shadow: 0 12px 32px rgba(139, 92, 246, 0.25);
     }
     .stat-head {
       display: flex;
@@ -384,10 +384,10 @@
         height: 18px !important;
       }
       .portal-nav-item.active {
-        color: #00f2fe !important;
-        background: rgba(0, 242, 254, 0.12) !important;
-        border: 1px solid rgba(0, 242, 254, 0.25) !important;
-        box-shadow: 0 0 12px rgba(0, 242, 254, 0.2) !important;
+        color: #c4b5fd !important;
+        background: rgba(139, 92, 246, 0.22) !important;
+        border: 1px solid rgba(196, 181, 253, 0.45) !important;
+        box-shadow: 0 0 14px rgba(139, 92, 246, 0.35) !important;
       }
       .sidebar-overlay {
         display: none !important;
@@ -1662,7 +1662,7 @@
   <header class="topbar" style="border-bottom: 0; background: transparent; padding-top: 16px;">
     <div class="portal-desktop-header">
       <div class="portal-user-profile-dock" id="user-pill" style="cursor: pointer;" onclick="switchTab('settings')">
-        <img class="vip-user-avatar" id="portal-user-avatar-img" src="/static/mini-app/brand/smf-logo.svg" alt="">
+        <span id="portal-user-avatar-wrap" class="vip-user-avatar-wrap" style="display: flex; align-items: center;"></span>
         <div style="line-height: 1.15;">
           <div style="font-weight: 800; font-size: 13.5px; color: #fff;" id="portal-user-name">Alex</div>
           <span class="vip-gold-pill" id="portal-user-tier">GOLD VIP</span>
@@ -1671,29 +1671,29 @@
 
       <nav class="portal-glass-dock" id="portal-sidebar">
         <button type="button" class="portal-glass-tab active" data-tab="dashboard">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/></svg>
-          <span>Overview</span>
+          <span class="anim-rocket" style="font-size: 15px;">🚀</span>
+          <span>DASHBOARD</span>
         </button>
         <button type="button" class="portal-glass-tab" data-tab="accounts">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-          <span>Granted Accounts</span>
+          <span class="anim-box" style="font-size: 15px;">📦</span>
+          <span>YOUR DELIVERIES</span>
         </button>
         <button type="button" class="portal-glass-tab" data-tab="wallet">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
-          <span>Vault Wallet <strong id="dock-wallet-val" style="color: #fff; margin-left: 2px;">$148.50</strong></span>
+          <span class="anim-wallet" style="font-size: 15px;">👛</span>
+          <span>POCKET <strong id="dock-wallet-val" style="color: #fff; margin-left: 2px;">$148.50</strong></span>
         </button>
         <button type="button" class="portal-glass-tab" data-tab="claims">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-          <span>Claims</span>
+          <span class="anim-shield" style="font-size: 15px;">🛡️</span>
+          <span>WARRANTY CARE</span>
         </button>
         <button type="button" class="portal-glass-tab" data-tab="messages">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-          <span>Messages</span>
+          <span class="anim-message" style="font-size: 15px;">💬</span>
+          <span>MESSAGES</span>
           <span class="nav-unread-badge" id="nav-unread-badge" hidden>0</span>
         </button>
         <button type="button" class="portal-glass-tab" data-tab="settings">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-          <span>Settings</span>
+          <span class="anim-gear" style="font-size: 15px;">⚙️</span>
+          <span>SETTINGS</span>
         </button>
       </nav>
 
@@ -1704,7 +1704,7 @@
 
       <div style="display: flex; align-items: center; gap: 8px;">
         <a class="btn btn-whatsapp" href="/mini" style="font-size: 13px; padding: 8px 14px; gap: 6px; border-radius: 999px;">
-          <span>🛍️</span> Storefront
+          <span>🛍️</span> Back to Shop
         </a>
         <button type="button" class="icon-btn" id="btn-logout" title="Log out" aria-label="Log out" hidden style="border-radius: 50%;">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="16" height="16"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/></svg>
@@ -1793,7 +1793,7 @@
             <div>
               <div style="font-size: 16px; font-weight: 800; color: #fff; display: flex; align-items: center; gap: 8px;">
                 <span>Loyalty Progress</span>
-                <span class="loyalty-discount-pill" id="loyalty-discount-pill" style="font-size: 11px; padding: 2px 8px; border-radius: 6px; background: rgba(0,242,254,0.15); color: #00f2fe; border: 1px solid rgba(0,242,254,0.4);">6% Store Discount</span>
+                <span class="loyalty-discount-pill" id="loyalty-discount-pill" style="font-size: 11px; padding: 2px 8px; border-radius: 6px; background: rgba(139,92,246,0.18); color: #c4b5fd; border: 1px solid rgba(139,92,246,0.45);">6% Store Discount</span>
               </div>
               <p style="font-size: 12.5px; color: var(--muted); margin: 3px 0 0 0;" id="loyalty-tier-subtitle">Gold VIP Member • Automatic checkout savings</p>
             </div>
@@ -1823,7 +1823,7 @@
             <span id="loyalty-progress-summary">Progress: 85%</span>
             <span>Completed Orders: <strong style="color: #fff;" id="loyalty-completed-count">14</strong></span>
             <span>Net Spend: <strong style="color: #fff;" id="loyalty-spend-amount">$284.50</strong></span>
-            <span id="loyalty-next-tier-hint">Next milestone: <strong style="color: #00f2fe;">Platinum Milestone</strong></span>
+            <span id="loyalty-next-tier-hint">Next milestone: <strong style="color: #c4b5fd;">Platinum Milestone</strong></span>
           </div>
         </div>
 
@@ -1852,7 +1852,7 @@
               <div class="svg-circular-countdown">
                 <svg viewBox="0 0 36 36">
                   <path stroke="rgba(255,255,255,0.08)" stroke-width="3" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
-                  <path stroke="#00f2fe" stroke-dasharray="80, 100" stroke-linecap="round" stroke-width="3" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                  <path stroke="#a78bfa" stroke-dasharray="80, 100" stroke-linecap="round" stroke-width="3" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
                 </svg>
                 <div class="svg-countdown-text">
                   <span class="countdown-num-bold">24</span>
@@ -1885,7 +1885,7 @@
               <div class="svg-circular-countdown">
                 <svg viewBox="0 0 36 36">
                   <path stroke="rgba(255,255,255,0.08)" stroke-width="3" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
-                  <path stroke="#00f2fe" stroke-dasharray="63, 100" stroke-linecap="round" stroke-width="3" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                  <path stroke="#a78bfa" stroke-dasharray="63, 100" stroke-linecap="round" stroke-width="3" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
                 </svg>
                 <div class="svg-countdown-text">
                   <span class="countdown-num-bold">19</span>
@@ -1947,15 +1947,15 @@
             <svg width="100%" height="100%" viewBox="0 0 800 200" preserveAspectRatio="none">
               <defs>
                 <linearGradient id="spendingAreaGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                  <stop offset="0%" stop-color="#00f2fe" stop-opacity="0.35"/>
-                  <stop offset="50%" stop-color="#8b5cf6" stop-opacity="0.2"/>
+                  <stop offset="0%" stop-color="#8b5cf6" stop-opacity="0.35"/>
+                  <stop offset="50%" stop-color="#a78bfa" stop-opacity="0.2"/>
                   <stop offset="100%" stop-color="#8b5cf6" stop-opacity="0.0"/>
                 </linearGradient>
                 <linearGradient id="spendingLineGrad" x1="0%" y1="0%" x2="100%" y2="0%">
                   <stop offset="0%" stop-color="#ec4899"/>
                   <stop offset="25%" stop-color="#c084fc"/>
-                  <stop offset="60%" stop-color="#00f2fe"/>
-                  <stop offset="100%" stop-color="#38bdf8"/>
+                  <stop offset="60%" stop-color="#a78bfa"/>
+                  <stop offset="100%" stop-color="#818cf8"/>
                 </linearGradient>
                 <filter id="glowFilter" x="-20%" y="-20%" width="140%" height="140%">
                   <feGaussianBlur stdDeviation="4" result="blur"/>
@@ -1991,9 +1991,9 @@
               <circle cx="70" cy="150" r="5" fill="#ec4899" stroke="#fff" stroke-width="2" filter="url(#glowFilter)"/>
               <circle cx="220" cy="60" r="5" fill="#c084fc" stroke="#fff" stroke-width="2" filter="url(#glowFilter)"/>
               <circle cx="370" cy="135" r="5" fill="#818cf8" stroke="#fff" stroke-width="2" filter="url(#glowFilter)"/>
-              <circle cx="510" cy="25" r="6" fill="#00f2fe" stroke="#fff" stroke-width="2.5" filter="url(#glowFilter)"/>
-              <circle cx="650" cy="120" r="5" fill="#00f2fe" stroke="#fff" stroke-width="2" filter="url(#glowFilter)"/>
-              <circle cx="760" cy="40" r="6" fill="#38bdf8" stroke="#fff" stroke-width="2.5" filter="url(#glowFilter)"/>
+              <circle cx="510" cy="25" r="6" fill="#c4b5fd" stroke="#fff" stroke-width="2.5" filter="url(#glowFilter)"/>
+              <circle cx="650" cy="120" r="5" fill="#a78bfa" stroke="#fff" stroke-width="2" filter="url(#glowFilter)"/>
+              <circle cx="760" cy="40" r="6" fill="#8b5cf6" stroke="#fff" stroke-width="2.5" filter="url(#glowFilter)"/>
 
               <!-- Month Labels along bottom -->
               <text x="70" y="198" fill="rgba(255,255,255,0.5)" font-size="11" font-weight="600" text-anchor="middle">Jan</text>
@@ -2001,7 +2001,7 @@
               <text x="370" y="198" fill="rgba(255,255,255,0.5)" font-size="11" font-weight="600" text-anchor="middle">Mar</text>
               <text x="510" y="198" fill="rgba(255,255,255,0.5)" font-size="11" font-weight="600" text-anchor="middle">Apr</text>
               <text x="650" y="198" fill="rgba(255,255,255,0.5)" font-size="11" font-weight="600" text-anchor="middle">May</text>
-              <text x="760" y="198" fill="#00f2fe" font-size="11" font-weight="800" text-anchor="middle">Jun</text>
+              <text x="760" y="198" fill="#c4b5fd" font-size="11" font-weight="800" text-anchor="middle">Jun</text>
             </svg>
           </div>
         </div>
@@ -2515,18 +2515,132 @@
       if (overlay) overlay.addEventListener("click", closeSidebar);
       if (btnCloseSidebar) btnCloseSidebar.addEventListener("click", closeSidebar);
 
-      // Navigation tab switching
-      window.switchTab = (tabName) => {
+      // Smart Avatar Generator based on name gender guessing
+      function getSmartAvatar(name, isSignOut = false) {
+        if (isSignOut || !name) {
+          return `<svg class="vip-user-signout-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: #c4b5fd; display: block;"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`;
+        }
+        const clean = String(name).toLowerCase().trim();
+        const femalePatterns = [
+          'saba', 'fatima', 'ayesha', 'aisha', 'zainab', 'sana', 'maryam', 'maria', 
+          'hira', 'anaya', 'sarah', 'sara', 'samina', 'nadia', 'bushra', 'sidra', 
+          'iqra', 'nimra', 'sadia', 'rabia', 'mehwish', 'komal', 'noor', 'amna', 
+          'faryal', 'mahnoor', 'laiba', 'kinza', 'iman', 'emaan', 'aleena', 'alina',
+          'kiran', 'asma', 'shazia', 'nida', 'zoya', 'mishal', 'hina', 'farah',
+          'female', 'woman', 'girl', 'lady', 'miss', 'mrs'
+        ];
+        const malePatterns = [
+          'ali', 'ahmed', 'ahmad', 'salman', 'usman', 'hamza', 'bilal', 'saeed', 
+          'omar', 'umer', 'umar', 'hassan', 'hasan', 'hussain', 'hussein', 'fahad', 
+          'waqas', 'shahid', 'alex', 'john', 'david', 'michael', 'muhammad', 'mohammad', 
+          'asif', 'kashif', 'irfan', 'kamran', 'adnan', 'tariq', 'rashid', 'naveed',
+          'imran', 'babur', 'rizwan', 'shaheen', 'haris', 'naseem', 'shadab',
+          'male', 'man', 'boy', 'mr'
+        ];
+        
+        let gender = 'neutral';
+        const tokens = clean.split(/[\s._-]+/);
+        for (const token of tokens) {
+          if (femalePatterns.includes(token)) { gender = 'female'; break; }
+          if (malePatterns.includes(token)) { gender = 'male'; break; }
+        }
+        if (gender === 'neutral') {
+          for (const p of femalePatterns) {
+            if (clean.includes(p)) { gender = 'female'; break; }
+          }
+        }
+        if (gender === 'neutral') {
+          for (const p of malePatterns) {
+            if (clean.includes(p)) { gender = 'male'; break; }
+          }
+        }
+
+        if (gender === 'female') {
+          return `<svg class="vip-user-avatar-svg" viewBox="0 0 36 36" width="30" height="30" style="border-radius: 50%; border: 1.5px solid #c4b5fd; box-shadow: 0 0 12px rgba(167, 139, 250, 0.6); display: block;">
+            <circle cx="18" cy="18" r="18" fill="#4c1d95"/>
+            <path d="M10 18 C10 10 26 10 26 18 C26 23 25 27 24 30 C20 31 16 31 12 30 C11 27 10 23 10 18 Z" fill="#2e1065"/>
+            <ellipse cx="18" cy="17" rx="5.5" ry="6.5" fill="#fed7aa"/>
+            <path d="M11 15 C13 11 23 11 25 15 C23 13 19 13 18 15 C17 13 13 13 11 15 Z" fill="#1e1b4b"/>
+            <path d="M9 34 C9 26 27 26 27 34 Z" fill="#f472b6"/>
+          </svg>`;
+        }
+
+        if (gender === 'male') {
+          return `<svg class="vip-user-avatar-svg" viewBox="0 0 36 36" width="30" height="30" style="border-radius: 50%; border: 1.5px solid #8b5cf6; box-shadow: 0 0 12px rgba(139, 92, 246, 0.6); display: block;">
+            <circle cx="18" cy="18" r="18" fill="#312e81"/>
+            <path d="M12 15 C12 9 24 9 24 15 C23 11 19 11 18 12 C17 11 13 11 12 15 Z" fill="#0f172a"/>
+            <ellipse cx="18" cy="17" rx="5.2" ry="6" fill="#fed7aa"/>
+            <path d="M8 34 C8 26 28 26 28 34 Z" fill="#818cf8"/>
+          </svg>`;
+        }
+
+        return `<svg class="vip-user-avatar-svg" viewBox="0 0 36 36" width="30" height="30" style="border-radius: 50%; border: 1.5px solid #c084fc; box-shadow: 0 0 10px rgba(192, 132, 252, 0.5); display: block;">
+          <circle cx="18" cy="18" r="18" fill="#581c87"/>
+          <circle cx="18" cy="14" r="5" fill="#fed7aa"/>
+          <path d="M10 32 C10 24 26 24 26 32 Z" fill="#c084fc"/>
+        </svg>`;
+      }
+      window.getSmartAvatar = getSmartAvatar;
+
+      // Navigation tab switching with URL Hash Routing (Each Tab Acts as a Page)
+      const validTabs = ["dashboard", "accounts", "wallet", "claims", "messages", "settings", "orders"];
+
+      function getTabFromHash() {
+        const raw = (window.location.hash || "").replace(/^#\/?/, "").toLowerCase().split("?")[0];
+        if (raw === "deliveries" || raw === "accounts" || raw === "granted-accounts") return "accounts";
+        if (raw === "pocket" || raw === "wallet") return "wallet";
+        if (raw === "warranty" || raw === "care" || raw === "claims") return "claims";
+        if (raw === "dashboard" || raw === "overview") return "dashboard";
+        if (validTabs.includes(raw)) return raw;
+        return "dashboard";
+      }
+
+      window.switchTab = (tabName, orderFilter = null, updateHash = true) => {
+        if (tabName === "deliveries") tabName = "accounts";
+        else if (tabName === "pocket") tabName = "wallet";
+        else if (tabName === "warranty" || tabName === "care") tabName = "claims";
+        else if (!validTabs.includes(tabName)) tabName = "dashboard";
+
+        if (updateHash) {
+          const hashSlug = tabName === "accounts" ? "deliveries" : (tabName === "wallet" ? "pocket" : (tabName === "claims" ? "warranty" : tabName));
+          if (window.location.hash !== `#/${hashSlug}`) {
+            history.pushState(null, "", `#/${hashSlug}`);
+          }
+        }
+
+        // Highlight top glass dock tabs
+        document.querySelectorAll(".portal-glass-tab").forEach((btn) => {
+          btn.classList.toggle("active", btn.dataset.tab === tabName);
+        });
+        // Highlight sidebar nav items
         document.querySelectorAll(".portal-nav-item[data-tab]").forEach((btn) => {
           btn.classList.toggle("active", btn.dataset.tab === tabName);
         });
+        // Highlight mobile bottom dock
+        document.querySelectorAll(".mobile-dock-btn").forEach((btn) => {
+          const btnTab = btn.getAttribute("data-tab") || (btn.getAttribute("onclick") || "").match(/'([a-z]+)'/)?.[1];
+          btn.classList.toggle("active", btnTab === tabName);
+        });
+
+        // Toggle page content panels
         document.querySelectorAll(".portal-tab-content").forEach((content) => {
           content.hidden = content.id !== `tab-${tabName}`;
         });
+
         closeSidebar();
         window.scrollTo({ top: 0, behavior: "smooth" });
       };
 
+      // Listen for browser back/forward and direct links
+      window.addEventListener("hashchange", () => {
+        const target = getTabFromHash();
+        window.switchTab(target, null, false);
+      });
+
+      // Attach click handlers to top dock tabs
+      document.querySelectorAll(".portal-glass-tab[data-tab]").forEach((btn) => {
+        btn.addEventListener("click", () => switchTab(btn.dataset.tab));
+      });
       document.querySelectorAll(".portal-nav-item[data-tab]").forEach((btn) => {
         btn.addEventListener("click", () => switchTab(btn.dataset.tab));
       });
@@ -2581,6 +2695,9 @@
         if (portalUserTier) portalUserTier.textContent = `${(loyalty.short_name || 'GOLD').toUpperCase()} VIP`;
         const dockWalletVal = document.getElementById("dock-wallet-val");
         if (dockWalletVal) dockWalletVal.textContent = `$${Number(stats.wallet_balance || 148.50).toFixed(2)}`;
+
+        const avatarWrap = document.getElementById("portal-user-avatar-wrap");
+        if (avatarWrap) avatarWrap.innerHTML = getSmartAvatar(name, false);
 
         const userPill = document.getElementById("user-pill");
         if (userPill) userPill.hidden = false;
@@ -2657,7 +2774,7 @@
           if (loyalty.is_highest) {
             nextHint.innerHTML = `Status: <strong style="color: #c084fc;">Top Tier VIP Achieved 💎</strong>`;
           } else {
-            nextHint.innerHTML = `Next milestone: <strong style="color: #00f2fe;">Platinum Milestone</strong>`;
+            nextHint.innerHTML = `Next milestone: <strong style="color: #c4b5fd;">Platinum Milestone</strong>`;
           }
         }
 
@@ -2667,7 +2784,7 @@
           ticketsContainer.innerHTML = data.active_accounts_preview.slice(0, 3).map(acc => {
             const daysLeft = acc.days_left != null ? acc.days_left : 30;
             const pct = Math.min(100, Math.round((daysLeft / 30) * 100));
-            const dialColor = daysLeft < 5 ? '#ec4899' : (daysLeft < 15 ? '#00f2fe' : '#10b981');
+            const dialColor = daysLeft < 5 ? '#ec4899' : (daysLeft < 15 ? '#c4b5fd' : '#10b981');
             return `
               <div class="ticket-pass-container">
                 <div class="ticket-main-pane">
@@ -4869,42 +4986,43 @@
           // Phase 7: Fetch unread notifications count on load
           fetchUnreadNotificationCount();
 
-          // URL hash or path routing
-          const hash = (location.hash || "").replace(/^#/, "");
-          if (hash === "orders" || hash === "/orders" || location.pathname.includes("/orders")) {
-            switchTab("orders");
+          // URL hash or path routing (Every tab behaves as a page)
+          const rawHash = (location.hash || "").replace(/^#\/?/, "").toLowerCase().split("?")[0];
+          if (rawHash === "orders" || location.pathname.includes("/orders")) {
+            switchTab("orders", null, false);
           } else if (
-            hash === "accounts" ||
-            hash === "/accounts" ||
-            hash === "granted-accounts" ||
+            rawHash === "deliveries" ||
+            rawHash === "accounts" ||
+            rawHash === "granted-accounts" ||
             location.pathname.includes("/accounts") ||
             location.pathname.includes("/granted-accounts")
           ) {
-            switchTab("accounts");
+            switchTab("accounts", null, false);
           } else if (
-            hash === "wallet" ||
-            hash === "/wallet" ||
+            rawHash === "pocket" ||
+            rawHash === "wallet" ||
             location.pathname.includes("/wallet")
           ) {
-            switchTab("wallet");
+            switchTab("wallet", null, false);
           } else if (
-            hash === "claims" ||
-            hash === "/claims" ||
+            rawHash === "warranty" ||
+            rawHash === "care" ||
+            rawHash === "claims" ||
             location.pathname.includes("/claims")
           ) {
-            switchTab("claims");
+            switchTab("claims", null, false);
           } else if (
-            hash === "messages" ||
-            hash === "/messages" ||
+            rawHash === "messages" ||
             location.pathname.includes("/messages")
           ) {
-            switchTab("messages");
+            switchTab("messages", null, false);
           } else if (
-            hash === "settings" ||
-            hash === "/settings" ||
+            rawHash === "settings" ||
             location.pathname.includes("/settings")
           ) {
-            switchTab("settings");
+            switchTab("settings", null, false);
+          } else {
+            switchTab("dashboard", null, false);
           }
         } catch (_err) {
           document.getElementById("section-loading").hidden = true;
