@@ -58,6 +58,7 @@ from utils.granted_accounts import (
     sync_granted_accounts_for_order,
     sync_user_granted_accounts,
 )
+from utils.hero_logos import get_hero_logos
 from utils.helpers import generate_order_code, get_mini_app_url, get_public_base_url, parse_icon
 from utils.rate_limiter import check_rate_limit
 from utils.security import (
@@ -389,6 +390,7 @@ def shop_payload(db: Session) -> dict:
         "currencies": currencies,
         "pkr_rate": pkr_rate,
         "languages": languages,
+        "hero_logos": get_hero_logos(),
     }
 
 

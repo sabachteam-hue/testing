@@ -99,6 +99,7 @@ from utils.stock_manager import InsufficientStockError, add_stock, complete_rese
 from utils.stock_display import apply_provider_stock
 from utils.menu_commands import ensure_menu_commands
 from utils.pricing import api_computed_sell_price, derive_api_markup_from_sell
+from utils.hero_logos import get_hero_logos, save_hero_logos
 
 logger = logging.getLogger(__name__)
 
@@ -3616,8 +3617,32 @@ def settings(request: Request, db: Session = Depends(get_db)):
     return render(
         request,
         "settings.html",
-        {"config": config, "message": request.query_params.get("message")},
+        {
+            "config": config,
+            "message": request.query_params.get("message"),
+            "hero_logos": get_hero_logos(),
+        },
     )
+
+
+@router.post("/settings/hero-logos")
+async def update_main_page_logos(
+    request: Request,
+    logo_netflix: str = Form(""),
+    logo_discord: str = Form(""),
+    logo_chatgpt: str = Form(""),
+    logo_star: str = Form(""),
+):
+    admin_required(request)
+    logos = {
+        "netflix": logo_netflix.strip(),
+        "discord": logo_discord.strip(),
+        "chatgpt": logo_chatgpt.strip(),
+        "star": logo_star.strip(),
+    }
+    save_hero_logos(logos)
+    return redirect(f"/admin/settings?message={quote('Main page 3D logos updated successfully!')}")
+
 
 @router.post("/settings")
 async def update_settings(
@@ -3641,9 +3666,20 @@ async def update_settings(
     force_join_group: str = Form(""),
     force_join_group_url: str = Form(""),
     mini_app_url: str = Form(""),
+    logo_netflix: str = Form(""),
+    logo_discord: str = Form(""),
+    logo_chatgpt: str = Form(""),
+    logo_star: str = Form(""),
     db: Session = Depends(get_db),
 ):
     admin_required(request)
+    if any([logo_netflix, logo_discord, logo_chatgpt, logo_star]):
+        existing_logos = get_hero_logos()
+        existing_logos["netflix"] = logo_netflix.strip()
+        existing_logos["discord"] = logo_discord.strip()
+        existing_logos["chatgpt"] = logo_chatgpt.strip()
+        existing_logos["star"] = logo_star.strip()
+        save_hero_logos(existing_logos)
     config = db.query(BotConfig).first() or BotConfig()
     was_maintenance = bool(getattr(config, "maintenance", False))
     # Checkbox posts "true" when ticked; missing field when unticked (same as force_join).

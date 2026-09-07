@@ -56,6 +56,33 @@
     </div>
   </div>
 
+  <div class="panel" id="panel-hero-logos">
+    <div class="settings-card-head">
+      <div>
+        <h3>Update Main Page Logos (Hero 3D Badges)</h3>
+        <p class="muted settings-card-sub">Main page hero banner ke 3D floating brand logos/icons yahan se update karein</p>
+      </div>
+    </div>
+    <div class="settings-fields">
+      <label>Netflix 3D Logo (Image URL ya Path)
+        <input name="logo_netflix" value="{{ hero_logos.get('netflix', '') if hero_logos else '' }}" placeholder="https://example.com/netflix.png or /static/uploads/...">
+        <span class="field-hint">Khali chhorny par default official 3D Netflix ribbon badge show hoga.</span>
+      </label>
+      <label>Discord 3D Logo (Image URL ya Path)
+        <input name="logo_discord" value="{{ hero_logos.get('discord', '') if hero_logos else '' }}" placeholder="https://example.com/discord.png or /static/uploads/...">
+        <span class="field-hint">Khali chhorny par default official 3D Discord Clyde badge show hoga.</span>
+      </label>
+      <label>ChatGPT Plus 3D Logo (Image URL ya Path)
+        <input name="logo_chatgpt" value="{{ hero_logos.get('chatgpt', '') if hero_logos else '' }}" placeholder="https://example.com/chatgpt.png or /static/uploads/...">
+        <span class="field-hint">Khali chhorny par default official 3D OpenAI mint coin badge show hoga.</span>
+      </label>
+      <label>Reward Star 3D Badge (Image URL ya Path)
+        <input name="logo_star" value="{{ hero_logos.get('star', '') if hero_logos else '' }}" placeholder="https://example.com/star.png or /static/uploads/...">
+        <span class="field-hint">Khali chhorny par default official 3D pink gem star badge show hoga.</span>
+      </label>
+    </div>
+  </div>
+
   <div class="panel">
     <div class="settings-card-head">
       <div>

@@ -276,7 +276,29 @@
     }
   }
 
+  function renderHeroBadges() {
+    if (!state.shop || !state.shop.hero_logos) return;
+    const logos = state.shop.hero_logos;
+    if (logos.netflix) {
+      const el = document.getElementById("hero-badge-netflix");
+      if (el) el.innerHTML = `<img src="${escapeHtml(logos.netflix)}" class="hero-custom-logo-img" alt="Netflix">`;
+    }
+    if (logos.discord) {
+      const el = document.getElementById("hero-badge-discord");
+      if (el) el.innerHTML = `<img src="${escapeHtml(logos.discord)}" class="hero-custom-logo-img" alt="Discord">`;
+    }
+    if (logos.chatgpt) {
+      const el = document.getElementById("hero-badge-chatgpt");
+      if (el) el.innerHTML = `<img src="${escapeHtml(logos.chatgpt)}" class="hero-custom-logo-img" alt="ChatGPT">`;
+    }
+    if (logos.star) {
+      const el = document.getElementById("hero-badge-star");
+      if (el) el.innerHTML = `<img src="${escapeHtml(logos.star)}" class="hero-custom-logo-img" alt="VIP Star">`;
+    }
+  }
+
   function renderChrome() {
+    renderHeroBadges();
     if (state.shop) {
       if (els.eyebrow && state.shop.eyebrow && state.shop.eyebrow !== "PREMIUM DIGITAL ACCOUNTS") els.eyebrow.textContent = state.shop.eyebrow;
       if (els.headline && state.shop.headline && state.shop.headline !== "SMF SHOP") els.headline.textContent = state.shop.headline;
